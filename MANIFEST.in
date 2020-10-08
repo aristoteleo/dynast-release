@@ -1,1 +1,1 @@
-recursive-include nt/bins *
+recursive-include dynast/bins *
