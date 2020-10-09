@@ -34,7 +34,7 @@ IDX_CONVERSION = {v: k for k, v in CONVERSION_IDX.items()}
 
 
 def parse_read_contig(
-    bam_path, processed, lock, contig, temp_dir=None, update_every=10000, process_every=100000,
+    bam_path, processed, lock, contig, temp_dir=None, update_every=10000, process_every=10000,
 ):
     conversions_dir = os.path.join(temp_dir, 'conversions')
     info_dir = os.path.join(temp_dir, 'info')
@@ -81,16 +81,22 @@ def parse_read_contig(
             reference = read.get_reference_sequence().upper()
 
             mismatched = False
-            for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=True, with_seq=True):
-                read_base = sequence[read_i]
-                genome_base = _genome_base.upper()
-                if 'N' in (genome_base, read_base):
+            for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
+                if genome_i is None:
                     continue
 
                 key = (cr, genome_i)
                 coverage.setdefault(key, 0)
                 coverage[key] += 1
                 keys_added.append(key)
+
+                if read_i is None:
+                    continue
+
+                read_base = sequence[read_i]
+                genome_base = _genome_base.upper()
+                if 'N' in (genome_base, read_base):
+                    continue
 
                 if genome_base != read_base:
                     mismatched = True
@@ -108,7 +114,7 @@ def parse_read_contig(
             # We also don't do this every iteration in interest of runtime.
             if n % process_every == 0:
                 new_keys_added = []
-                for key in keys_added:
+                for key in list(set(keys_added)):
                     if key[1] < read.reference_start:
                         if key not in mismatches and key in coverage:
                             del coverage[key]
@@ -122,7 +128,7 @@ def parse_read_contig(
         lock.release()
 
     # Clean coverage before writing
-    for key in keys_added:
+    for key in list(set(keys_added)):
         if key not in mismatches and key in coverage:
             del coverage[key]
     with open(coverage_path, 'w') as f:

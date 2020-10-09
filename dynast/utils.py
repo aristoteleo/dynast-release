@@ -165,3 +165,15 @@ def increase_file_descriptor_limit(limit):
         finally:
             if old is not None:
                 resource.setrlimit(resource.RLIMIT_NOFILE, old)
+
+def flatten_dict_values(d):
+    if isinstance(d, dict):
+        flattened = []
+        for k, v in d.items():
+            if isinstance(v, dict):
+                flattened.extend(flatten_dict_values(v))
+            else:
+                flattened.append(v)
+        return flattened
+    else:
+        return [d]

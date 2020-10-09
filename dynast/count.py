@@ -94,15 +94,24 @@ def STAR_solo(
         utils.run_executable(command)
 
     solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
-    gene_dir = os.path.join(solo_dir, constants.STAR_GENE_DIR, constants.STAR_RAW_DIR)
+    gene_dir = os.path.join(solo_dir, constants.STAR_GENE_DIR)
+    raw_gene_dir = os.path.join(gene_dir, constants.STAR_RAW_DIR)
+    filtered_gene_dir = os.path.join(gene_dir, constants.STAR_FILTERED_DIR)
     velocyto_dir = os.path.join(solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
 
     return {
         'bam': os.path.join(out_dir, constants.STAR_BAM_FILENAME),
         'gene': {
-            'barcodes': os.path.join(gene_dir, constants.STAR_BARCODES_FILENAME),
-            'features': os.path.join(gene_dir, constants.STAR_FEATURES_FILENAME),
-            'matrix': os.path.join(gene_dir, constants.STAR_MATRIX_FILENAME),
+            'raw': {
+                'barcodes': os.path.join(raw_gene_dir, constants.STAR_BARCODES_FILENAME),
+                'features': os.path.join(raw_gene_dir, constants.STAR_FEATURES_FILENAME),
+                'matrix': os.path.join(raw_gene_dir, constants.STAR_MATRIX_FILENAME),
+            },
+            'filtered': {
+                'barcodes': os.path.join(filtered_gene_dir, constants.STAR_BARCODES_FILENAME),
+                'features': os.path.join(filtered_gene_dir, constants.STAR_FEATURES_FILENAME),
+                'matrix': os.path.join(filtered_gene_dir, constants.STAR_MATRIX_FILENAME),
+            },
         },
         'velocyto': {
             'barcodes': os.path.join(velocyto_dir, constants.STAR_BARCODES_FILENAME),
@@ -123,16 +132,25 @@ def count(
 ):
     STAR_out_dir = os.path.join(out_dir, constants.STAR_OUTPUT_DIR)
     STAR_solo_dir = os.path.join(STAR_out_dir, constants.STAR_SOLO_DIR)
-    STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR, constants.STAR_RAW_DIR)
+    STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR)
+    STAR_raw_gene_dir = os.path.join(STAR_gene_dir, constants.STAR_RAW_DIR)
+    STAR_filtered_gene_dir = os.path.join(STAR_gene_dir, constants.STAR_FILTERED_DIR)
     STAR_velocyto_dir = os.path.join(STAR_solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
 
     # Check if these files exist. If they do, we can skip alignment.
     STAR_result = {
         'bam': os.path.join(STAR_out_dir, constants.STAR_BAM_FILENAME),
         'gene': {
-            'barcodes': os.path.join(STAR_gene_dir, constants.STAR_BARCODES_FILENAME),
-            'features': os.path.join(STAR_gene_dir, constants.STAR_FEATURES_FILENAME),
-            'matrix': os.path.join(STAR_gene_dir, constants.STAR_MATRIX_FILENAME),
+            'raw': {
+                'barcodes': os.path.join(STAR_raw_gene_dir, constants.STAR_BARCODES_FILENAME),
+                'features': os.path.join(STAR_raw_gene_dir, constants.STAR_FEATURES_FILENAME),
+                'matrix': os.path.join(STAR_raw_gene_dir, constants.STAR_MATRIX_FILENAME),
+            },
+            'filtered': {
+                'barcodes': os.path.join(STAR_filtered_gene_dir, constants.STAR_BARCODES_FILENAME),
+                'features': os.path.join(STAR_filtered_gene_dir, constants.STAR_FEATURES_FILENAME),
+                'matrix': os.path.join(STAR_filtered_gene_dir, constants.STAR_MATRIX_FILENAME),
+            },
         },
         'velocyto': {
             'barcodes': os.path.join(STAR_velocyto_dir, constants.STAR_BARCODES_FILENAME),
@@ -140,12 +158,7 @@ def count(
             'matrix': os.path.join(STAR_velocyto_dir, constants.STAR_MATRIX_FILENAME),
         }
     }
-    STAR_required = []
-    for value in STAR_result.values():
-        if isinstance(value, dict):
-            STAR_required += list(value.values())
-        else:
-            STAR_required.append(value)
+    STAR_required = utils.flatten_dict_values(STAR_result)
     found = [path for path in STAR_required if os.path.exists(path)]
     not_found = [path for path in STAR_required if not os.path.exists(path)]
     logger.debug(f'found: {found}')
