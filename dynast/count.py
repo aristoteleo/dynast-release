@@ -7,7 +7,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-from . import bam, config, constants, utils
+from . import bam, config, constants, conversions, utils
 
 logger = logging.getLogger(__name__)
 
@@ -120,15 +120,18 @@ def STAR_solo(
         },
     }
 
+
 def count(
     fastqs,
     index_dir,
     out_dir,
+    quality=27,
     whitelist_path=None,
     n_threads=8,
     temp_dir=None,
     realign=False,
     reparse=False,
+    recount=False,
 ):
     STAR_out_dir = os.path.join(out_dir, constants.STAR_OUTPUT_DIR)
     STAR_solo_dir = os.path.join(STAR_out_dir, constants.STAR_SOLO_DIR)
@@ -185,15 +188,15 @@ def count(
         pysam.index(STAR_result['bam'], bai_path, '-@', str(n_threads))
 
     # Parse BAM and save results
-    info_path = os.path.join(out_dir, constants.INFO_FILENAME)
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
+    index_path = os.path.join(out_dir, constants.INDEX_FILENAME)
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
-    if not os.path.exists(info_path) or not os.path.exists(conversions_path) or reparse or realign:
+    if not os.path.exists(conversions_path) or not os.path.exists(index_path) or reparse or realign:
         logger.info(f'Parsing read, conversion, coverage information from BAM')
-        info_path, conversions_path, coverage_path = bam.parse_all_reads(
+        conversions_path, index_path, coverage_path = bam.parse_all_reads(
             STAR_result['bam'],
-            info_path,
             conversions_path,
+            index_path,
             coverage_path,
             n_threads=n_threads,
             temp_dir=temp_dir,
@@ -202,4 +205,17 @@ def count(
         logger.info(
             'Skipping read and conversion parsing from BAM because files '
             'already exist. Use the `--reparse` flag to parse BAM alignments again.'
+        )
+
+    # Count conversions
+    count_path = os.path.join(out_dir, constants.COUNT_FILENAME)
+    if not os.path.exists(count_path) or recount or reparse or realign:
+        logger.info('Counting conversions')
+        count_path = conversions.count_conversions(
+            conversions_path, index_path, count_path, quality=quality, n_threads=n_threads, temp_dir=temp_dir
+        )
+    else:
+        logger.info(
+            'Skipping conversion counting because files '
+            'already exist. Use the `--recount` flag to count conversions again.'
         )

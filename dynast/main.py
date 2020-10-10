@@ -102,6 +102,16 @@ def setup_count_args(parser, parent):
         type=str,
         default=None
     )
+    parser_count.add_argument(
+        '--quality',
+        metavar='QUALITY',
+        help=(
+            'Base quality threshold. Only bases with PHRED quality greater than '
+            'this value will be considered when counting conversions. (default: 27)'
+        ),
+        type=int,
+        default=27
+    )
     parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
 
     skip_group = parser_count.add_mutually_exclusive_group()
@@ -113,6 +123,11 @@ def setup_count_args(parser, parent):
     skip_group.add_argument(
         '--reparse',
         help='Re-parse STAR alignment BAM and re-generate read and conversion CSVs.',
+        action='store_true'
+    )
+    skip_group.add_argument(
+        '--recount',
+        help='Re-count conversions',
         action='store_true'
     )
 
@@ -135,15 +150,21 @@ def parse_count(parser, args, temp_dir=None):
     :param args: Command-line arguments dictionary, as parsed by argparse
     :type args: dict
     """
+    # Check quality
+    if args.quality < 0 or args.quality > 41:
+        parser.error('`--quality` must be in [0, 42)')
+
     count(
         args.fastqs,
         args.i,
         args.o,
-        args.w,
+        quality=args.quality,
+        whitelist_path=args.w,
         n_threads=args.t,
         temp_dir=temp_dir,
         realign=args.realign,
         reparse=args.reparse,
+        recount=args.recount,
     )
 
 

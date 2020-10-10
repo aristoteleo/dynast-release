@@ -3,11 +3,33 @@ import logging
 import os
 import shutil
 import subprocess as sp
+import tempfile
 from contextlib import contextmanager
 
-from .config import PLATFORM
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
+from . import config
 
 logger = logging.getLogger(__name__)
+
+class TqdmLoggingHandler(logging.Handler):
+    """Custom logging handler so that logging does not affect progress bars.
+    """
+
+    def __init__(self, level=logging.NOTSET):
+        super().__init__(level)
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.write(msg)
+            self.flush()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            self.handleError(record)
 
 def run_executable(
     command,
@@ -123,7 +145,7 @@ def get_file_descriptor_limit():
     """Get the maximum number of open file descriptors in a platform-dependent
     way.
     """
-    if PLATFORM == 'windows':
+    if config.PLATFORM == 'windows':
         import win32file
         return win32file._getmaxstdio()
     else:
@@ -133,7 +155,7 @@ def get_file_descriptor_limit():
 def get_max_file_descriptor_limit():
     """
     """
-    if PLATFORM == 'windows':
+    if config.PLATFORM == 'windows':
         return 2048
     else:
         import resource
@@ -147,7 +169,7 @@ def increase_file_descriptor_limit(limit):
     This is required when running STAR with many threads.
     """
     old = None
-    if PLATFORM == 'windows':
+    if config.PLATFORM == 'windows':
         import win32file
         try:
             old = win32file._getmaxstdio()
@@ -177,3 +199,8 @@ def flatten_dict_values(d):
         return flattened
     else:
         return [d]
+
+def mkstemp(dir=None):
+    fd, path = tempfile.mkstemp(dir=dir)
+    os.close(fd)
+    return path

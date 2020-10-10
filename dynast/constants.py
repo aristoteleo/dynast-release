@@ -10,6 +10,8 @@ STAR_BARCODES_FILENAME = 'barcodes.tsv'
 STAR_FEATURES_FILENAME = 'features.tsv'
 STAR_MATRIX_FILENAME = 'matrix.mtx'
 
-INFO_FILENAME = 'info.csv'
 CONVERSIONS_FILENAME = 'conversions.csv'
+INDEX_FILENAME = 'conversions.idx'
 COVERAGE_FILENAME = 'coverage.csv'
+
+COUNT_FILENAME = 'counts.csv'
