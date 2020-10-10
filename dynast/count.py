@@ -1,15 +1,12 @@
 import logging
 import os
 import pysam
-import re
 import tempfile
-
-import numpy as np
-import pandas as pd
 
 from . import bam, config, constants, conversions, utils
 
 logger = logging.getLogger(__name__)
+
 
 def STAR_solo(
     fastqs,
@@ -57,14 +54,22 @@ def STAR_solo(
     command += ['--runThreadN', n_threads]
     command += ['--outFileNamePrefix', out_dir]
     command += ['--soloCBwhitelist', whitelist_path or 'None']
-    command += ['--outTmpDir', os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')]
+    command += [
+        '--outTmpDir',
+        os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
+    ]
     # TODO: currently uses hard-coded dropseq barcode and UMI positions
     command += [
-        '--soloType', 'CB_UMI_Simple',
-        '--soloCBstart', 1,
-        '--soloCBlen', 12,
-        '--soloUMIstart', 13,
-        '--soloUMIlen', 8,
+        '--soloType',
+        'CB_UMI_Simple',
+        '--soloCBstart',
+        1,
+        '--soloCBlen',
+        12,
+        '--soloUMIstart',
+        13,
+        '--soloUMIlen',
+        8,
     ]
     # Attempt to increase NOFILE limit if n_threads * n_bins is greater than
     # current limit
@@ -192,7 +197,7 @@ def count(
     index_path = os.path.join(out_dir, constants.INDEX_FILENAME)
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     if not os.path.exists(conversions_path) or not os.path.exists(index_path) or reparse or realign:
-        logger.info(f'Parsing read, conversion, coverage information from BAM')
+        logger.info('Parsing read, conversion, coverage information from BAM to' f'{conversions_path}, {coverage_path}')
         conversions_path, index_path, coverage_path = bam.parse_all_reads(
             STAR_result['bam'],
             conversions_path,
@@ -210,7 +215,7 @@ def count(
     # Count conversions
     count_path = os.path.join(out_dir, constants.COUNT_FILENAME)
     if not os.path.exists(count_path) or recount or reparse or realign:
-        logger.info('Counting conversions')
+        logger.info(f'Counting conversions to {count_path}')
         count_path = conversions.count_conversions(
             conversions_path, index_path, count_path, quality=quality, n_threads=n_threads, temp_dir=temp_dir
         )

@@ -16,8 +16,15 @@ from . import utils
 
 logger = logging.getLogger(__name__)
 
+
 def parse_read_contig(
-    bam_path, counter, lock, contig, temp_dir=None, update_every=10000, process_every=10000,
+    bam_path,
+    counter,
+    lock,
+    contig,
+    temp_dir=None,
+    update_every=10000,
+    process_every=10000,
 ):
     conversions_path = utils.mkstemp(dir=temp_dir)
     index_path = utils.mkstemp(dir=temp_dir)
@@ -120,6 +127,7 @@ def parse_read_contig(
 
     return conversions_path, index_path, coverage_path
 
+
 def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_threads=8, temp_dir=None):
     """
     """
@@ -133,8 +141,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     lock = manager.Lock()
     pool = multiprocessing.Pool(n_threads)
     async_result = pool.map_async(
-        partial(parse_read_contig, bam_path, counter, lock, temp_dir=tempfile.mkdtemp(dir=temp_dir)),
-        contigs
+        partial(parse_read_contig, bam_path, counter, lock, temp_dir=tempfile.mkdtemp(dir=temp_dir)), contigs
     )
 
     # Display progres bar
@@ -162,7 +169,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
             with gzip.open(index_part_path, 'rb') as f:
                 index_part = pickle.load(f)
             for p, n in index_part:
-                index.append((pos+p, n))
+                index.append((pos + p, n))
             pos += os.path.getsize(conversions_part_path)
     with gzip.open(index_path, 'wb') as index_out:
         pickle.dump(index, index_out)

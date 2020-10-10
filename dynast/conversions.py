@@ -1,6 +1,5 @@
 import gzip
 import logging
-import os
 import multiprocessing
 import pickle
 import re
@@ -15,7 +14,8 @@ from . import utils
 
 logger = logging.getLogger(__name__)
 
-PARSER = re.compile(r'''^
+PARSER = re.compile(
+    r'''^
     (?P<read_id>[^,]*),
     (?P<CR>[^,]*),
     (?P<CB>[^,]*),
@@ -32,7 +32,8 @@ PARSER = re.compile(r'''^
     (?P<C>[^,]*),
     (?P<G>[^,]*),
     (?P<T>[^,]*)\n
-$''', re.VERBOSE)
+$''', re.VERBOSE
+)
 
 CONVERSION_IDX = {
     ('A', 'C'): 0,
@@ -54,6 +55,7 @@ BASE_IDX = {
     'G': 14,
     'T': 15,
 }
+
 
 def split_index(index, n=8):
     """
@@ -79,7 +81,10 @@ def split_index(index, n=8):
 
     return parts
 
-def count_conversions_part(conversions_path, counter, lock, pos, n_lines, quality=27, temp_dir=None, update_every=10000):
+
+def count_conversions_part(
+    conversions_path, counter, lock, pos, n_lines, quality=27, temp_dir=None, update_every=10000
+):
     """
     """
     count_path = utils.mkstemp(dir=temp_dir)
@@ -138,8 +143,14 @@ def count_conversions(conversions_path, index_path, count_path, quality=27, n_th
     lock = manager.Lock()
     pool = multiprocessing.Pool(n_threads)
     async_result = pool.starmap_async(
-        partial(count_conversions_part, conversions_path, counter, lock, quality=quality, temp_dir=tempfile.mkdtemp(dir=temp_dir)),
-        parts
+        partial(
+            count_conversions_part,
+            conversions_path,
+            counter,
+            lock,
+            quality=quality,
+            temp_dir=tempfile.mkdtemp(dir=temp_dir)
+        ), parts
     )
 
     # Display progres bar

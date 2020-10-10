@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import tempfile
 
 from .config import get_STAR_binary_path
@@ -7,12 +8,13 @@ from .utils import open_as_text, run_executable
 
 logger = logging.getLogger(__name__)
 
+
 def STAR_genomeGenerate(
     fasta_path,
     gtf_path,
     index_dir,
     n_threads=8,
-    memory=16 * 1024 ** 3,
+    memory=16 * 1024**3,
     temp_dir=None,
 ):
     """Generate a STAR index from a reference.
@@ -51,12 +53,12 @@ def STAR_genomeGenerate(
     chr_bin_n_bits = min(18, int(math.log2(genome_length / n_entries)))
 
     # Adapted from Cellranger
-    sa_index_memory = (4 ** sa_index_n_bases) * 8
+    sa_index_memory = (4**sa_index_n_bases) * 8
     genome_memory = genome_length
     sa_sparse_d = max(
-        1, math.ceil((8 * genome_length) / (max(1, memory - 2 * 1024 ** 3) - genome_memory - sa_index_memory))
+        1, math.ceil((8 * genome_length) / (max(1, memory - 2 * 1024**3) - genome_memory - sa_index_memory))
     )
-    min_memory = genome_memory + sa_index_memory + 3 * 1024 ** 3
+    min_memory = genome_memory + sa_index_memory + 3 * 1024**3
     if memory < min_memory:
         raise Exception(f'STAR requires at least {min_memory} to index this reference.')
 
@@ -79,11 +81,15 @@ def STAR_genomeGenerate(
     command += ['--genomeSAsparseD', sa_sparse_d]
     command += ['--genomeSAindexNbases', sa_index_n_bases]
     command += ['--genomeChrBinNbits', chr_bin_n_bits]
-    command += ['--outTmpDir', os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')]
+    command += [
+        '--outTmpDir',
+        os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
+    ]
 
     run_executable(command)
 
     return {'index': index_dir}
+
 
 def ref():
     pass

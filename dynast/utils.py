@@ -4,15 +4,15 @@ import os
 import shutil
 import subprocess as sp
 import tempfile
+import time
 from contextlib import contextmanager
 
-import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 from . import config
 
 logger = logging.getLogger(__name__)
+
 
 class TqdmLoggingHandler(logging.Handler):
     """Custom logging handler so that logging does not affect progress bars.
@@ -30,6 +30,7 @@ class TqdmLoggingHandler(logging.Handler):
             raise
         except Exception:
             self.handleError(record)
+
 
 def run_executable(
     command,
@@ -112,6 +113,7 @@ def run_executable(
 
     return p
 
+
 def open_as_text(path, mode):
     """Open a textfile or gzip file in text mode.
 
@@ -123,8 +125,8 @@ def open_as_text(path, mode):
     :return: file object
     :rtype: file object
     """
-    return gzip.open(path, mode +
-                     't') if path.endswith('.gz') else open(path, mode)
+    return gzip.open(path, mode + 't') if path.endswith('.gz') else open(path, mode)
+
 
 def decompress_gzip(gzip_path, out_path):
     """Decompress a gzip file to provided file path.
@@ -141,6 +143,7 @@ def decompress_gzip(gzip_path, out_path):
         shutil.copyfileobj(f, out)
     return out_path
 
+
 def get_file_descriptor_limit():
     """Get the maximum number of open file descriptors in a platform-dependent
     way.
@@ -152,6 +155,7 @@ def get_file_descriptor_limit():
         import resource
         return resource.getrlimit(resource.RLIMIT_NOFILE)[0]
 
+
 def get_max_file_descriptor_limit():
     """
     """
@@ -160,6 +164,7 @@ def get_max_file_descriptor_limit():
     else:
         import resource
         return resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+
 
 @contextmanager
 def increase_file_descriptor_limit(limit):
@@ -173,7 +178,7 @@ def increase_file_descriptor_limit(limit):
         import win32file
         try:
             old = win32file._getmaxstdio()
-            win32file._setmaxstdio(new)
+            win32file._setmaxstdio(limit)
             yield
         finally:
             if old is not None:
@@ -188,6 +193,7 @@ def increase_file_descriptor_limit(limit):
             if old is not None:
                 resource.setrlimit(resource.RLIMIT_NOFILE, old)
 
+
 def flatten_dict_values(d):
     if isinstance(d, dict):
         flattened = []
@@ -199,6 +205,7 @@ def flatten_dict_values(d):
         return flattened
     else:
         return [d]
+
 
 def mkstemp(dir=None):
     fd, path = tempfile.mkstemp(dir=dir)

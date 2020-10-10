@@ -9,6 +9,7 @@ from .config import get_STAR_binary_path
 from .count import count
 from .ref import ref
 
+
 def setup_ref_args(parser, parent):
     """Helper function to set up a subparser for the `ref` command.
 
@@ -38,11 +39,7 @@ def setup_ref_args(parser, parent):
         required=True
     )
     parser_ref.add_argument(
-        '-m',
-        metavar='MEMORY',
-        help='Maximum memory used, in GB (default: 16)',
-        type=int,
-        default=16
+        '-m', metavar='MEMORY', help='Maximum memory used, in GB (default: 16)', type=int, default=16
     )
     parser_ref.add_argument(
         'fasta',
@@ -56,6 +53,7 @@ def setup_ref_args(parser, parent):
     )
 
     return parser_ref
+
 
 def setup_count_args(parser, parent):
     """Helper function to set up a subparser for the `count` command.
@@ -79,11 +77,7 @@ def setup_count_args(parser, parent):
 
     required_count = parser_count.add_argument_group('required arguments')
     required_count.add_argument(
-        '-i',
-        metavar='INDEX',
-        help='Path to the directory where the STAR index is located',
-        type=str,
-        required=True
+        '-i', metavar='INDEX', help='Path to the directory where the STAR index is located', type=str, required=True
     )
     parser_count.add_argument(
         '-o',
@@ -95,10 +89,8 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '-w',
         metavar='WHITELIST',
-        help=(
-            'Path to file of whitelisted barcodes to correct to. '
-            'If not provided, all barcodes are used.'
-        ),
+        help=('Path to file of whitelisted barcodes to correct to. '
+              'If not provided, all barcodes are used.'),
         type=str,
         default=None
     )
@@ -115,23 +107,14 @@ def setup_count_args(parser, parent):
     parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
 
     skip_group = parser_count.add_mutually_exclusive_group()
+    skip_group.add_argument('--realign', help='Re-run alignment with STAR', action='store_true')
     skip_group.add_argument(
-        '--realign',
-        help='Re-run alignment with STAR',
-        action='store_true'
+        '--reparse', help='Re-parse STAR alignment BAM and re-generate read and conversion CSVs.', action='store_true'
     )
-    skip_group.add_argument(
-        '--reparse',
-        help='Re-parse STAR alignment BAM and re-generate read and conversion CSVs.',
-        action='store_true'
-    )
-    skip_group.add_argument(
-        '--recount',
-        help='Re-count conversions',
-        action='store_true'
-    )
+    skip_group.add_argument('--recount', help='Re-count conversions', action='store_true')
 
     return parser_count
+
 
 def parse_ref(parser, args, temp_dir=None):
     """Parser for the `ref` command.
@@ -144,6 +127,7 @@ def parse_ref(parser, args, temp_dir=None):
             'Please provide a different directory or remove the existing one.'
         )
     ref()
+
 
 def parse_count(parser, args, temp_dir=None):
     """Parser for the `count` command.
@@ -173,10 +157,9 @@ COMMAND_TO_FUNCTION = {
     'count': parse_count,
 }
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description=f'{__version__}'
-    )
+    parser = argparse.ArgumentParser(description=f'{__version__}')
     parser._actions[0].help = parser._actions[0].help.capitalize()
     subparsers = parser.add_subparsers(
         dest='command',
@@ -185,28 +168,10 @@ def main():
 
     # Add common options to this parent parser
     parent = argparse.ArgumentParser(add_help=False)
-    parent.add_argument(
-        '--tmp',
-        metavar='TMP',
-        help='Override default temporary directory',
-        type=str,
-        default='tmp'
-    )
-    parent.add_argument(
-        '--keep-tmp',
-        help='Do not delete the tmp directory',
-        action='store_true'
-    )
-    parent.add_argument(
-        '--verbose', help='Print debugging information', action='store_true'
-    )
-    parent.add_argument(
-        '-t',
-        metavar='THREADS',
-        help='Number of threads to use (default: 8)',
-        type=int,
-        default=8
-    )
+    parent.add_argument('--tmp', metavar='TMP', help='Override default temporary directory', type=str, default='tmp')
+    parent.add_argument('--keep-tmp', help='Do not delete the tmp directory', action='store_true')
+    parent.add_argument('--verbose', help='Print debugging information', action='store_true')
+    parent.add_argument('-t', metavar='THREADS', help='Number of threads to use (default: 8)', type=int, default=8)
 
     # Command parsers
     parser_ref = setup_ref_args(subparsers, parent)
@@ -248,7 +213,7 @@ def main():
     os.makedirs(args.tmp)
     try:
         COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
-    except Exception as e:
+    except Exception:
         logger.exception('An exception occurred')
     finally:
         if not args.keep_tmp:
