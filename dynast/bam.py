@@ -23,7 +23,7 @@ def parse_read_contig(
     lock,
     contig,
     temp_dir=None,
-    update_every=10000,
+    update_every=5000,
     process_every=10000,
 ):
     conversions_path = utils.mkstemp(dir=temp_dir)
@@ -61,6 +61,7 @@ def parse_read_contig(
             cr, ur = read.get_tag('CR'), read.get_tag('UR')
             cb, ub = read.get_tag('CB'), read.get_tag('UB')
             gx = read.get_tag('GX')
+            gn = read.get_tag('GN') if read.has_tag('GN') else ''
             strand = '-' if read.is_reverse else '+'
             sequence = read.seq.upper()
             qualities = read.query_qualities
@@ -88,7 +89,7 @@ def parse_read_contig(
                     n_lines += 1
                     mismatches.add(key)
                     conversions_out.write(
-                        f'{read_id},{cr},{cb},{ur},{ub},{gx},{strand},{contig},{genome_i},{genome_base},'
+                        f'{read_id},{cr},{cb},{ur},{ub},{gx},{gn},{strand},{contig},{genome_i},{genome_base},'
                         f'{read_base},{qualities[read_i]},{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
                     )
 
@@ -145,7 +146,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     )
 
     # Display progres bar
-    pbar = tqdm(total=n_reads, ascii=True)
+    pbar = tqdm(unit='reads', total=n_reads, ascii=True, unit_scale=True)
     previous_progress = 0
     while not async_result.ready():
         time.sleep(0.05)
@@ -159,6 +160,10 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     index = []
     with open(conversions_path, 'wb') as conversions_out, \
         open(coverage_path, 'wb') as coverage_out:
+        conversions_out.write(b'read_id,CR,CB,UR,UB,GX,GN,strand,contig,genome_i,original,converted,A,C,G,T\n')
+        coverage_out.write(b'CR,contig,genome_i,coverage\n')
+        pos = conversions_out.tell()
+
         for conversions_part_path, index_part_path, coverage_part_path in async_result.get():
             with open(conversions_part_path, 'rb') as f:
                 shutil.copyfileobj(f, conversions_out)

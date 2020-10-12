@@ -15,3 +15,12 @@ INDEX_FILENAME = 'conversions.idx'
 COVERAGE_FILENAME = 'coverage.csv'
 
 COUNT_FILENAME = 'counts.csv'
+BARCODES_FILENAME = 'barcodes.csv'
+GENES_FILENAME = 'genes.csv'
+
+RATES_DIR = 'rates'
+RATES_FILENAME = 'rates.csv'
+BARCODES_RATES_FILENAME = 'barcode_rates.csv'
+GENES_RATES_FILENAME = 'gene_rates.csv'
+
+AGGREGATES_DIR = 'aggregates'

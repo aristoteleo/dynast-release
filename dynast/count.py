@@ -213,14 +213,42 @@ def count(
         )
 
     # Count conversions
-    count_path = os.path.join(out_dir, constants.COUNT_FILENAME)
-    if not os.path.exists(count_path) or recount or reparse or realign:
-        logger.info(f'Counting conversions to {count_path}')
-        count_path = conversions.count_conversions(
-            conversions_path, index_path, count_path, quality=quality, n_threads=n_threads, temp_dir=temp_dir
+    barcodes_path = os.path.join(out_dir, constants.BARCODES_FILENAME)
+    genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
+    counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
+    if any(not os.path.exists(path) for path in (barcodes_path, genes_path, counts_path)) \
+        or recount or reparse or realign:
+        logger.info('Counting conversions')
+        barcodes_path, genes_path, counts_path = conversions.count_conversions(
+            conversions_path,
+            index_path,
+            barcodes_path,
+            genes_path,
+            counts_path,
+            quality=quality,
+            n_threads=n_threads,
+            temp_dir=temp_dir
         )
     else:
         logger.info(
             'Skipping conversion counting because files '
             'already exist. Use the `--recount` flag to count conversions again.'
         )
+
+    # Calculate mutation rates
+    logger.info('Calculating mutation rates per cell and per gene')
+    counts_dir = os.path.join(out_dir, constants.RATES_DIR)
+    os.makedirs(counts_dir, exist_ok=True)
+    rates_path = os.path.join(counts_dir, constants.RATES_FILENAME)
+    cell_rates_path = os.path.join(counts_dir, constants.BARCODES_RATES_FILENAME)
+    gene_rates_path = os.path.join(counts_dir, constants.GENES_RATES_FILENAME)
+    df_counts = conversions.read_counts(counts_path)
+    conversions.calculate_mutation_rates(df_counts, rates_path)
+    conversions.calculate_mutation_rates(df_counts, cell_rates_path, group_by='barcode')
+    conversions.calculate_mutation_rates(df_counts, gene_rates_path, group_by='GX')
+
+    logger.info('Aggregating counts')
+    aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
+    os.makedirs(aggregates_dir, exist_ok=True)
+    df_genes = conversions.read_genes(genes_path)
+    conversions.aggregate_counts(df_counts, df_genes, aggregates_dir)

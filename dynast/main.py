@@ -211,6 +211,7 @@ def main():
             'exists.'
         )
     os.makedirs(args.tmp)
+    os.environ['NUMEXPR_MAX_THREADS'] = str(args.t)
     try:
         COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
     except Exception:
