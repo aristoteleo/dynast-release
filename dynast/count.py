@@ -3,7 +3,7 @@ import os
 import pysam
 import tempfile
 
-from . import bam, config, constants, conversions, utils
+from . import bam, config, constants, conversions, estimation, utils
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ def STAR_solo(
                      uses the system temporary directory
     :type temp_dir: str, optional
 
-    :return:
-    :rtype:
+    :return: dictionary containing output files
+    :rtype: dict
     """
     logger.info('Aligning the following FASTQs with STAR')
     for fastq in fastqs:
@@ -130,14 +130,23 @@ def count(
     fastqs,
     index_dir,
     out_dir,
+    use_corrected=False,
     quality=27,
+    group_by=None,
     whitelist_path=None,
     n_threads=8,
     temp_dir=None,
-    realign=False,
-    reparse=False,
-    recount=False,
+    re=None,
 ):
+    # Check memory.
+    available_memory = utils.get_available_memory()
+    if available_memory < config.RECOMMENDED_MEMORY:
+        logger.warning(
+            f'There is only {available_memory / (1024 ** 3):.2f} GB of free memory on the machine. '
+            f'It is highly recommended to have at least {config.RECOMMENDED_MEMORY // (1024 ** 3)} GB '
+            'free when running dynast. Continuing may cause dynast to crash with an out-of-memory error.'
+        )
+
     STAR_out_dir = os.path.join(out_dir, constants.STAR_OUTPUT_DIR)
     STAR_solo_dir = os.path.join(STAR_out_dir, constants.STAR_SOLO_DIR)
     STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR)
@@ -171,7 +180,7 @@ def count(
     not_found = [path for path in STAR_required if not os.path.exists(path)]
     logger.debug(f'found: {found}')
     logger.debug(f'not found: {not_found}')
-    if not_found or realign:
+    if not utils.all_exists(STAR_required) or re in config.RE_CHOICES[:1]:
         STAR_result = STAR_solo(
             fastqs,
             index_dir,
@@ -182,13 +191,13 @@ def count(
         )
     else:
         logger.info(
-            'Skipping STAR because alignment files already exist. '
-            'Use the `--realign` flag to run alignment again.'
+            'Skipped STAR because alignment files already exist. '
+            'Use the `--re` argument to run alignment again.'
         )
 
     # Check if BAM index exists and create one if it doesn't.
     bai_path = os.path.join(STAR_out_dir, constants.STAR_BAI_FILENAME)
-    if not os.path.exists(bai_path) or realign:
+    if not os.path.exists(bai_path) or re in config.RE_CHOICES[:1]:
         logger.info(f'Indexing {STAR_result["bam"]} with samtools')
         pysam.index(STAR_result['bam'], bai_path, '-@', str(n_threads))
 
@@ -196,7 +205,7 @@ def count(
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
     index_path = os.path.join(out_dir, constants.INDEX_FILENAME)
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
-    if not os.path.exists(conversions_path) or not os.path.exists(index_path) or reparse or realign:
+    if not utils.all_exists([conversions_path, index_path]) or re in config.RE_CHOICES[:2]:
         logger.info('Parsing read, conversion, coverage information from BAM to' f'{conversions_path}, {coverage_path}')
         conversions_path, index_path, coverage_path = bam.parse_all_reads(
             STAR_result['bam'],
@@ -208,47 +217,73 @@ def count(
         )
     else:
         logger.info(
-            'Skipping read and conversion parsing from BAM because files '
-            'already exist. Use the `--reparse` flag to parse BAM alignments again.'
+            'Skipped read and conversion parsing from BAM because files '
+            'already exist. Use the `--re` argument to parse BAM alignments again.'
         )
 
-    # Count conversions
+    # Count conversions and calculate mutation rates
     barcodes_path = os.path.join(out_dir, constants.BARCODES_FILENAME)
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
     counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
-    if any(not os.path.exists(path) for path in (barcodes_path, genes_path, counts_path)) \
-        or recount or reparse or realign:
-        logger.info('Counting conversions')
+    rates_path = os.path.join(out_dir, constants.RATES_FILENAME)
+    counts_required = [
+        barcodes_path,
+        genes_path,
+        counts_path,
+        rates_path,
+    ]
+    if not utils.all_exists(counts_required) or re in config.RE_CHOICES[:3]:
+        logger.info('Counting conversions and calculating mutation rates')
         barcodes_path, genes_path, counts_path = conversions.count_conversions(
             conversions_path,
             index_path,
             barcodes_path,
             genes_path,
             counts_path,
+            use_corrected=use_corrected,
             quality=quality,
             n_threads=n_threads,
             temp_dir=temp_dir
         )
+
+        df_counts = conversions.read_counts(counts_path)
+        rates_path = conversions.calculate_mutation_rates(df_counts, rates_path, group_by=group_by)
     else:
         logger.info(
-            'Skipping conversion counting because files '
-            'already exist. Use the `--recount` flag to count conversions again.'
+            'Skipped conversion counting and mutation rate calculation because files '
+            'already exist. Use the `--re` argument to count conversions again.'
         )
 
-    # Calculate mutation rates
-    logger.info('Calculating mutation rates per cell and per gene')
-    counts_dir = os.path.join(out_dir, constants.RATES_DIR)
-    os.makedirs(counts_dir, exist_ok=True)
-    rates_path = os.path.join(counts_dir, constants.RATES_FILENAME)
-    cell_rates_path = os.path.join(counts_dir, constants.BARCODES_RATES_FILENAME)
-    gene_rates_path = os.path.join(counts_dir, constants.GENES_RATES_FILENAME)
-    df_counts = conversions.read_counts(counts_path)
-    conversions.calculate_mutation_rates(df_counts, rates_path)
-    conversions.calculate_mutation_rates(df_counts, cell_rates_path, group_by='barcode')
-    conversions.calculate_mutation_rates(df_counts, gene_rates_path, group_by='GX')
-
-    logger.info('Aggregating counts')
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
-    os.makedirs(aggregates_dir, exist_ok=True)
-    df_genes = conversions.read_genes(genes_path)
-    conversions.aggregate_counts(df_counts, df_genes, aggregates_dir)
+    aggregates_paths = {
+        conversion: os.path.join(aggregates_dir, f'{conversion}.csv')
+        for conversion in conversions.CONVERSION_COLUMNS
+    }
+    if not utils.all_exists(aggregates_paths.values()) or re in config.RE_CHOICES[:4]:
+        logger.info('Aggregating counts')
+        os.makedirs(aggregates_dir, exist_ok=True)
+        df_genes = conversions.read_genes(genes_path)
+        aggregates_paths = conversions.aggregate_counts(df_counts, df_genes, aggregates_dir)
+    else:
+        logger.info(
+            'Skipped count aggregation because files '
+            'already exist. Use the `--re` argument to count conversions again.'
+        )
+
+    estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
+    p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
+    p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
+    pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
+    estimates_paths = [p_e_path, p_c_path, pi_path]
+    if not utils.all_exists(estimates_paths) or re in config.RE_CHOICES[:5]:
+        os.makedirs(estimates_dir, exist_ok=True)
+
+        logger.info('Estimating average mismatch rate in unlabeled RNA')
+        df_rates = conversions.read_rates(rates_path)
+        p_e = estimation.estimate_p_e(df_rates, p_e_path)
+
+        logger.info('Estimating average mismatch rate in labeled RNA')
+        df_aggregates = conversions.read_aggregates(aggregates_paths['TC'])
+        estimation.estimate_p_c(df_aggregates, p_e, group_by=group_by)
+
+        logger.info('Estimating fraction of newly transcribed RNA')

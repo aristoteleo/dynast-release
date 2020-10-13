@@ -5,6 +5,8 @@ PACKAGE_PATH = os.path.dirname(__file__)
 PLATFORM = platform.system().lower()
 BINS_DIR = 'bins'
 
+RE_CHOICES = ['align', 'parse', 'count', 'aggregate', 'estimate']
+RECOMMENDED_MEMORY = 16 * (1024**3)  # 16 GB
 STAR_SOLO_OPTIONS = [
     '--outSAMattributes',
     'NH',

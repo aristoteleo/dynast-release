@@ -150,6 +150,15 @@ def read_genes(genes_path):
     return pd.read_csv(genes_path, dtype=dtypes)
 
 
+def read_rates(rates_path):
+    return pd.read_csv(rates_path, squeeze=True, index_col=0)
+
+
+def read_aggregates(aggregates_path):
+    dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint16 for column in COLUMNS}}
+    return pd.read_csv(aggregates_path, dtype=dtypes)
+
+
 def count_conversions(
     conversions_path,
     index_path,
@@ -250,7 +259,7 @@ def calculate_mutation_rates(df, rates_path, group_by=None):
     dfs = []
     for base in sorted(BASE_IDX.keys()):
         dfs.append(df.filter(regex=f'^{base}[A,C,G,T]$').divide(df[base], axis=0))
-    df_rates = pd.concat(dfs).fillna(0).reset_index()
+    df_rates = pd.concat(dfs, axis=1).reset_index()
     df_rates.to_csv(rates_path, index=False)
     return rates_path
 
@@ -265,12 +274,12 @@ def aggregate_counts(df, df_genes, aggregates_dir):
 
     df_complemented = pd.concat((df_forward, df_reverse[COLUMNS]))
 
-    csvs = []
+    paths = {}
     for conversion in tqdm(CONVERSION_COLUMNS, ascii=True):
         df_agg = pd.DataFrame(df_complemented.groupby(['barcode', 'GX', conversion, conversion[0]]).size())
         df_agg.columns = ['count']
         csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
         df_agg.reset_index().to_csv(csv_path, index=False)
-        csvs.append(csv_path)
+        paths[conversion] = csv_path
 
-    return csvs
+    return paths

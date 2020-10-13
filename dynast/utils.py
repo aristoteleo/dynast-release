@@ -7,6 +7,7 @@ import tempfile
 import time
 from contextlib import contextmanager
 
+import psutil
 from tqdm import tqdm
 
 from . import config
@@ -145,8 +146,11 @@ def decompress_gzip(gzip_path, out_path):
 
 
 def get_file_descriptor_limit():
-    """Get the maximum number of open file descriptors in a platform-dependent
-    way.
+    """Get the current value for the maximum number of open file descriptors
+    in a platform-dependent way.
+
+    :return: the current value of the maximum number of open file descriptors.
+    :rtype: int
     """
     if config.PLATFORM == 'windows':
         import win32file
@@ -157,7 +161,14 @@ def get_file_descriptor_limit():
 
 
 def get_max_file_descriptor_limit():
-    """
+    """Get the maximum allowed value for the maximum number of open file
+    descriptors. Note that for Windows, there is not an easy way to get this,
+    as it requires reading from the registry. So, we just return the maximum for
+    a vanilla Windows installation, which is 8192.
+    https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/setmaxstdio?view=vs-2019
+
+    :return: maximum allowed value for the maximum number of open file descriptors
+    :rtype: int
     """
     if config.PLATFORM == 'windows':
         return 2048
@@ -169,9 +180,14 @@ def get_max_file_descriptor_limit():
 @contextmanager
 def increase_file_descriptor_limit(limit):
     """Context manager that can be used to temporarily increase the maximum
-    number of open file descriptors for the current process.
+    number of open file descriptors for the current process. The original
+    value is restored when execution exits this function.
 
     This is required when running STAR with many threads.
+
+    :param limit: maximum number of open file descriptors will be increased to
+                  this value for the duration of the context
+    :type limit: int
     """
     old = None
     if config.PLATFORM == 'windows':
@@ -195,6 +211,14 @@ def increase_file_descriptor_limit(limit):
 
 
 def flatten_dict_values(d):
+    """Extract all values from a nested dictionary.
+
+    :param d: nested dictionary from which to extract values from
+    :type d: dict
+
+    :return: all values from the dictionary as a list
+    :rtype: list
+    """
     if isinstance(d, dict):
         flattened = []
         for k, v in d.items():
@@ -208,6 +232,30 @@ def flatten_dict_values(d):
 
 
 def mkstemp(dir=None):
+    """Wrapper for `tempfile.mkstemp` that automatically closes the OS-level
+    file descriptor. This function behaves like `tempfile.mkdtemp` but for
+    files.
+
+    :param dir: directory to create the temporary file. This value is passed as
+                the `dir` kwarg of `tempfile.mkstemp`, defaults to `None`
+    :type dir: str, optional
+
+    :return: path to the temporary file
+    :rtype: str
+    """
     fd, path = tempfile.mkstemp(dir=dir)
     os.close(fd)
     return path
+
+
+def get_available_memory():
+    """Get total amount of available memory (total memory - used memory) in bytes.
+
+    :return: available memory in bytes
+    :rtype: int
+    """
+    return psutil.virtual_memory().available
+
+
+def all_exists(paths):
+    return all(os.path.exists(path) for path in paths)

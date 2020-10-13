@@ -35,6 +35,7 @@ def STAR_genomeGenerate(
     :return:
     :rtype:
     """
+    # TODO: allow gzipped files
     print(f'Calculating optimal STAR index parameters for {memory} bytes of memory')
     # Calculate genome length and number of FASTA entries
     genome_length = 0

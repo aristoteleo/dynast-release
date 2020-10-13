@@ -5,7 +5,7 @@ import shutil
 import sys
 
 from . import __version__
-from .config import get_STAR_binary_path
+from .config import get_STAR_binary_path, RE_CHOICES
 from .count import count
 from .ref import ref
 
@@ -104,14 +104,41 @@ def setup_count_args(parser, parent):
         type=int,
         default=27
     )
-    parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
-
-    skip_group = parser_count.add_mutually_exclusive_group()
-    skip_group.add_argument('--realign', help='Re-run alignment with STAR', action='store_true')
-    skip_group.add_argument(
-        '--reparse', help='Re-parse STAR alignment BAM and re-generate read and conversion CSVs.', action='store_true'
+    parser_count.add_argument(
+        '--re',
+        metavar='RE',
+        help=(
+            'Re-do a step in the pipeline. Available choices are: `align`, '
+            '`parse`, `count`, `aggregate`, `estimate`.'
+        ),
+        type=str,
+        choices=RE_CHOICES,
+        default=None
     )
-    skip_group.add_argument('--recount', help='Re-count conversions', action='store_true')
+    parser_count.add_argument(
+        '--use-corrected-barcodes',
+        help=(
+            'Use STAR corrected barcodes instead of raw barcodes. This corresponds to '
+            'the `CB` tags in the STAR alignments BAM, as opposed to the `CR` tags. '
+            'All `barcode` columns in CSV files will correspond to '
+            'corrected barcodes instead of raw barcodes.'
+        ),
+        action='store_true'
+    )
+    parser_count.add_argument(
+        '--group-by',
+        metavar='GROUPBY',
+        help=(
+            'Column name to group by when calculating p_e and p_c estimates. '
+            'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
+            'either raw or corrected barcodes, depending on whether '
+            '--use-corrected-barcodes was specified. `GX` corresponds to genes.'
+        ),
+        type=str,
+        choices=['barcode', 'GX'],
+        default='barcode',
+    )
+    parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
 
     return parser_count
 
@@ -142,13 +169,13 @@ def parse_count(parser, args, temp_dir=None):
         args.fastqs,
         args.i,
         args.o,
+        use_corrected=args.use_corrected_barcodes,
         quality=args.quality,
+        group_by=args.group_by,
         whitelist_path=args.w,
         n_threads=args.t,
+        re=args.re,
         temp_dir=temp_dir,
-        realign=args.realign,
-        reparse=args.reparse,
-        recount=args.recount,
     )
 
 
