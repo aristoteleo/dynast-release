@@ -176,10 +176,6 @@ def count(
         }
     }
     STAR_required = utils.flatten_dict_values(STAR_result)
-    found = [path for path in STAR_required if os.path.exists(path)]
-    not_found = [path for path in STAR_required if not os.path.exists(path)]
-    logger.debug(f'found: {found}')
-    logger.debug(f'not found: {not_found}')
     if not utils.all_exists(STAR_required) or re in config.RE_CHOICES[:1]:
         STAR_result = STAR_solo(
             fastqs,
@@ -273,6 +269,7 @@ def count(
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
     p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
+    aggregate_path = os.path.join(estimates_dir, constants.AGGREGATE_FILENAME)
     pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
     estimates_paths = [p_e_path, p_c_path, pi_path]
     if not utils.all_exists(estimates_paths) or re in config.RE_CHOICES[:5]:
@@ -284,6 +281,6 @@ def count(
 
         logger.info('Estimating average mismatch rate in labeled RNA')
         df_aggregates = conversions.read_aggregates(aggregates_paths['TC'])
-        estimation.estimate_p_c(df_aggregates, p_e, group_by=group_by)
+        estimation.estimate_p_c(df_aggregates, p_e, p_c_path, aggregate_path, group_by=group_by, n_threads=n_threads)
 
         logger.info('Estimating fraction of newly transcribed RNA')

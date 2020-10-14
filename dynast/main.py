@@ -121,7 +121,8 @@ def setup_count_args(parser, parent):
             'Use STAR corrected barcodes instead of raw barcodes. This corresponds to '
             'the `CB` tags in the STAR alignments BAM, as opposed to the `CR` tags. '
             'All `barcode` columns in CSV files will correspond to '
-            'corrected barcodes instead of raw barcodes.'
+            'corrected barcodes instead of raw barcodes. This option is only '
+            'available if a whitelist is provided with the `-w` argument.'
         ),
         action='store_true'
     )
@@ -161,6 +162,10 @@ def parse_count(parser, args, temp_dir=None):
     :param args: Command-line arguments dictionary, as parsed by argparse
     :type args: dict
     """
+    # Whitelist must be provided if we want to use corrected barcodes
+    if args.use_corrected_barcodes and args.w is None:
+        parser.error('Whitelist must be provided for `--use-corrected-barcodes`')
+
     # Check quality
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
@@ -226,6 +231,7 @@ def main():
         level=logging.DEBUG if args.verbose else logging.INFO,
     )
     logger = logging.getLogger(__name__)
+    logging.getLogger('numba').setLevel(logging.WARNING)
     logger.debug('Printing verbose output')
     logger.debug(args)
     logger.debug(f'STAR binary located at {get_STAR_binary_path()}')
