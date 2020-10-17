@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+import warnings
 
 from . import __version__
 from .config import get_STAR_binary_path, RE_CHOICES
@@ -127,17 +128,30 @@ def setup_count_args(parser, parent):
         action='store_true'
     )
     parser_count.add_argument(
-        '--group-by',
+        '--p-group-by',
         metavar='GROUPBY',
         help=(
-            'Column name to group by when calculating p_e and p_c estimates. '
+            'Comma-delimited column names to group by when calculating p_e and p_c estimates. '
             'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
             'either raw or corrected barcodes, depending on whether '
-            '--use-corrected-barcodes was specified. `GX` corresponds to genes.'
+            '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
+            '(default: `barcode`)'
         ),
         type=str,
-        choices=['barcode', 'GX'],
         default='barcode',
+    )
+    parser_count.add_argument(
+        '--pi-group-by',
+        metavar='GROUPBY',
+        help=(
+            'Comma-delimited column names to group by when calculating pi estimates. '
+            'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
+            'either raw or corrected barcodes, depending on whether '
+            '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
+            '(default: `barcode,GX`)'
+        ),
+        type=str,
+        default='barcode,GX',
     )
     parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
 
@@ -170,13 +184,26 @@ def parse_count(parser, args, temp_dir=None):
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
+    # Check group by
+    if args.p_group_by.lower() == 'none':
+        args.p_group_by = None
+    else:
+        args.p_group_by = args.p_group_by.split(',')
+    if args.pi_group_by.lower() == 'none':
+        args.pi_group_by = None
+    else:
+        args.pi_group_by = args.pi_group_by.split(',')
+    if not set(args.p_group_by).issubset(set(args.pi_group_by)):
+        parser.error('`--p-group-by` must be a subset of `--pi-group-by`')
+
     count(
         args.fastqs,
         args.i,
         args.o,
         use_corrected=args.use_corrected_barcodes,
         quality=args.quality,
-        group_by=args.group_by,
+        p_group_by=args.p_group_by,
+        pi_group_by=args.pi_group_by,
         whitelist_path=args.w,
         n_threads=args.t,
         re=args.re,
@@ -229,11 +256,14 @@ def main():
     logging.basicConfig(
         format='[%(asctime)s] %(levelname)7s %(message)s',
         level=logging.DEBUG if args.verbose else logging.INFO,
+        force=True,
     )
     logger = logging.getLogger(__name__)
-    logging.getLogger('numba').setLevel(logging.WARNING)
+    logging.getLogger('numba').setLevel(logging.CRITICAL)
+    logging.getLogger('pystan').setLevel(logging.CRITICAL)
+    logging.getLogger('anndata').setLevel(logging.CRITICAL)
     logger.debug('Printing verbose output')
-    logger.debug(args)
+    logger.debug(f'Input args: {args}')
     logger.debug(f'STAR binary located at {get_STAR_binary_path()}')
     logger.debug(f'Creating {args.tmp} directory')
     if os.path.exists(args.tmp):
@@ -246,7 +276,9 @@ def main():
     os.makedirs(args.tmp)
     os.environ['NUMEXPR_MAX_THREADS'] = str(args.t)
     try:
-        COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
     except Exception:
         logger.exception('An exception occurred')
     finally:

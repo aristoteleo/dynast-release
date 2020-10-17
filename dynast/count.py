@@ -132,12 +132,15 @@ def count(
     out_dir,
     use_corrected=False,
     quality=27,
-    group_by=None,
+    p_group_by=None,
+    pi_group_by=None,
     whitelist_path=None,
     n_threads=8,
     temp_dir=None,
     re=None,
 ):
+    """
+    """
     # Check memory.
     available_memory = utils.get_available_memory()
     if available_memory < config.RECOMMENDED_MEMORY:
@@ -202,7 +205,7 @@ def count(
     index_path = os.path.join(out_dir, constants.INDEX_FILENAME)
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     if not utils.all_exists([conversions_path, index_path]) or re in config.RE_CHOICES[:2]:
-        logger.info('Parsing read, conversion, coverage information from BAM to' f'{conversions_path}, {coverage_path}')
+        logger.info(f'Parsing read, conversion, coverage information from BAM to {conversions_path}, {coverage_path}')
         conversions_path, index_path, coverage_path = bam.parse_all_reads(
             STAR_result['bam'],
             conversions_path,
@@ -228,6 +231,7 @@ def count(
         counts_path,
         rates_path,
     ]
+    df_counts = None
     if not utils.all_exists(counts_required) or re in config.RE_CHOICES[:3]:
         logger.info('Counting conversions and calculating mutation rates')
         barcodes_path, genes_path, counts_path = conversions.count_conversions(
@@ -243,7 +247,7 @@ def count(
         )
 
         df_counts = conversions.read_counts(counts_path)
-        rates_path = conversions.calculate_mutation_rates(df_counts, rates_path, group_by=group_by)
+        rates_path = conversions.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
     else:
         logger.info(
             'Skipped conversion counting and mutation rate calculation because files '
@@ -258,6 +262,7 @@ def count(
     if not utils.all_exists(aggregates_paths.values()) or re in config.RE_CHOICES[:4]:
         logger.info('Aggregating counts')
         os.makedirs(aggregates_dir, exist_ok=True)
+        df_counts = df_counts if df_counts is not None else conversions.read_counts(counts_path)
         df_genes = conversions.read_genes(genes_path)
         aggregates_paths = conversions.aggregate_counts(df_counts, df_genes, aggregates_dir)
     else:
@@ -270,17 +275,61 @@ def count(
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
     p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
     aggregate_path = os.path.join(estimates_dir, constants.AGGREGATE_FILENAME)
-    pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
-    estimates_paths = [p_e_path, p_c_path, pi_path]
+    estimates_paths = [p_e_path, p_c_path, aggregate_path]
+    df_aggregates = None
     if not utils.all_exists(estimates_paths) or re in config.RE_CHOICES[:5]:
         os.makedirs(estimates_dir, exist_ok=True)
 
-        logger.info('Estimating average mismatch rate in unlabeled RNA')
+        logger.info('Estimating average mismatch rate in old RNA')
         df_rates = conversions.read_rates(rates_path)
-        p_e = estimation.estimate_p_e(df_rates, p_e_path)
+        p_e, p_e_path = estimation.estimate_p_e(df_rates, p_e_path, group_by=p_group_by)
 
-        logger.info('Estimating average mismatch rate in labeled RNA')
-        df_aggregates = conversions.read_aggregates(aggregates_paths['TC'])
-        estimation.estimate_p_c(df_aggregates, p_e, p_c_path, aggregate_path, group_by=group_by, n_threads=n_threads)
+        logger.info('Estimating average mismatch rate in new RNA')
+        df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
+            aggregates_paths['TC']
+        )
+        p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
+            df_aggregates, p_e, p_c_path, aggregate_path, group_by=p_group_by, n_threads=n_threads
+        )
+    else:
+        logger.info(
+            'Skipped rate estimation because files '
+            'already exist. Use the `--re` argument to calculate estimates again.'
+        )
 
+    pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
+    if not utils.all_exists([pi_path]) or re in config.RE_CHOICES[:6]:
         logger.info('Estimating fraction of newly transcribed RNA')
+        with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
+            barcodes = [line.strip() for line in f.readlines()]
+        df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
+            aggregates_paths['TC']
+        )
+        p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
+        p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)
+        pi_path = estimation.estimate_pi(
+            df_aggregates,
+            p_e,
+            p_c,
+            pi_path,
+            filter_dict={'barcode': barcodes},
+            p_group_by=p_group_by,
+            group_by=pi_group_by,
+            n_threads=n_threads,
+        )
+    else:
+        logger.info(
+            'Skipped estimation of newly transcribed RNA because files '
+            'already exist. Use the `--re` argument to calculate estimate again.'
+        )
+
+    adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
+    logger.info('Splitting reads')
+    pis = estimation.read_pi(pi_path, group_by=pi_group_by)
+    adata = utils.read_STAR_count_matrix(
+        STAR_result['gene']['filtered']['barcodes'],
+        STAR_result['gene']['filtered']['features'],
+        STAR_result['gene']['filtered']['matrix'],
+    )
+    adata = estimation.split_reads(adata, pis, group_by=pi_group_by)
+    adata.write_h5ad(adata_path, compression='gzip')

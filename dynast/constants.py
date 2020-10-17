@@ -26,3 +26,5 @@ P_E_FILENAME = 'p_e.csv'
 P_C_FILENAME = 'p_c.csv'
 AGGREGATE_FILENAME = 'aggregate.csv'
 PI_FILENAME = 'pi.csv'
+
+ADATA_FILENAME = 'adata.h5ad'

@@ -4,8 +4,12 @@ import platform
 PACKAGE_PATH = os.path.dirname(__file__)
 PLATFORM = platform.system().lower()
 BINS_DIR = 'bins'
+MODELS_DIR = 'models'
+MODEL_PATH = os.path.join(PACKAGE_PATH, MODELS_DIR, 'pi.stan')
+MODEL_NAME = 'pi'
 
-RE_CHOICES = ['align', 'parse', 'count', 'aggregate', 'estimate']
+RE_CHOICES = ['align', 'parse', 'count', 'aggregate', 'estimate_rates', 'estimate_fraction']
+GROUP_CHOICES = ['barcode', 'GX']
 RECOMMENDED_MEMORY = 16 * (1024**3)  # 16 GB
 STAR_SOLO_OPTIONS = [
     '--outSAMattributes',
@@ -48,6 +52,7 @@ class UnsupportedOSException(Exception):
 def get_STAR_binary_path():
     """Get the path to the platform-dependent STAR binary included with
     the installation.
+
     :return: path to the binary
     :rtype: str
     """

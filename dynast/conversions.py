@@ -151,7 +151,7 @@ def read_genes(genes_path):
 
 
 def read_rates(rates_path):
-    return pd.read_csv(rates_path, squeeze=True, index_col=0)
+    return pd.read_csv(rates_path, index_col=None)
 
 
 def read_aggregates(aggregates_path):
@@ -173,13 +173,16 @@ def count_conversions(
     """
     """
     # Load index
+    logger.debug(f'Loading index {index_path} for {conversions_path}')
     with gzip.open(index_path, 'rb') as f:
         index = pickle.load(f)
 
     # Split index into n contiguous pieces
+    logger.debug(f'Splitting index into {n_threads} parts')
     parts = split_index(index, n=n_threads)
 
     # Parse each part in a different process
+    logger.debug(f'Spawning {n_threads} processes')
     n_lines = sum(idx[1] for idx in index)
     manager = multiprocessing.Manager()
     counter = manager.Value('I', 0)
@@ -196,21 +199,23 @@ def count_conversions(
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), parts
     )
+    pool.close()
 
     # Display progres bar
-    pbar = tqdm(unit='reads', total=n_lines, ascii=True, unit_scale=True)
-    previous_progress = 0
-    while not async_result.ready():
-        time.sleep(0.05)
-        progress = counter.value
-        pbar.update(progress - previous_progress)
-        previous_progress = progress
-    pbar.close()
+    with tqdm(unit='reads', total=n_lines, ascii=True, unit_scale=True) as pbar:
+        previous_progress = 0
+        while not async_result.ready():
+            time.sleep(0.05)
+            progress = counter.value
+            pbar.update(progress - previous_progress)
+            previous_progress = progress
+    pool.join()
 
     # Combine csvs
     barcodes = {}
     genes = {}
     combined_path = utils.mkstemp(dir=temp_dir)
+    logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
         for counts_part_path, barcodes_part, genes_part in async_result.get():
             barcodes.update(barcodes_part)
@@ -219,10 +224,12 @@ def count_conversions(
                 shutil.copyfileobj(f, out)
 
     # Write barcode and gene mapping
+    logger.debug(f'Writing barcodes to {barcodes_path}')
     with open(barcodes_path, 'w') as f:
         f.write('CR,CB\n')
         for cr in sorted(barcodes.keys()):
             f.write(f'{cr},{barcodes[cr]}\n')
+    logger.debug(f'Writing genes to {genes_path}')
     with open(genes_path, 'w') as f:
         f.write('GX,GN,strand\n')
         for gx in sorted(genes.keys()):
@@ -231,7 +238,7 @@ def count_conversions(
 
     # Read in as dataframe and deduplicate based on CR and UB
     # If there are duplicates, select the row with the most conversions
-    logger.info('Done counting. Deduplicating reads based on barcode and UMI')
+    logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
     df = pd.read_csv(
         combined_path,
         names=['barcode', 'UB', 'GX'] + COLUMNS,
@@ -252,14 +259,22 @@ def count_conversions(
     return barcodes_path, genes_path, counts_path
 
 
-def calculate_mutation_rates(df, rates_path, group_by=None):
-    df = df.groupby(group_by).sum().astype(np.uint32) if group_by is not None else df.sum().astype(np.uint32)
+def calculate_mutation_rates(df_counts, rates_path, group_by=None):
+    logger.debug(f'Mutation rates will be grouped by {group_by}')
+    if group_by is not None:
+        df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
+    else:
+        df_sum = pd.DataFrame(df_counts.sum(numeric_only=True).astype(np.uint32)).T
 
     # Compute mutation rate of each base
     dfs = []
     for base in sorted(BASE_IDX.keys()):
-        dfs.append(df.filter(regex=f'^{base}[A,C,G,T]$').divide(df[base], axis=0))
-    df_rates = pd.concat(dfs, axis=1).reset_index()
+        logger.debug(f'Calculating {base} mutation rate')
+        dfs.append(df_sum.filter(regex=f'^{base}[A,C,G,T]$').divide(df_sum[base], axis=0))
+    df_rates = pd.concat(dfs, axis=1)
+    if group_by is not None:
+        df_rates = df_rates.reset_index()
+    logger.debug(f'Writing mutation rates to {rates_path}')
     df_rates.to_csv(rates_path, index=False)
     return rates_path
 
@@ -276,9 +291,10 @@ def aggregate_counts(df, df_genes, aggregates_dir):
 
     paths = {}
     for conversion in tqdm(CONVERSION_COLUMNS, ascii=True):
+        csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
+        logger.debug(f'Aggregating counts for {conversion} conversion to {csv_path}')
         df_agg = pd.DataFrame(df_complemented.groupby(['barcode', 'GX', conversion, conversion[0]]).size())
         df_agg.columns = ['count']
-        csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
         df_agg.reset_index().to_csv(csv_path, index=False)
         paths[conversion] = csv_path
 
