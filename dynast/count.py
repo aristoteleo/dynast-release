@@ -132,6 +132,7 @@ def count(
     out_dir,
     use_corrected=False,
     quality=27,
+    conversion='TC',
     p_group_by=None,
     pi_group_by=None,
     whitelist_path=None,
@@ -274,9 +275,10 @@ def count(
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
     p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
-    aggregate_path = os.path.join(estimates_dir, constants.AGGREGATE_FILENAME)
+    aggregate_path = os.path.join(estimates_dir, f'{conversion}.csv')
     estimates_paths = [p_e_path, p_c_path, aggregate_path]
     df_aggregates = None
+    value_columns = [conversion, conversion[0], 'count']
     if not utils.all_exists(estimates_paths) or re in config.RE_CHOICES[:5]:
         os.makedirs(estimates_dir, exist_ok=True)
 
@@ -286,10 +288,16 @@ def count(
 
         logger.info('Estimating average mismatch rate in new RNA')
         df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
-            aggregates_paths['TC']
+            aggregates_paths[conversion]
         )
         p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
-            df_aggregates, p_e, p_c_path, aggregate_path, group_by=p_group_by, n_threads=n_threads
+            df_aggregates,
+            p_e,
+            p_c_path,
+            aggregate_path,
+            group_by=p_group_by,
+            value_columns=value_columns,
+            n_threads=n_threads,
         )
     else:
         logger.info(
@@ -303,7 +311,7 @@ def count(
         with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
             barcodes = [line.strip() for line in f.readlines()]
         df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
-            aggregates_paths['TC']
+            aggregates_paths[conversion]
         )
         p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
         p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)
@@ -315,6 +323,7 @@ def count(
             filter_dict={'barcode': barcodes},
             p_group_by=p_group_by,
             group_by=pi_group_by,
+            value_columns=value_columns,
             n_threads=n_threads,
         )
     else:

@@ -7,6 +7,7 @@ import warnings
 
 from . import __version__
 from .config import get_STAR_binary_path, RE_CHOICES
+from .conversions import CONVERSION_COLUMNS
 from .count import count
 from .ref import ref
 
@@ -143,15 +144,18 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--pi-group-by',
         metavar='GROUPBY',
-        help=(
-            'Comma-delimited column names to group by when calculating pi estimates. '
-            'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
-            'either raw or corrected barcodes, depending on whether '
-            '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
-            '(default: `barcode,GX`)'
-        ),
+        help=('Same as `--p-group-by`, but for pi estimation. (default: `barcode,GX`)'
+              '(default: `barcode,GX`)'),
         type=str,
         default='barcode,GX',
+    )
+    parser_count.add_argument(
+        '--conversion',
+        metavar='CONVERSION',
+        help=argparse.SUPPRESS,
+        type=str,
+        choices=CONVERSION_COLUMNS,
+        default='TC',
     )
     parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
 
@@ -193,7 +197,10 @@ def parse_count(parser, args, temp_dir=None):
         args.pi_group_by = None
     else:
         args.pi_group_by = args.pi_group_by.split(',')
-    if not set(args.p_group_by).issubset(set(args.pi_group_by)):
+    if args.pi_group_by is None and args.p_group_by is not None:
+        parser.error('`--p-group-by` must be `None` if `--pi-group-by` is `None`')
+    if args.p_group_by is not None and args.pi_group_by is not None and not set(args.p_group_by).issubset(set(
+            args.pi_group_by)):
         parser.error('`--p-group-by` must be a subset of `--pi-group-by`')
 
     count(
@@ -202,6 +209,7 @@ def parse_count(parser, args, temp_dir=None):
         args.o,
         use_corrected=args.use_corrected_barcodes,
         quality=args.quality,
+        conversion=args.conversion,
         p_group_by=args.p_group_by,
         pi_group_by=args.pi_group_by,
         whitelist_path=args.w,

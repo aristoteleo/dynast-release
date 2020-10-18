@@ -19,7 +19,6 @@ transformed parameters{
     beta = exp(log_beta);
 }
 
-
 model {
     pi_g ~ beta(alpha, beta);
     for (i in 1:N){

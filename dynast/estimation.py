@@ -294,11 +294,16 @@ def estimate_pi(
     n_threads=8,
 ):
     logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
+    df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).all(axis=1)]
     filter_dict = filter_dict or {}
     if filter_dict:
         logger.debug(f'Filtering aggregates by the following keys: {list(filter_dict.keys())}')
         for column, values in filter_dict.items():
             df_aggregates = df_aggregates[df_aggregates[column].isin(values)]
+
+    logger.debug('Summing aggregates by group')
+    df_aggregates = df_aggregates.groupby((group_by if group_by is not None else []) +
+                                          value_columns[:-1]).sum().reset_index()
 
     logger.debug(f'Loading STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
@@ -319,10 +324,15 @@ def estimate_pi(
             f.write(f'{alpha},{beta},{pi}')
         return pi_path
 
-    df_full = df_aggregates.set_index(p_group_by, drop=True)
-    df_full['p_e'] = df_full.index.map(p_e)
-    df_full['p_c'] = df_full.index.map(p_c)
-    df_full = df_full.reset_index()
+    if p_group_by is not None:
+        df_full = df_aggregates.set_index(p_group_by, drop=True)
+        df_full['p_e'] = df_full.index.map(p_e)
+        df_full['p_c'] = df_full.index.map(p_c)
+        df_full = df_full.reset_index()
+    else:
+        df_full = df_aggregates
+        df_full['p_e'] = p_e
+        df_full['p_c'] = p_c
     values = df_full[value_columns].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
