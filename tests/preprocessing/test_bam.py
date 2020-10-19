@@ -2,7 +2,7 @@ import multiprocessing
 import os
 from unittest import mock, TestCase
 
-import dynast.bam as bam
+import dynast.preprocessing.bam as bam
 from tests import mixins
 
 
@@ -24,10 +24,10 @@ class TestBam(mixins.TestMixin, TestCase):
         conversions_path = os.path.join(self.temp_dir, 'conversions.csv')
         index_path = os.path.join(self.temp_dir, 'conversions.idx')
         coverage_path = os.path.join(self.temp_dir, 'coverage_path')
-        with mock.patch('dynast.bam.parse_read_contig'), \
-            mock.patch('dynast.bam.tqdm'), \
-            mock.patch('dynast.bam.partial') as partial, \
-            mock.patch('dynast.bam.multiprocessing') as mp:
+        with mock.patch('dynast.preprocessing.bam.parse_read_contig'), \
+            mock.patch('dynast.preprocessing.bam.tqdm'), \
+            mock.patch('dynast.preprocessing.bam.partial') as partial, \
+            mock.patch('dynast.preprocessing.bam.multiprocessing') as mp:
             async_result = mock.MagicMock()
             async_result.ready.return_value = True
             async_result.get.return_value = zip(
