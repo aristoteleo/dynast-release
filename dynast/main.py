@@ -7,7 +7,7 @@ import warnings
 
 from . import __version__
 from .config import get_STAR_binary_path, RE_CHOICES
-from .conversions import CONVERSION_COLUMNS
+from .preprocessing import CONVERSION_COLUMNS
 from .count import count
 from .ref import ref
 
