@@ -42,47 +42,12 @@ def fit_stan(
     }
     init = [{'log_alpha': 0.0, 'log_beta': 0.0, 'pi_g': 0.5}] * n_chains
 
-    # model = stan.load_model(pickle_path)
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
             data=data, n_jobs=n_chains, iter=n_iters, chains=n_chains, init=init, control={'adapt_delta': 0.95}
         )
     samples = fit.extract(('alpha', 'beta'))
     return np.mean(samples['alpha']), np.mean(samples['beta'])
-
-
-def fit_stan_group(
-    values_group,
-    p_e,
-    p_c,
-    model,
-    n_chains=4,
-    n_iters=5000,
-):
-    params = {}
-    with utils.suppress_stdout_stderr():
-        for key, values in values_group.items():
-            conversions = []
-            contents = []
-            for k, n, count in values:
-                conversions.extend([k] * count)
-                contents.extend([n] * count)
-            data = {
-                'N': len(conversions),
-                'contents': contents,
-                'conversions': conversions,
-                'p_c': p_c,
-                'p_e': p_e,
-            }
-            init = [{'log_alpha': 0.0, 'log_beta': 0.0, 'pi_g': 0.5}] * n_chains
-
-            # model = stan.load_model(pickle_path)
-            fit = model.sampling(
-                data=data, n_jobs=1, iter=n_iters, chains=n_chains, init=init, control={'adapt_delta': 0.95}
-            )
-            samples = fit.extract(('alpha', 'beta'))
-            params[key] = (np.mean(samples['alpha']), np.mean(samples['beta']))
-        return params
 
 
 def estimate_pi(

@@ -37,7 +37,6 @@ class TestBam(mixins.TestMixin, TestCase):
 
             result = bam.parse_all_reads(self.bam_path, conversions_path, index_path, coverage_path)
             self.assertEqual((conversions_path, index_path, coverage_path), result)
-            print(result)
 
             partial.assert_called_once_with(
                 bam.parse_read_contig,

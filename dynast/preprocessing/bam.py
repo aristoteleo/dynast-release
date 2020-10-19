@@ -166,7 +166,7 @@ def parse_read_contig(
 
     # Save index
     with gzip.open(index_path, 'wb') as f:
-        pickle.dump(index, f)
+        pickle.dump(index, f, protocol=4)
 
     # Clean coverage before writing
     for key in list(set(keys_added)):
@@ -249,6 +249,6 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
                 index.append((pos + p, n))
             pos += os.path.getsize(conversions_part_path)
     with gzip.open(index_path, 'wb') as index_out:
-        pickle.dump(index, index_out)
+        pickle.dump(index, index_out, protocol=4)
 
     return conversions_path, index_path, coverage_path
