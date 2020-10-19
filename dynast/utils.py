@@ -37,15 +37,14 @@ class TqdmLoggingHandler(logging.Handler):
 
 
 class suppress_stdout_stderr:
-    '''
-    A context manager for doing a "deep suppression" of stdout and stderr in
+    """A context manager for doing a "deep suppression" of stdout and stderr in
     Python, i.e. will suppress all print, even if the print originates in a
     compiled C/Fortran sub-function.
        This will not suppress raised exceptions, since exceptions are printed
     to stderr just before a script exits, and after the context manager has
     exited (at least, I think that is why it lets exceptions through).
-
-    '''
+    https://github.com/facebook/prophet/issues/223
+    """
 
     def __init__(self):
         # Open a pair of null files
@@ -205,7 +204,7 @@ def get_max_file_descriptor_limit():
     :rtype: int
     """
     if config.PLATFORM == 'windows':
-        return 2048
+        return 8192
     else:
         import resource
         return resource.getrlimit(resource.RLIMIT_NOFILE)[1]
@@ -292,10 +291,31 @@ def get_available_memory():
 
 
 def all_exists(paths):
+    """Check if all provided paths exist.
+
+    :param paths: list of paths
+    :type paths: list
+
+    :return: `True` iff all paths exist
+    :rtype: bool
+    """
     return all(os.path.exists(path) for path in paths)
 
 
 def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
+    """Given the barcodes, features, and matrix paths of a STAR count matrix,
+    read it as an AnnData object.
+
+    :param barcodes_path: path to barcodes.tsv
+    :type barcodes_path: str
+    :param features_path: path to features.tsv
+    :type features_path: str
+    :param matrix_path: path to matrix.mtx
+    :type matrix_path: str
+
+    :return: cells x genes AnnData matrix
+    :rtype: AnnData
+    """
     df_barcodes = pd.read_csv(barcodes_path, names=['barcode'])
     df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1])
     matrix = scipy.io.mmread(matrix_path).T.toarray()

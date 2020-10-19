@@ -1,7 +1,8 @@
 .PHONY : install test check build docs clean push_release
 
 test:
-	nosetests --verbose --with-coverage --cover-package dynast
+	rm -f .coverage
+	nosetests --verbose --with-coverage --cover-package dynast tests/*
 
 check:
 	flake8 dynast && echo OK

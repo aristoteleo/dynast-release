@@ -12,7 +12,7 @@ from functools import partial
 import pysam
 from tqdm import tqdm
 
-from . import utils
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -199,9 +199,13 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     :return: (`conversions_path`, `index_path`, `coverage_path`)
     :rtype: tuple
     """
+    contigs = []
+    n_reads = 0
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
-        contigs = bam.references
-        n_reads = sum(index.total for index in bam.get_index_statistics())
+        for index in bam.get_index_statistics():
+            n_reads += index.total
+            if index.total > 0:
+                contigs.append(index.contig)
 
     # Initialize and run pool
     manager = multiprocessing.Manager()

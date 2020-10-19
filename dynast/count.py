@@ -3,7 +3,7 @@ import os
 import pysam
 import tempfile
 
-from . import bam, config, constants, conversions, estimation, utils
+from . import config, constants, estimation, preprocessing, utils
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ def count(
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     if not utils.all_exists([conversions_path, index_path]) or re in config.RE_CHOICES[:2]:
         logger.info(f'Parsing read, conversion, coverage information from BAM to {conversions_path}, {coverage_path}')
-        conversions_path, index_path, coverage_path = bam.parse_all_reads(
+        conversions_path, index_path, coverage_path = preprocessing.parse_all_reads(
             STAR_result['bam'],
             conversions_path,
             index_path,
@@ -235,7 +235,7 @@ def count(
     df_counts = None
     if not utils.all_exists(counts_required) or re in config.RE_CHOICES[:3]:
         logger.info('Counting conversions and calculating mutation rates')
-        barcodes_path, genes_path, counts_path = conversions.count_conversions(
+        barcodes_path, genes_path, counts_path = preprocessing.count_conversions(
             conversions_path,
             index_path,
             barcodes_path,
@@ -247,8 +247,8 @@ def count(
             temp_dir=temp_dir
         )
 
-        df_counts = conversions.read_counts(counts_path)
-        rates_path = conversions.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
+        df_counts = preprocessing.read_counts(counts_path)
+        rates_path = preprocessing.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
     else:
         logger.info(
             'Skipped conversion counting and mutation rate calculation because files '
@@ -258,14 +258,14 @@ def count(
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     aggregates_paths = {
         conversion: os.path.join(aggregates_dir, f'{conversion}.csv')
-        for conversion in conversions.CONVERSION_COLUMNS
+        for conversion in preprocessing.CONVERSION_COLUMNS
     }
     if not utils.all_exists(aggregates_paths.values()) or re in config.RE_CHOICES[:4]:
         logger.info('Aggregating counts')
         os.makedirs(aggregates_dir, exist_ok=True)
-        df_counts = df_counts if df_counts is not None else conversions.read_counts(counts_path)
-        df_genes = conversions.read_genes(genes_path)
-        aggregates_paths = conversions.aggregate_counts(df_counts, df_genes, aggregates_dir)
+        df_counts = df_counts if df_counts is not None else preprocessing.read_counts(counts_path)
+        df_genes = preprocessing.read_genes(genes_path)
+        aggregates_paths = preprocessing.aggregate_counts(df_counts, df_genes, aggregates_dir)
     else:
         logger.info(
             'Skipped count aggregation because files '
@@ -283,11 +283,11 @@ def count(
         os.makedirs(estimates_dir, exist_ok=True)
 
         logger.info('Estimating average mismatch rate in old RNA')
-        df_rates = conversions.read_rates(rates_path)
+        df_rates = preprocessing.read_rates(rates_path)
         p_e, p_e_path = estimation.estimate_p_e(df_rates, p_e_path, group_by=p_group_by)
 
         logger.info('Estimating average mismatch rate in new RNA')
-        df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
+        df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
             aggregates_paths[conversion]
         )
         p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
@@ -310,7 +310,7 @@ def count(
         logger.info('Estimating fraction of newly transcribed RNA')
         with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
             barcodes = [line.strip() for line in f.readlines()]
-        df_aggregates = df_aggregates if df_aggregates is not None else conversions.read_aggregates(
+        df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
             aggregates_paths[conversion]
         )
         p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
