@@ -117,7 +117,7 @@ class TestUtils(mixins.TestMixin, TestCase):
             self.assertEqual(vm.return_value.available, utils.get_available_memory())
 
     def test_read_STAR_count_matrix(self):
-        adata = utils.read_STAR_count_matrix(self.barcodes_path, self.features_path, self.matrix_path)
+        adata = utils.read_STAR_count_matrix(self.STAR_barcodes_path, self.STAR_features_path, self.STAR_matrix_path)
         self.assertEqual(2, np.count_nonzero(adata.X))
         self.assertEqual(3, adata.X[0, 0])
         self.assertEqual(5, adata.X[3, 2])

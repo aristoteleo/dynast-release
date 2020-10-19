@@ -64,11 +64,27 @@ COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 
 
 def read_counts(counts_path):
+    """Read counts CSV as a pandas dataframe.
+
+    :param counts_path: path to CSV
+    :type counts_path: str
+
+    :return: counts dataframe
+    :rtype: pandas.DataFrame
+    """
     dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint8 for column in COLUMNS}}
     return pd.read_csv(counts_path, dtype=dtypes)
 
 
 def read_genes(genes_path):
+    """Read genes CSV as a pandas dataframe.
+
+    :param genes_path: path to CSV
+    :type genes_path: str
+
+    :return: genes dataframe
+    :rtype: pandas.DataFrame
+    """
     dtypes = {
         'GX': 'string',
         'GN': 'string',
@@ -78,7 +94,17 @@ def read_genes(genes_path):
 
 
 def split_index(index, n=8):
-    """
+    """Split a conversions index, which is a list of tuples (file position,
+    number of lines), one for each read, into `n` approximately equal parts.
+    This function is used to split the conversions CSV for multiprocessing.
+
+    :param index: conversions index
+    :type index: list
+    :param n: number of splits, defaults to `8`
+    :type n: int, optional
+
+    :return: list of parts, where each part is a (file position, number of lines) tuple
+    :rtype: list
     """
     n_lines = sum(idx[1] for idx in index)
     target = (n_lines // n) + 1  # add one to prevent underflow
@@ -105,7 +131,38 @@ def split_index(index, n=8):
 def count_conversions_part(
     conversions_path, counter, lock, pos, n_lines, use_corrected=False, quality=27, temp_dir=None, update_every=10000
 ):
-    """
+    """Count the number of conversions of each read per barcode and gene, along with
+    the total nucleotide content of the region each read mapped to, also per barcode
+    and gene. This function is used exclusively for multiprocessing.
+
+    :param conversions_path: path to conversions CSV
+    :type conversions_path: str
+    :param counter: counter that keeps track of how many reads have been processed
+    :type counter: multiprocessing.Value
+    :param lock: semaphore for the `counter` so that multiple processes do not
+                 modify it at the same time
+    :type lock: multiprocessing.Lock
+    :param pos: file handle position at which to start reading the conversions CSV
+    :type pos: int
+    :param n_lines: number of lines to parse from the conversions CSV, starting
+                    from position `pos`
+    :type n_lines: int
+    :param use_corrected: whether or not to use corrected barcodes in the `barcode`
+                          column of the counts CSV, defaults to `False`
+    :type use_corrected: bool, optional
+    :param quality: only count conversions with PHRED quality greater than this value,
+                    defaults to `27`
+    :type quality: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+    :param update_every: update the counter every this many reads, defaults to `10000`
+    :type update_every: int, optional
+
+    :return: (`count_path`, `barcodes`, `genes`)
+             `count_path`: path to temporary counts CSV
+             `barcodes`: dictionary of raw to corrected barcode mappings
+             `genes`: dictionary of gene ID to (gene name, strand) mappings
+    :rtype: tuple
     """
     count_path = utils.mkstemp(dir=temp_dir)
 
@@ -117,17 +174,23 @@ def count_conversions_part(
     with open(conversions_path, 'r') as f, open(count_path, 'w') as out:
         f.seek(pos)
 
+        groups = None
+        prev_groups = None
         for i in range(n_lines):
             line = f.readline()
+            prev_groups = groups
             groups = CONVERSIONS_PARSER.match(line).groupdict()
 
             if read_id != groups['read_id']:
                 if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-                    barcodes.setdefault(groups["CR"], groups["CB"])
-                    genes.setdefault(groups["GX"], (groups['GN'], groups['strand']))
+                    barcodes.setdefault(prev_groups["CR"], prev_groups["CB"])
+                    genes.setdefault(prev_groups["GX"], (prev_groups['GN'], prev_groups['strand']))
 
-                    barcode = groups["CB"] if use_corrected else groups["CR"]
-                    out.write(f'{barcode},{groups["UB"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
+                    barcode = prev_groups["CB"] if use_corrected else prev_groups["CR"]
+                    out.write(
+                        f'{barcode},{prev_groups["UB"]},{prev_groups["GX"]},'
+                        f'{",".join(str(c) for c in counts)}\n'
+                    )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
                 read_id = groups['read_id']
                 count_base = True
@@ -142,6 +205,15 @@ def count_conversions_part(
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+
+        # Add last record
+        if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
+            barcodes.setdefault(groups["CR"], groups["CB"])
+            genes.setdefault(groups["GX"], (groups['GN'], groups['strand']))
+
+            barcode = groups["CB"] if use_corrected else groups["CR"]
+            out.write(f'{barcode},{groups["UB"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
+
     lock.acquire()
     counter.value += n_lines % update_every
     lock.release()
@@ -160,7 +232,34 @@ def count_conversions(
     n_threads=8,
     temp_dir=None
 ):
-    """
+    """Count the number of conversions of each read per barcode and gene, along with
+    the total nucleotide content of the region each read mapped to, also per barcode.
+    When a duplicate UMI for a barcode is observed, the read with the greatest
+    number of conversions is selected.
+
+    :param conversions_path: path to conversions CSV
+    :type conversions_path: str
+    :param index_path: path to conversions index
+    :type index_path: str
+    :param barcodes_path: path to write barcodes CSV
+    :type barcodes_path: str
+    :param genes_path: path to write genes CSV
+    :type genes_path: str
+    :param counts_path: path to write counts CSV
+    :param counts_path: str
+    :param use_corrected: whether or not to use corrected barcodes in the `barcode`
+                          column of the counts CSV, defaults to `False`
+    :type use_corrected: bool, optional
+    :param quality: only count conversions with PHRED quality greater than this value,
+                    defaults to `27`
+    :type quality: int, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+
+    :return: (`barcodes_path`, `genes_path`, `counts_path`)
+    :rtype: tuple
     """
     # Load index
     logger.debug(f'Loading index {index_path} for {conversions_path}')

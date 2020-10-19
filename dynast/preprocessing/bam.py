@@ -232,7 +232,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     index = []
     with open(conversions_path, 'wb') as conversions_out, \
         open(coverage_path, 'wb') as coverage_out:
-        conversions_out.write(b'read_id,CR,CB,UR,UB,GX,GN,strand,contig,genome_i,original,converted,A,C,G,T\n')
+        conversions_out.write(b'read_id,CR,CB,UR,UB,GX,GN,strand,contig,genome_i,original,converted,quality,A,C,G,T\n')
         coverage_out.write(b'CR,contig,genome_i,coverage\n')
         pos = conversions_out.tell()
 

@@ -27,9 +27,9 @@ class TestMixin(TestCase):
         cls.base_dir = os.path.dirname(os.path.abspath(__file__))
         cls.fixtures_dir = os.path.join(cls.base_dir, 'fixtures')
         cls.STAR_dir = os.path.join(cls.fixtures_dir, 'STAR')
-        cls.barcodes_path = os.path.join(cls.STAR_dir, 'barcodes.tsv')
-        cls.features_path = os.path.join(cls.STAR_dir, 'features.tsv')
-        cls.matrix_path = os.path.join(cls.STAR_dir, 'matrix.mtx')
+        cls.STAR_barcodes_path = os.path.join(cls.STAR_dir, 'barcodes.tsv')
+        cls.STAR_features_path = os.path.join(cls.STAR_dir, 'features.tsv')
+        cls.STAR_matrix_path = os.path.join(cls.STAR_dir, 'matrix.mtx')
 
         cls.bam_path = os.path.join(cls.STAR_dir, 'small.bam')
         cls.bam_conversions_paths = [
@@ -47,6 +47,17 @@ class TestMixin(TestCase):
         cls.bam_conversions_path = os.path.join(cls.STAR_dir, 'conversions.csv')
         cls.bam_index_path = os.path.join(cls.STAR_dir, 'conversions.idx')
         cls.bam_coverage_path = os.path.join(cls.STAR_dir, 'coverage.csv')
+
+        cls.conversions_path = os.path.join(cls.fixtures_dir, 'conversions.csv')
+        cls.index_path = os.path.join(cls.fixtures_dir, 'conversions.idx')
+        cls.counts_part_path = os.path.join(cls.fixtures_dir, 'counts_part.csv')
+        cls.counts_part_paths = [
+            os.path.join(cls.fixtures_dir, 'counts_part1.csv'),
+            os.path.join(cls.fixtures_dir, 'counts_part2.csv'),
+        ]
+        cls.barcodes_path = os.path.join(cls.fixtures_dir, 'barcodes.csv')
+        cls.genes_path = os.path.join(cls.fixtures_dir, 'genes.csv')
+        cls.counts_path = os.path.join(cls.fixtures_dir, 'counts.csv')
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
