@@ -11,15 +11,44 @@ logger = logging.getLogger(__name__)
 
 
 def read_rates(rates_path):
+    """Read mutation rates CSV as a pandas dataframe.
+
+    :param rates_path: path to rates CSV
+    :type rates_path: str
+
+    :return: rates dataframe
+    :rtype: pandas.DataFrame
+    """
     return pd.read_csv(rates_path, index_col=None)
 
 
 def read_aggregates(aggregates_path):
+    """Read aggregates CSV as a pandas dataframe.
+
+    :param aggregates_path: path to aggregates CSV
+    :type aggregates_path: str
+
+    :return: aggregates dataframe
+    :rtype: pandas.DataFrame
+    """
     dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint16 for column in COLUMNS}}
     return pd.read_csv(aggregates_path, dtype=dtypes)
 
 
 def calculate_mutation_rates(df_counts, rates_path, group_by=None):
+    """Calculate mutation rate for each pair of bases.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param rates_path: path to write rates CSV
+    :type rates_path: str
+    :param group_by: column(s) to group calculations by, defaults to `None`, which
+                     combines all rows
+    :type group_by: str or list
+
+    :return: path to rates CSV
+    :rtype: str
+    """
     logger.debug(f'Mutation rates will be grouped by {group_by}')
     if group_by is not None:
         df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
@@ -39,8 +68,21 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     return rates_path
 
 
-def aggregate_counts(df, df_genes, aggregates_dir):
-    df = df.merge(df_genes[['GX', 'strand']], on='GX')
+def aggregate_counts(df_counts, df_genes, aggregates_dir):
+    """Calculate mutation aggregates for each pair of bases.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param df_genes: genes dataframe
+    :type df_genes: pandas.DataFrame
+    :param aggregates_dir: directory to write aggregate CSVs. One CSV is written
+                           per pair of bases (i.e. `AC.csv`, `AG.csv` etc.)
+    :type aggregates_dir: str
+
+    :return: dictionary of pairs of bases to path to CSVs
+    :rtype: dict
+    """
+    df = df_counts.merge(df_genes[['GX', 'strand']], on='GX')
     df_forward = df[df.strand == '+']
     df_reverse = df[df.strand == '-'][COLUMNS]
 

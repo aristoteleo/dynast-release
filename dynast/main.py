@@ -11,6 +11,8 @@ from .preprocessing import CONVERSION_COLUMNS
 from .count import count
 from .ref import ref
 
+logger = logging.getLogger(__name__)
+
 
 def setup_ref_args(parser, parent):
     """Helper function to set up a subparser for the `ref` command.
@@ -124,7 +126,8 @@ def setup_count_args(parser, parent):
             'the `CB` tags in the STAR alignments BAM, as opposed to the `CR` tags. '
             'All `barcode` columns in CSV files will correspond to '
             'corrected barcodes instead of raw barcodes. This option is only '
-            'available if a whitelist is provided with the `-w` argument.'
+            'available if a whitelist is provided with the `-w` argument and is '
+            'highly recommended.'
         ),
         action='store_true'
     )
@@ -183,6 +186,8 @@ def parse_count(parser, args, temp_dir=None):
     # Whitelist must be provided if we want to use corrected barcodes
     if args.use_corrected_barcodes and args.w is None:
         parser.error('Whitelist must be provided for `--use-corrected-barcodes`')
+    if args.w is not None and not args.use_corrected_barcodes:
+        logger.warning('`--use-corrected-barcodes` is highly recommended when providing a whitelist')
 
     # Check quality
     if args.quality < 0 or args.quality > 41:
@@ -266,7 +271,6 @@ def main():
         level=logging.DEBUG if args.verbose else logging.INFO,
         force=True,
     )
-    logger = logging.getLogger(__name__)
     logging.getLogger('numba').setLevel(logging.CRITICAL)
     logging.getLogger('pystan').setLevel(logging.CRITICAL)
     logging.getLogger('anndata').setLevel(logging.CRITICAL)

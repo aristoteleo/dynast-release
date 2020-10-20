@@ -48,9 +48,20 @@ def STAR_solo(
     if not out_dir.endswith(('/', '\\')):
         out_dir += os.path.sep
 
+    # Input FASTQs must be plaintext
+    plaintext_fastqs = []
+    for fastq in fastqs:
+        if fastq.endswith('.gz'):
+            plaintext_path = utils.mkstemp(dir=temp_dir)
+            logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
+            utils.decompress_gzip(fastq, plaintext_path)
+        else:
+            plaintext_path = fastq
+        plaintext_fastqs.append(plaintext_path)
+
     command = [config.get_STAR_binary_path()] + config.STAR_SOLO_OPTIONS
     command += ['--genomeDir', index_dir]
-    command += ['--readFilesIn'] + fastqs
+    command += ['--readFilesIn'] + plaintext_fastqs
     command += ['--runThreadN', n_threads]
     command += ['--outFileNamePrefix', out_dir]
     command += ['--soloCBwhitelist', whitelist_path or 'None']

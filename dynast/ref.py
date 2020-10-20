@@ -3,8 +3,7 @@ import math
 import os
 import tempfile
 
-from .config import get_STAR_binary_path
-from .utils import open_as_text, run_executable
+from . import config, utils
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +34,16 @@ def STAR_genomeGenerate(
     :return:
     :rtype:
     """
-    # TODO: allow gzipped files
+    if fasta_path.endswith('.gz'):
+        plaintext_path = utils.mkstemp(dir=temp_dir)
+        logger.warning(f'Decompressing {fasta_path} to {plaintext_path} because STAR requires a plaintext FASTA')
+        fasta_path = plaintext_path
+
     print(f'Calculating optimal STAR index parameters for {memory} bytes of memory')
     # Calculate genome length and number of FASTA entries
     genome_length = 0
     n_entries = 0
-    with open_as_text(fasta_path, 'r') as f:
+    with utils.open_as_text(fasta_path, 'r') as f:
         for line in f:
             if line.startswith('>'):
                 n_entries += 1
@@ -73,7 +76,7 @@ def STAR_genomeGenerate(
     )
 
     print(f'Generating STAR index to {index_dir}')
-    command = [get_STAR_binary_path(), '--runMode', 'genomeGenerate']
+    command = [config.get_STAR_binary_path(), '--runMode', 'genomeGenerate']
     command += ['--genomeDir', index_dir]
     command += ['--genomeFastaFiles', fasta_path]
     command += ['--sjdbGTFfile', gtf_path]
@@ -87,7 +90,7 @@ def STAR_genomeGenerate(
         os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
     ]
 
-    run_executable(command)
+    utils.run_executable(command)
 
     return {'index': index_dir}
 

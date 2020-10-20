@@ -4,11 +4,27 @@ import os
 import pickle
 from unittest import mock, TestCase
 
+import numpy as np
+
 import dynast.preprocessing.conversion as conversion
 from tests import mixins
 
 
 class TestConversion(mixins.TestMixin, TestCase):
+
+    def test_read_counts(self):
+        df = conversion.read_counts(self.counts_path)
+        self.assertFalse(df.empty)
+        self.assertEqual(['barcode', 'GX'] + self.conversions + self.bases, list(df.columns))
+        for column in self.conversions:
+            self.assertEqual(df[column].dtype, np.uint8)
+        for column in self.bases:
+            self.assertEqual(df[column].dtype, np.uint8)
+
+    def test_read_genes(self):
+        df = conversion.read_genes(self.genes_path)
+        self.assertFalse(df.empty)
+        self.assertEqual(['GX', 'GN', 'strand'], list(df.columns))
 
     def test_split_index(self):
         index = [(1, 5), (2, 5), (3, 5), (4, 5), (5, 5)]
