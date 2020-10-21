@@ -79,6 +79,12 @@ class TestMixin(TestCase):
             for conversion in cls.conversions
         }
 
+        # Estimation
+        cls.estimates_dir = os.path.join(cls.fixtures_dir, 'estimates')
+        cls.p_e_barcode_path = os.path.join(cls.estimates_dir, 'p_e_barcode.csv')
+        cls.p_e_gene_path = os.path.join(cls.estimates_dir, 'p_e_gene.csv')
+        cls.p_e_none_path = os.path.join(cls.estimates_dir, 'p_e_none.csv')
+
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
 

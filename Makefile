@@ -2,7 +2,7 @@
 
 test:
 	rm -f .coverage
-	nosetests --verbose --with-coverage --cover-package dynast tests/* tests/preprocessing/*
+	nosetests --verbose --with-coverage --cover-package dynast tests/* tests/preprocessing/* tests/estimation/*
 
 check:
 	flake8 dynast && echo OK

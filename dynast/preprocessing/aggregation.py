@@ -44,7 +44,7 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     :type rates_path: str
     :param group_by: column(s) to group calculations by, defaults to `None`, which
                      combines all rows
-    :type group_by: str or list
+    :type group_by: list
 
     :return: path to rates CSV
     :rtype: str

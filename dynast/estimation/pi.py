@@ -44,7 +44,12 @@ def fit_stan(
 
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
-            data=data, n_jobs=n_chains, iter=n_iters, chains=n_chains, init=init, control={'adapt_delta': 0.95}
+            data=data,
+            n_jobs=n_chains,
+            iter=n_iters,
+            chains=n_chains,
+            init=init,
+            control={'adapt_delta': 0.95},
         )
     samples = fit.extract(('alpha', 'beta'))
     return np.mean(samples['alpha']), np.mean(samples['beta'])
