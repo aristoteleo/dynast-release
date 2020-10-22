@@ -199,6 +199,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     :return: (`conversions_path`, `index_path`, `coverage_path`)
     :rtype: tuple
     """
+    logger.debug(f'Extracting contigs from BAM {bam_path}')
     contigs = []
     n_reads = 0
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
@@ -208,6 +209,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
                 contigs.append(index.contig)
 
     # Initialize and run pool
+    logger.debug(f'Spawning {n_threads} processes')
     manager = multiprocessing.Manager()
     counter = manager.Value('I', 0)
     lock = manager.Lock()
@@ -218,6 +220,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
     pool.close()
 
     # Display progres bar
+    logger.debug(f'Processing contigs {contigs} from BAM')
     with tqdm(unit='reads', total=n_reads, ascii=True, unit_scale=True) as pbar:
         previous_progress = 0
         while not async_result.ready():
@@ -228,6 +231,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
         pool.join()
 
     # Combine csvs
+    logger.debug(f'Writing conversions and coverage to {conversions_path} and {coverage_path}')
     pos = 0
     index = []
     with open(conversions_path, 'wb') as conversions_out, \
@@ -248,6 +252,7 @@ def parse_all_reads(bam_path, conversions_path, index_path, coverage_path, n_thr
             for p, n in index_part:
                 index.append((pos + p, n))
             pos += os.path.getsize(conversions_part_path)
+    logger.debug(f'Writing conversions index to {index_path}')
     with gzip.open(index_path, 'wb') as index_out:
         pickle.dump(index, index_out, protocol=4)
 

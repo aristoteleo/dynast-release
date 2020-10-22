@@ -73,6 +73,7 @@ class TestMixin(TestCase):
         cls.aggregates_dir = os.path.join(cls.fixtures_dir, 'aggregates')
         cls.rates_barcode_path = os.path.join(cls.fixtures_dir, 'rates_barcode.csv')
         cls.rates_gene_path = os.path.join(cls.fixtures_dir, 'rates_gene.csv')
+        cls.rates_barcode_gene_path = os.path.join(cls.fixtures_dir, 'rates_barcode_gene.csv')
         cls.rates_none_path = os.path.join(cls.fixtures_dir, 'rates_none.csv')
         cls.aggregate_paths = {
             conversion: os.path.join(cls.aggregates_dir, f'{conversion}.csv')
@@ -83,7 +84,17 @@ class TestMixin(TestCase):
         cls.estimates_dir = os.path.join(cls.fixtures_dir, 'estimates')
         cls.p_e_barcode_path = os.path.join(cls.estimates_dir, 'p_e_barcode.csv')
         cls.p_e_gene_path = os.path.join(cls.estimates_dir, 'p_e_gene.csv')
+        cls.p_e_barcode_gene_path = os.path.join(cls.estimates_dir, 'p_e_barcode_gene.csv')
         cls.p_e_none_path = os.path.join(cls.estimates_dir, 'p_e_none.csv')
+        cls.p_c_barcode_path = os.path.join(cls.estimates_dir, 'p_c_barcode.csv')
+        cls.aggregate_barcode_path = os.path.join(cls.estimates_dir, 'aggregate_barcode.csv')
+        cls.p_c_gene_path = os.path.join(cls.estimates_dir, 'p_c_gene.csv')
+        cls.aggregate_gene_path = os.path.join(cls.estimates_dir, 'aggregate_gene.csv')
+        cls.p_c_barcode_gene_path = os.path.join(cls.estimates_dir, 'p_c_barcode_gene.csv')
+        cls.aggregate_barcode_gene_path = os.path.join(cls.estimates_dir, 'aggregate_barcode_gene.csv')
+        cls.p_c_none_path = os.path.join(cls.estimates_dir, 'p_c_none.csv')
+        cls.aggregate_none_path = os.path.join(cls.estimates_dir, 'aggregate_none.csv')
+        cls.pi_barcode_barcode_gene_path = os.path.join(cls.estimates_dir, 'pi_barcode_barcode_gene.csv')
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()

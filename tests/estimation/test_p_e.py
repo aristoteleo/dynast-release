@@ -25,6 +25,12 @@ class TestPE(mixins.TestMixin, TestCase):
         self.assertEqual((mock.ANY, p_e_path), p_e.estimate_p_e(df, p_e_path, group_by=['GX']))
         self.assertTrue(mixins.files_equal(self.p_e_gene_path, p_e_path))
 
+    def test_estimate_p_e_by_barcode_gene(self):
+        df = pd.read_csv(self.rates_barcode_gene_path)
+        p_e_path = os.path.join(self.temp_dir, 'p_e.csv')
+        self.assertEqual((mock.ANY, p_e_path), p_e.estimate_p_e(df, p_e_path, group_by=['barcode', 'GX']))
+        self.assertTrue(mixins.files_equal(self.p_e_barcode_gene_path, p_e_path))
+
     def test_estimate_p_e_by_none(self):
         df = pd.read_csv(self.rates_none_path)
         p_e_path = os.path.join(self.temp_dir, 'p_e.csv')

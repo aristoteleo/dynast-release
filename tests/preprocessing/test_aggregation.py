@@ -31,6 +31,15 @@ class TestAggregation(mixins.TestMixin, TestCase):
         self.assertEqual(rates_path, aggregation.calculate_mutation_rates(df_counts, rates_path, group_by=['GX']))
         self.assertTrue(mixins.files_equal(self.rates_gene_path, rates_path))
 
+    def test_calculate_mutation_rates_by_barcode_gene(self):
+        rates_path = os.path.join(self.temp_dir, 'rates.csv')
+        df_counts = pd.read_csv(self.counts_path)
+
+        self.assertEqual(
+            rates_path, aggregation.calculate_mutation_rates(df_counts, rates_path, group_by=['barcode', 'GX'])
+        )
+        self.assertTrue(mixins.files_equal(self.rates_barcode_gene_path, rates_path))
+
     def test_calculate_mutation_rates_by_none(self):
         rates_path = os.path.join(self.temp_dir, 'rates.csv')
         df_counts = pd.read_csv(self.counts_path)
