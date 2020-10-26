@@ -12,6 +12,7 @@ def STAR_solo(
     fastqs,
     index_dir,
     out_dir,
+    technology,
     whitelist_path=None,
     n_threads=8,
     n_bins=50,
@@ -26,6 +27,8 @@ def STAR_solo(
     :type index_dir: str
     :param out_dir: path to directory to place STAR output
     :type out_dir: str
+    :param technology: a `Technology` object defined in `technology.py`
+    :type technology: collections.namedtuple
     :param whitelist_path: path to textfile containing barcode whitelist,
                            defaults to `None`
     :type whitelist_path: str, optional
@@ -48,40 +51,50 @@ def STAR_solo(
     if not out_dir.endswith(('/', '\\')):
         out_dir += os.path.sep
 
-    # Input FASTQs must be plaintext
-    plaintext_fastqs = []
-    for fastq in fastqs:
-        if fastq.endswith('.gz'):
-            plaintext_path = utils.mkstemp(dir=temp_dir)
-            logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
-            utils.decompress_gzip(fastq, plaintext_path)
-        else:
-            plaintext_path = fastq
-        plaintext_fastqs.append(plaintext_path)
+    command = [config.get_STAR_binary_path()] + config.STAR_SOLO_OPTIONS + technology.bam_tags
+    if technology.name != 'smartseq':
+        # Input FASTQs must be plaintext
+        plaintext_fastqs = []
+        for fastq in fastqs:
+            if fastq.endswith('.gz'):
+                plaintext_path = utils.mkstemp(dir=temp_dir)
+                logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
+                utils.decompress_gzip(fastq, plaintext_path)
+            else:
+                plaintext_path = fastq
+            plaintext_fastqs.append(plaintext_path)
+        command += ['--readFilesIn'] + plaintext_fastqs
+        command += ['--soloCBwhitelist', whitelist_path or 'None']
+    else:
+        manifest_path = utils.mkstemp(dir=temp_dir)
+        with open(fastqs[0], 'r') as f, open(manifest_path, 'w') as out:
+            for line in f:
+                cell_id, fastq_1, fastq_2 = line.strip().split(',')
+                if fastq_1.endswith('.gz'):
+                    plaintext_path = utils.mkstemp(dir=temp_dir)
+                    logger.warning(
+                        f'Decompressing {fastq_1} to {plaintext_path} because STAR requires plaintext FASTQs'
+                    )
+                    utils.decompress_gzip(fastq_1, plaintext_path)
+                    fastq_1 = plaintext_path
+                if fastq_2.endswith('.gz'):
+                    plaintext_path = utils.mkstemp(dir=temp_dir)
+                    logger.warning(
+                        f'Decompressing {fastq_2} to {plaintext_path} because STAR requires plaintext FASTQs'
+                    )
+                    utils.decompress_gzip(fastq_2, plaintext_path)
+                    fastq_2 = plaintext_path
 
-    command = [config.get_STAR_binary_path()] + config.STAR_SOLO_OPTIONS
+                out.write(f'{fastq_1}\t{fastq_2}\t{cell_id}\n')
+        command += ['--readFilesManifest', manifest_path]
     command += ['--genomeDir', index_dir]
-    command += ['--readFilesIn'] + plaintext_fastqs
     command += ['--runThreadN', n_threads]
     command += ['--outFileNamePrefix', out_dir]
-    command += ['--soloCBwhitelist', whitelist_path or 'None']
     command += [
         '--outTmpDir',
         os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
     ]
-    # TODO: currently uses hard-coded dropseq barcode and UMI positions
-    command += [
-        '--soloType',
-        'CB_UMI_Simple',
-        '--soloCBstart',
-        1,
-        '--soloCBlen',
-        12,
-        '--soloUMIstart',
-        13,
-        '--soloUMIlen',
-        8,
-    ]
+    command += technology.STAR_args
     # Attempt to increase NOFILE limit if n_threads * n_bins is greater than
     # current limit
     requested = n_threads * n_bins
@@ -141,9 +154,11 @@ def count(
     fastqs,
     index_dir,
     out_dir,
+    technology,
     use_corrected=False,
     quality=27,
     conversion='TC',
+    snp_group_by=None,
     p_group_by=None,
     pi_group_by=None,
     whitelist_path=None,
@@ -153,6 +168,12 @@ def count(
 ):
     """
     """
+
+    def redo(key):
+        return re in config.RE_CHOICES[:config.RE_CHOICES.index(key) + 1]
+
+    os.makedirs(out_dir, exist_ok=True)
+
     # Check memory.
     available_memory = utils.get_available_memory()
     if available_memory < config.RECOMMENDED_MEMORY:
@@ -161,6 +182,13 @@ def count(
             f'It is highly recommended to have at least {config.RECOMMENDED_MEMORY // (1024 ** 3)} GB '
             'free when running dynast. Continuing may cause dynast to crash with an out-of-memory error.'
         )
+
+    # If whitelist was not provided but one is available, decompress into output
+    # directory.
+    if whitelist_path is None and technology.whitelist_path is not None:
+        whitelist_path = os.path.join(out_dir, f'{technology.name}_whitelist.txt')
+        logger.info(f'Copying prepackaged whitelist for technology {technology.name} to {whitelist_path}')
+        utils.decompress_gzip(technology.whitelist_path, whitelist_path)
 
     STAR_out_dir = os.path.join(out_dir, constants.STAR_OUTPUT_DIR)
     STAR_solo_dir = os.path.join(STAR_out_dir, constants.STAR_SOLO_DIR)
@@ -191,11 +219,12 @@ def count(
         }
     }
     STAR_required = utils.flatten_dict_values(STAR_result)
-    if not utils.all_exists(STAR_required) or re in config.RE_CHOICES[:1]:
+    if not utils.all_exists(STAR_required) or redo('align'):
         STAR_result = STAR_solo(
             fastqs,
             index_dir,
             STAR_out_dir,
+            technology,
             whitelist_path=whitelist_path,
             n_threads=n_threads,
             temp_dir=temp_dir,
@@ -208,21 +237,24 @@ def count(
 
     # Check if BAM index exists and create one if it doesn't.
     bai_path = os.path.join(STAR_out_dir, constants.STAR_BAI_FILENAME)
-    if not os.path.exists(bai_path) or re in config.RE_CHOICES[:1]:
+    if not os.path.exists(bai_path) or redo('align'):
         logger.info(f'Indexing {STAR_result["bam"]} with samtools')
         pysam.index(STAR_result['bam'], bai_path, '-@', str(n_threads))
 
     # Parse BAM and save results
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
-    index_path = os.path.join(out_dir, constants.INDEX_FILENAME)
-    coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
-    if not utils.all_exists([conversions_path, index_path]) or re in config.RE_CHOICES[:2]:
-        logger.info(f'Parsing read, conversion, coverage information from BAM to {conversions_path}, {coverage_path}')
-        conversions_path, index_path, coverage_path = preprocessing.parse_all_reads(
+    conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
+    barcodes_path = os.path.join(out_dir, constants.BARCODES_FILENAME)
+    genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
+    if not utils.all_exists([conversions_path, conversions_index_path, barcodes_path, genes_path]) or redo('parse'):
+        logger.info(f'Parsing read conversion information from BAM to {conversions_path}')
+        conversions_path, conversions_index_path = preprocessing.parse_all_reads(
             STAR_result['bam'],
             conversions_path,
-            index_path,
-            coverage_path,
+            conversions_index_path,
+            barcodes_path,
+            genes_path,
+            use_corrected=use_corrected,
             n_threads=n_threads,
             temp_dir=temp_dir,
         )
@@ -232,34 +264,54 @@ def count(
             'already exist. Use the `--re` argument to parse BAM alignments again.'
         )
 
-    # Count conversions and calculate mutation rates
-    barcodes_path = os.path.join(out_dir, constants.BARCODES_FILENAME)
-    genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
-    counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
-    rates_path = os.path.join(out_dir, constants.RATES_FILENAME)
-    counts_required = [
-        barcodes_path,
-        genes_path,
-        counts_path,
-        rates_path,
-    ]
-    df_counts = None
-    if not utils.all_exists(counts_required) or re in config.RE_CHOICES[:3]:
-        logger.info('Counting conversions and calculating mutation rates')
-        barcodes_path, genes_path, counts_path = preprocessing.count_conversions(
+    # Detect SNPs
+    snp_dir = os.path.join(out_dir, constants.SNP_DIR)
+    coverage_path = os.path.join(snp_dir, constants.COVERAGE_FILENAME)
+    coverage_index_path = os.path.join(snp_dir, constants.COVERAGE_INDEX_FILENAME)
+    snps_path = os.path.join(snp_dir, constants.SNPS_FILENAME)
+    if not utils.all_exists([coverage_path, coverage_index_path, snps_path]) or redo('snp'):
+        logger.info('Calculating coverage and detecting SNPs')
+        os.makedirs(snp_dir, exist_ok=True)
+        coverage_path, coverage_index_path = preprocessing.calculate_coverage(
+            STAR_result['bam'],
+            preprocessing.read_conversions(conversions_path),
+            coverage_path,
+            coverage_index_path,
+            use_corrected=use_corrected,
+            n_threads=n_threads,
+            temp_dir=temp_dir,
+        )
+        snps_path = preprocessing.detect_snps(
             conversions_path,
-            index_path,
-            barcodes_path,
-            genes_path,
+            conversions_index_path,
+            coverage_path,
+            coverage_index_path,
+            snps_path,
+            use_corrected=use_corrected,
+            quality=quality,
+            n_threads=n_threads,
+        )
+    else:
+        logger.info(
+            'Skipped coverage calculation and SNP detection because files '
+            'already exist. Use the `--re` argument to redo.'
+        )
+
+    # Count conversions and calculate mutation rates
+    counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
+    if not utils.all_exists([counts_path]) or redo('count'):
+        logger.info('Counting conversions')
+        counts_path = preprocessing.count_conversions(
+            conversions_path,
+            conversions_index_path,
             counts_path,
+            snps=preprocessing.read_snps(snps_path),
+            group_by=snp_group_by,
             use_corrected=use_corrected,
             quality=quality,
             n_threads=n_threads,
             temp_dir=temp_dir
         )
-
-        df_counts = preprocessing.read_counts(counts_path)
-        rates_path = preprocessing.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
     else:
         logger.info(
             'Skipped conversion counting and mutation rate calculation because files '
@@ -267,16 +319,18 @@ def count(
         )
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
+    rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
     aggregates_paths = {
         conversion: os.path.join(aggregates_dir, f'{conversion}.csv')
         for conversion in preprocessing.CONVERSION_COLUMNS
     }
-    if not utils.all_exists(aggregates_paths.values()) or re in config.RE_CHOICES[:4]:
-        logger.info('Aggregating counts')
+    aggregates_required = list(aggregates_paths.values()) + [rates_path]
+    if not utils.all_exists(aggregates_required) or redo('aggregate'):
+        logger.info('Computing mutation rates and aggregating counts')
         os.makedirs(aggregates_dir, exist_ok=True)
-        df_counts = df_counts if df_counts is not None else preprocessing.read_counts(counts_path)
-        df_genes = preprocessing.read_genes(genes_path)
-        aggregates_paths = preprocessing.aggregate_counts(df_counts, df_genes, aggregates_dir)
+        df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
+        rates_path = preprocessing.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
+        aggregates_paths = preprocessing.aggregate_counts(df_counts, aggregates_dir)
     else:
         logger.info(
             'Skipped count aggregation because files '
@@ -290,7 +344,7 @@ def count(
     estimates_paths = [p_e_path, p_c_path, aggregate_path]
     df_aggregates = None
     value_columns = [conversion, conversion[0], 'count']
-    if not utils.all_exists(estimates_paths) or re in config.RE_CHOICES[:5]:
+    if not utils.all_exists(estimates_paths) or redo('estimate_rates'):
         os.makedirs(estimates_dir, exist_ok=True)
 
         logger.info('Estimating average mismatch rate in old RNA')
@@ -317,7 +371,7 @@ def count(
         )
 
     pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
-    if not utils.all_exists([pi_path]) or re in config.RE_CHOICES[:6]:
+    if not utils.all_exists([pi_path]) or redo('estimate_fraction'):
         logger.info('Estimating fraction of newly transcribed RNA')
         with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
             barcodes = [line.strip() for line in f.readlines()]

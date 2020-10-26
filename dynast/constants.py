@@ -11,8 +11,12 @@ STAR_FEATURES_FILENAME = 'features.tsv'
 STAR_MATRIX_FILENAME = 'matrix.mtx'
 
 CONVERSIONS_FILENAME = 'conversions.csv'
-INDEX_FILENAME = 'conversions.idx'
+CONVERSIONS_INDEX_FILENAME = 'conversions.idx'
+
+SNP_DIR = 'snp'
 COVERAGE_FILENAME = 'coverage.csv'
+COVERAGE_INDEX_FILENAME = 'coverage.idx'
+SNPS_FILENAME = 'snps.csv'
 
 COUNT_FILENAME = 'counts.csv'
 BARCODES_FILENAME = 'barcodes.csv'

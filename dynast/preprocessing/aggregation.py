@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .conversion import BASE_COLUMNS, BASE_IDX, COLUMNS, CONVERSION_COLUMNS
+from .conversion import BASE_IDX, COLUMNS, CONVERSION_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def read_aggregates(aggregates_path):
 def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     """Calculate mutation rate for each pair of bases.
 
-    :param df_counts: counts dataframe
+    :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
     :param rates_path: path to write rates CSV
     :type rates_path: str
@@ -50,6 +50,7 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     :rtype: str
     """
     logger.debug(f'Mutation rates will be grouped by {group_by}')
+
     if group_by is not None:
         df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
     else:
@@ -68,13 +69,11 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     return rates_path
 
 
-def aggregate_counts(df_counts, df_genes, aggregates_dir):
+def aggregate_counts(df_counts, aggregates_dir):
     """Calculate mutation aggregates for each pair of bases.
 
-    :param df_counts: counts dataframe
+    :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
-    :param df_genes: genes dataframe
-    :type df_genes: pandas.DataFrame
     :param aggregates_dir: directory to write aggregate CSVs. One CSV is written
                            per pair of bases (i.e. `AC.csv`, `AG.csv` etc.)
     :type aggregates_dir: str
@@ -82,20 +81,11 @@ def aggregate_counts(df_counts, df_genes, aggregates_dir):
     :return: dictionary of pairs of bases to path to CSVs
     :rtype: dict
     """
-    df = df_counts.merge(df_genes[['GX', 'strand']], on='GX')
-    df_forward = df[df.strand == '+']
-    df_reverse = df[df.strand == '-'][COLUMNS]
-
-    # Rename columns of reverse
-    df_reverse.columns = list(reversed(CONVERSION_COLUMNS)) + list(reversed(BASE_COLUMNS))
-
-    df_complemented = pd.concat((df_forward, df_reverse[COLUMNS]))
-
     paths = {}
     for conversion in tqdm(CONVERSION_COLUMNS, ascii=True):
         csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
         logger.debug(f'Aggregating counts for {conversion} conversion to {csv_path}')
-        df_agg = pd.DataFrame(df_complemented.groupby(['barcode', 'GX', conversion, conversion[0]]).size())
+        df_agg = pd.DataFrame(df_counts.groupby(['barcode', 'GX', conversion, conversion[0]]).size())
         df_agg.columns = ['count']
         df_agg.reset_index().to_csv(csv_path, index=False)
         paths[conversion] = csv_path

@@ -1,11 +1,13 @@
 import gzip
 import logging
+import multiprocessing
 import os
 import shutil
 import subprocess as sp
 import tempfile
 import time
 from contextlib import contextmanager
+from operator import add
 
 import anndata
 import pandas as pd
@@ -321,3 +323,45 @@ def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
     matrix = scipy.io.mmread(matrix_path).T.toarray()
 
     return anndata.AnnData(matrix, obs=df_barcodes, var=df_features)
+
+
+def make_pool_with_counter(n_threads):
+    manager = multiprocessing.Manager()
+    counter = manager.Value('I', 0)
+    lock = manager.Lock()
+    pool = multiprocessing.Pool(n_threads)
+    return pool, counter, lock
+
+
+def display_progress_with_counter(async_result, counter, total):
+    with tqdm(total=total, ascii=True, unit_scale=True) as pbar:
+        previous_progress = 0
+        while not async_result.ready():
+            time.sleep(0.05)
+            progress = counter.value
+            pbar.update(progress - previous_progress)
+            previous_progress = progress
+
+
+def merge_dictionaries(d1, d2, f=add, default=0):
+    merged = d1.copy()
+    for key, value2 in d2.items():
+        if key in d1 and isinstance(d1[key], dict) != isinstance(value2, dict):
+            raise Exception(f'Inconsistent key {key}')
+
+        value1 = d1.get(key, {} if isinstance(value2, dict) else default)
+        if isinstance(value1, dict) and isinstance(value2, dict):
+            merged[key] = merge_dictionaries(value1, value2, f=f, default=default)
+        else:
+            merged[key] = f(value1, value2)
+    return merged
+
+
+def flatten_dictionary(d, keys=None):
+    keys = keys or []
+    for k, v in d.items():
+        new_keys = keys + [k]
+        if isinstance(v, dict):
+            yield from flatten_dictionary(v, new_keys)
+        else:
+            yield new_keys, v

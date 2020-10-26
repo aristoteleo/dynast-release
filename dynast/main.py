@@ -7,9 +7,10 @@ import warnings
 
 from . import __version__
 from .config import get_STAR_binary_path, RE_CHOICES
-from .preprocessing import CONVERSION_COLUMNS
 from .count import count
+from .preprocessing import CONVERSION_COLUMNS
 from .ref import ref
+from .technology import TECHNOLOGIES_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +74,8 @@ def setup_count_args(parser, parent):
     """
     parser_count = parser.add_parser(
         'count',
-        description='',
-        help='',
+        description='Quantify new RNA',
+        help='Quantify new RNA',
         parents=[parent],
     )
     parser_count._actions[0].help = parser_count._actions[0].help.capitalize()
@@ -89,6 +90,14 @@ def setup_count_args(parser, parent):
         help='Path to output directory (default: current directory)',
         type=str,
         default='.',
+    )
+    parser_count.add_argument(
+        '-x',
+        metavar='TECHNOLOGY',
+        help=f'Single-cell technology used. Available choices are: {",".join(TECHNOLOGIES_MAP.keys())}',
+        type=str,
+        required=True,
+        choices=TECHNOLOGIES_MAP.keys()
     )
     parser_count.add_argument(
         '-w',
@@ -160,7 +169,15 @@ def setup_count_args(parser, parent):
         choices=CONVERSION_COLUMNS,
         default='TC',
     )
-    parser_count.add_argument('fastqs', help='FASTQ files', nargs='+')
+    parser_count.add_argument(
+        'fastqs',
+        help=(
+            'FASTQ files. If `-x smartseq`, this is a single manifest CSV file where '
+            'the first column contains cell IDs and the next two columns contain '
+            'paths to FASTQs (the third column may contain a dash `-` for single-end reads).'
+        ),
+        nargs='+'
+    )
 
     return parser_count
 
@@ -175,7 +192,7 @@ def parse_ref(parser, args, temp_dir=None):
             f'STAR index directory {args.i} already exists. '
             'Please provide a different directory or remove the existing one.'
         )
-    ref()
+    ref(args.fasta, args.gtf, args.i, n_threads=args.t, memory=args.m * (1024**3), temp_dir=temp_dir)
 
 
 def parse_count(parser, args, temp_dir=None):
@@ -208,10 +225,35 @@ def parse_count(parser, args, temp_dir=None):
             args.pi_group_by)):
         parser.error('`--p-group-by` must be a subset of `--pi-group-by`')
 
+    technology = TECHNOLOGIES_MAP[args.x]
+    if technology.name == 'smartseq':
+        if len(args.fastqs) != 1:
+            parser.error('A single manifest TSV must be provided for technology `smartseq`')
+        with open(args.fastqs[0], 'r') as f:
+            cell_ids = []
+            for line in f:
+                cell_id, fastq_1, fastq_2 = line.strip().split(',')
+                if cell_id in cell_ids:
+                    parser.error(f'Found duplicate cell ID in manifest CSV: {cell_id}')
+                if not os.path.exists(fastq_1):
+                    parser.error(
+                        f'{fastq_1} does not exist. '
+                        f'All paths in {args.fastqs[0]} must be relative to the '
+                        'current working directory or absolute.'
+                    )
+                if fastq_2 != '-' and not os.path.exists(fastq_2):
+                    parser.error(
+                        f'{fastq_2} does not exist. '
+                        f'All paths in {args.fastqs[0]} must be relative to the '
+                        'current working directory or absolute.'
+                    )
+                cell_ids.append(cell_id)
+
     count(
         args.fastqs,
         args.i,
         args.o,
+        TECHNOLOGIES_MAP[args.x],
         use_corrected=args.use_corrected_barcodes,
         quality=args.quality,
         conversion=args.conversion,

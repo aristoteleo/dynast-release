@@ -1,2 +1,3 @@
 recursive-include dynast/bins *
 recursive-include dynast/models *
+recursive-include dynast/whitelists *

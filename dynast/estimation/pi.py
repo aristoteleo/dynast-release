@@ -163,6 +163,16 @@ def split_reads(adata, pis, group_by=None):
         if group_by == ['barcode', 'GX']:
             barcode, gx = key
             pi_matrix[barcode_index[barcode], gene_id_index[gx]] = pi
+        elif group_by == ['barcode']:
+            barcode = key
+            pi_matrix[barcode_index[barcode]] = pi
+        elif group_by == ['GX']:
+            gx = key
+            pi_matrix[:, gene_id_index[gx]] = pi
+        elif group_by is None:
+            pi_matrix[:, :] = pi
+        else:
+            raise Exception(f'Unknown group_by {group_by}')
 
     adata.layers['pi'] = pi_matrix
     adata.layers['new'] = adata.X * pi_matrix

@@ -71,10 +71,10 @@ class TestMixin(TestCase):
 
         # Aggregation
         cls.aggregates_dir = os.path.join(cls.fixtures_dir, 'aggregates')
-        cls.rates_barcode_path = os.path.join(cls.fixtures_dir, 'rates_barcode.csv')
-        cls.rates_gene_path = os.path.join(cls.fixtures_dir, 'rates_gene.csv')
-        cls.rates_barcode_gene_path = os.path.join(cls.fixtures_dir, 'rates_barcode_gene.csv')
-        cls.rates_none_path = os.path.join(cls.fixtures_dir, 'rates_none.csv')
+        cls.rates_barcode_path = os.path.join(cls.aggregates_dir, 'rates_barcode.csv')
+        cls.rates_gene_path = os.path.join(cls.aggregates_dir, 'rates_gene.csv')
+        cls.rates_barcode_gene_path = os.path.join(cls.aggregates_dir, 'rates_barcode_gene.csv')
+        cls.rates_none_path = os.path.join(cls.aggregates_dir, 'rates_none.csv')
         cls.aggregate_paths = {
             conversion: os.path.join(cls.aggregates_dir, f'{conversion}.csv')
             for conversion in cls.conversions

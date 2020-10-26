@@ -1,18 +1,15 @@
-import gzip
 import logging
-import multiprocessing
-import pickle
 import re
 import shutil
 import tempfile
-import time
 from functools import partial
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from .. import utils
+from .bam import read_genes
+from .index import read_index, split_index
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +32,7 @@ CONVERSIONS_PARSER = re.compile(
     (?P<C>[^,]*),
     (?P<G>[^,]*),
     (?P<T>[^,]*)\n
-$''', re.VERBOSE
+    $''', re.VERBOSE
 )
 
 CONVERSION_IDX = {
@@ -76,60 +73,31 @@ def read_counts(counts_path):
     return pd.read_csv(counts_path, dtype=dtypes)
 
 
-def read_genes(genes_path):
-    """Read genes CSV as a pandas dataframe.
+def read_counts_complemented(counts_path, genes_path):
+    df_counts = read_counts(counts_path).merge(read_genes(genes_path)[['GX', 'strand']], on='GX')
 
-    :param genes_path: path to CSV
-    :type genes_path: str
+    columns = ['barcode', 'GX'] + COLUMNS
+    df_forward = df_counts[df_counts.strand == '+'][columns]
+    df_reverse = df_counts[df_counts.strand == '-'][columns]
 
-    :return: genes dataframe
-    :rtype: pandas.DataFrame
-    """
-    dtypes = {
-        'GX': 'string',
-        'GN': 'string',
-        'strand': 'category',
-    }
-    return pd.read_csv(genes_path, dtype=dtypes)
+    df_reverse.columns = ['barcode', 'GX'] + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
+    df_reverse = df_reverse[columns]
 
-
-def split_index(index, n=8):
-    """Split a conversions index, which is a list of tuples (file position,
-    number of lines), one for each read, into `n` approximately equal parts.
-    This function is used to split the conversions CSV for multiprocessing.
-
-    :param index: conversions index
-    :type index: list
-    :param n: number of splits, defaults to `8`
-    :type n: int, optional
-
-    :return: list of parts, where each part is a (file position, number of lines) tuple
-    :rtype: list
-    """
-    n_lines = sum(idx[1] for idx in index)
-    target = (n_lines // n) + 1  # add one to prevent underflow
-
-    # Split the index to "approximately" equal parts
-    parts = []
-    start_pos = None
-    current_size = 0
-    for pos, size in index:
-        if start_pos is None:
-            start_pos = pos
-        current_size += size
-
-        if current_size >= target:
-            parts.append((start_pos, current_size))
-            start_pos = None
-            current_size = 0
-    if current_size > 0:
-        parts.append((start_pos, current_size))
-
-    return parts
+    return pd.concat((df_forward, df_reverse))
 
 
 def count_conversions_part(
-    conversions_path, counter, lock, pos, n_lines, use_corrected=False, quality=27, temp_dir=None, update_every=10000
+    conversions_path,
+    counter,
+    lock,
+    pos,
+    n_lines,
+    snps=None,
+    group_by=None,
+    use_corrected=False,
+    quality=27,
+    temp_dir=None,
+    update_every=10000,
 ):
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode
@@ -158,16 +126,22 @@ def count_conversions_part(
     :param update_every: update the counter every this many reads, defaults to `10000`
     :type update_every: int, optional
 
-    :return: (`count_path`, `barcodes`, `genes`)
-             `count_path`: path to temporary counts CSV
-             `barcodes`: dictionary of raw to corrected barcode mappings
-             `genes`: dictionary of gene ID to (gene name, strand) mappings
+    :return: path to temporary counts CSV
     :rtype: tuple
     """
+
+    def is_snp(g):
+        if not snps:
+            return False
+
+        if group_by is None:
+            return int(g['genome_i']) in snps.get(g['contig'], set())
+        else:
+            # TODO
+            raise Exception()
+
     count_path = utils.mkstemp(dir=temp_dir)
 
-    barcodes = {}
-    genes = {}
     counts = None
     read_id = None
     count_base = True
@@ -183,8 +157,6 @@ def count_conversions_part(
 
             if read_id != groups['read_id']:
                 if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-                    barcodes.setdefault(prev_groups["CR"], prev_groups["CB"])
-                    genes.setdefault(prev_groups["GX"], (prev_groups['GN'], prev_groups['strand']))
 
                     barcode = prev_groups["CB"] if use_corrected else prev_groups["CR"]
                     out.write(
@@ -194,7 +166,7 @@ def count_conversions_part(
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
                 read_id = groups['read_id']
                 count_base = True
-            if int(groups['quality']) > quality:
+            if int(groups['quality']) > quality and not is_snp(groups):
                 counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
             if count_base:
                 for base, j in BASE_IDX.items():
@@ -208,9 +180,6 @@ def count_conversions_part(
 
         # Add last record
         if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-            barcodes.setdefault(groups["CR"], groups["CB"])
-            genes.setdefault(groups["GX"], (groups['GN'], groups['strand']))
-
             barcode = groups["CB"] if use_corrected else groups["CR"]
             out.write(f'{barcode},{groups["UB"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
 
@@ -218,15 +187,15 @@ def count_conversions_part(
     counter.value += n_lines % update_every
     lock.release()
 
-    return count_path, barcodes, genes
+    return count_path
 
 
 def count_conversions(
     conversions_path,
     index_path,
-    barcodes_path,
-    genes_path,
     counts_path,
+    snps=None,
+    group_by=None,
     use_corrected=False,
     quality=27,
     n_threads=8,
@@ -263,8 +232,7 @@ def count_conversions(
     """
     # Load index
     logger.debug(f'Loading index {index_path} for {conversions_path}')
-    with gzip.open(index_path, 'rb') as f:
-        index = pickle.load(f)
+    index = read_index(index_path)
 
     # Split index into n contiguous pieces
     logger.debug(f'Splitting index into {n_threads} parts')
@@ -273,16 +241,15 @@ def count_conversions(
     # Parse each part in a different process
     logger.debug(f'Spawning {n_threads} processes')
     n_lines = sum(idx[1] for idx in index)
-    manager = multiprocessing.Manager()
-    counter = manager.Value('I', 0)
-    lock = manager.Lock()
-    pool = multiprocessing.Pool(n_threads)
+    pool, counter, lock = utils.make_pool_with_counter(n_threads)
     async_result = pool.starmap_async(
         partial(
             count_conversions_part,
             conversions_path,
             counter,
             lock,
+            snps=snps,
+            group_by=group_by,
             use_corrected=use_corrected,
             quality=quality,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
@@ -291,39 +258,16 @@ def count_conversions(
     pool.close()
 
     # Display progres bar
-    with tqdm(unit='reads', total=n_lines, ascii=True, unit_scale=True) as pbar:
-        previous_progress = 0
-        while not async_result.ready():
-            time.sleep(0.05)
-            progress = counter.value
-            pbar.update(progress - previous_progress)
-            previous_progress = progress
+    utils.display_progress_with_counter(async_result, counter, n_lines)
     pool.join()
 
     # Combine csvs
-    barcodes = {}
-    genes = {}
     combined_path = utils.mkstemp(dir=temp_dir)
     logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
-        for counts_part_path, barcodes_part, genes_part in async_result.get():
-            barcodes.update(barcodes_part)
-            genes.update(genes_part)
+        for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
-
-    # Write barcode and gene mapping
-    logger.debug(f'Writing barcodes to {barcodes_path}')
-    with open(barcodes_path, 'w') as f:
-        f.write('CR,CB\n')
-        for cr in sorted(barcodes.keys()):
-            f.write(f'{cr},{barcodes[cr]}\n')
-    logger.debug(f'Writing genes to {genes_path}')
-    with open(genes_path, 'w') as f:
-        f.write('GX,GN,strand\n')
-        for gx in sorted(genes.keys()):
-            gn, strand = genes[gx]
-            f.write(f'{gx},{gn},{strand}\n')
 
     # Read in as dataframe and deduplicate based on CR and UB
     # If there are duplicates, select the row with the most conversions
@@ -345,4 +289,4 @@ def count_conversions(
     ).sort_values('barcode').reset_index(drop=True)
     df_filtered.to_csv(counts_path, index=False)
 
-    return barcodes_path, genes_path, counts_path
+    return counts_path
