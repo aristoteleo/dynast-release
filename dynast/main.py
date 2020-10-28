@@ -170,6 +170,13 @@ def setup_count_args(parser, parent):
         default='TC',
     )
     parser_count.add_argument(
+        '--snp',
+        metavar='CONVERSION',
+        help=argparse.SUPPRESS,
+        type=float,
+        default=0.5,
+    )
+    parser_count.add_argument(
         'fastqs',
         help=(
             'FASTQ files. If `-x smartseq`, this is a single manifest CSV file where '
@@ -257,6 +264,8 @@ def parse_count(parser, args, temp_dir=None):
         use_corrected=args.use_corrected_barcodes,
         quality=args.quality,
         conversion=args.conversion,
+        snp=args.snp,
+        snp_group_by=None,
         p_group_by=args.p_group_by,
         pi_group_by=args.pi_group_by,
         whitelist_path=args.w,

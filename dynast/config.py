@@ -9,7 +9,7 @@ MODELS_DIR = os.path.join(PACKAGE_PATH, 'models')
 MODEL_PATH = os.path.join(MODELS_DIR, 'pi.stan')
 MODEL_NAME = 'pi'
 
-RE_CHOICES = ['align', 'parse', 'snp', 'count', 'aggregate', 'estimate_rates', 'estimate_fraction', 'split']
+RE_CHOICES = ['align', 'parse', 'snp', 'count', 'aggregate', 'p', 'pi', 'split']
 GROUP_CHOICES = ['barcode', 'GX']
 RECOMMENDED_MEMORY = 16 * (1024**3)  # 16 GB
 STAR_SOLO_OPTIONS = [

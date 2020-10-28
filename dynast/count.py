@@ -158,6 +158,7 @@ def count(
     use_corrected=False,
     quality=27,
     conversion='TC',
+    snp=0.5,
     snp_group_by=None,
     p_group_by=None,
     pi_group_by=None,
@@ -230,10 +231,7 @@ def count(
             temp_dir=temp_dir,
         )
     else:
-        logger.info(
-            'Skipped STAR because alignment files already exist. '
-            'Use the `--re` argument to run alignment again.'
-        )
+        logger.info('Skipped STAR because alignment files already exist.')
 
     # Check if BAM index exists and create one if it doesn't.
     bai_path = os.path.join(STAR_out_dir, constants.STAR_BAI_FILENAME)
@@ -259,10 +257,7 @@ def count(
             temp_dir=temp_dir,
         )
     else:
-        logger.info(
-            'Skipped read and conversion parsing from BAM because files '
-            'already exist. Use the `--re` argument to parse BAM alignments again.'
-        )
+        logger.info('Skipped read and conversion parsing from BAM because files already exist.')
 
     # Detect SNPs
     snp_dir = os.path.join(out_dir, constants.SNP_DIR)
@@ -289,13 +284,11 @@ def count(
             snps_path,
             use_corrected=use_corrected,
             quality=quality,
+            threshold=snp,
             n_threads=n_threads,
         )
     else:
-        logger.info(
-            'Skipped coverage calculation and SNP detection because files '
-            'already exist. Use the `--re` argument to redo.'
-        )
+        logger.info('Skipped coverage calculation and SNP detection because files already exist.')
 
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
@@ -313,10 +306,7 @@ def count(
             temp_dir=temp_dir
         )
     else:
-        logger.info(
-            'Skipped conversion counting and mutation rate calculation because files '
-            'already exist. Use the `--re` argument to count conversions again.'
-        )
+        logger.info('Skipped conversion counting and mutation rate calculation because files already exist.')
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
@@ -325,6 +315,7 @@ def count(
         for conversion in preprocessing.CONVERSION_COLUMNS
     }
     aggregates_required = list(aggregates_paths.values()) + [rates_path]
+    df_counts = None
     if not utils.all_exists(aggregates_required) or redo('aggregate'):
         logger.info('Computing mutation rates and aggregating counts')
         os.makedirs(aggregates_dir, exist_ok=True)
@@ -332,10 +323,7 @@ def count(
         rates_path = preprocessing.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
         aggregates_paths = preprocessing.aggregate_counts(df_counts, aggregates_dir)
     else:
-        logger.info(
-            'Skipped count aggregation because files '
-            'already exist. Use the `--re` argument to count conversions again.'
-        )
+        logger.info('Skipped count aggregation because files already exist.')
 
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
@@ -344,7 +332,7 @@ def count(
     estimates_paths = [p_e_path, p_c_path, aggregate_path]
     df_aggregates = None
     value_columns = [conversion, conversion[0], 'count']
-    if not utils.all_exists(estimates_paths) or redo('estimate_rates'):
+    if not utils.all_exists(estimates_paths) or redo('p'):
         os.makedirs(estimates_dir, exist_ok=True)
 
         logger.info('Estimating average mismatch rate in old RNA')
@@ -365,16 +353,13 @@ def count(
             n_threads=n_threads,
         )
     else:
-        logger.info(
-            'Skipped rate estimation because files '
-            'already exist. Use the `--re` argument to calculate estimates again.'
-        )
+        logger.info('Skipped rate estimation because files already exist.')
 
+    with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
+        barcodes = [line.strip() for line in f]
     pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
-    if not utils.all_exists([pi_path]) or redo('estimate_fraction'):
+    if not utils.all_exists([pi_path]) or redo('pi'):
         logger.info('Estimating fraction of newly transcribed RNA')
-        with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
-            barcodes = [line.strip() for line in f.readlines()]
         df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
             aggregates_paths[conversion]
         )
@@ -392,10 +377,7 @@ def count(
             n_threads=n_threads,
         )
     else:
-        logger.info(
-            'Skipped estimation of newly transcribed RNA because files '
-            'already exist. Use the `--re` argument to calculate estimate again.'
-        )
+        logger.info('Skipped estimation of newly transcribed RNA because files already exist.')
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     logger.info('Splitting reads')
@@ -404,6 +386,12 @@ def count(
         STAR_result['gene']['filtered']['barcodes'],
         STAR_result['gene']['filtered']['features'],
         STAR_result['gene']['filtered']['matrix'],
+    )
+    adata = preprocessing.split_counts_by_umi(
+        adata,
+        preprocessing.read_counts_complemented(counts_path, genes_path) if df_counts is None else df_counts,
+        conversion=conversion,
+        filter_dict={'barcode': barcodes}
     )
     adata = estimation.split_reads(adata, pis, group_by=pi_group_by)
     adata.write_h5ad(adata_path, compression='gzip')

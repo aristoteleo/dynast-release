@@ -322,7 +322,10 @@ def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
     df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1])
     matrix = scipy.io.mmread(matrix_path).T.toarray()
 
-    return anndata.AnnData(matrix, obs=df_barcodes, var=df_features)
+    adata = anndata.AnnData(matrix, obs=df_barcodes, var=df_features)
+    adata.obs.index = adata.obs.index.astype(str)
+    adata.var.index = adata.var.index.astype(str)
+    return adata
 
 
 def make_pool_with_counter(n_threads):

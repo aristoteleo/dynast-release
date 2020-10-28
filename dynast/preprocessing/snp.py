@@ -200,7 +200,7 @@ def detect_snps(
     group_by=None,
     use_corrected=False,
     quality=27,
-    threshold=0.8,
+    threshold=0.5,
     n_threads=8,
 ):
     logger.info('Counting number of conversions for each genomic position')
@@ -231,7 +231,9 @@ def detect_snps(
         prefix = '' if group_by is None else f'{",".join(group_by)},'
         f.write(f'{prefix}contig,genome_i\n')
         for key, fraction in utils.flatten_dictionary(fractions):
-            if fraction < threshold:
+            # If (# conversions) / (# coverage) is greater than a threshold,
+            # consider this a SNP and write to CSV
+            if fraction > threshold:
                 f.write(f'{",".join(str(k) for k in key)}\n')
 
     return snps_path

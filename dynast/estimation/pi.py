@@ -25,7 +25,7 @@ def fit_stan(
     p_e,
     p_c,
     model,
-    n_chains=5,
+    n_chains=3,
     n_iters=2000,
 ):
     conversions = []
@@ -175,6 +175,6 @@ def split_reads(adata, pis, group_by=None):
             raise Exception(f'Unknown group_by {group_by}')
 
     adata.layers['pi'] = pi_matrix
-    adata.layers['new'] = adata.X * pi_matrix
-    adata.layers['old'] = adata.X * (1 - pi_matrix)
+    adata.layers['new_estimated'] = adata.X * pi_matrix
+    adata.layers['old_estimated'] = adata.X * (1 - pi_matrix)
     return adata

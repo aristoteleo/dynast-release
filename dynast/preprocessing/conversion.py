@@ -86,6 +86,28 @@ def read_counts_complemented(counts_path, genes_path):
     return pd.concat((df_forward, df_reverse))
 
 
+def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
+    filter_dict = filter_dict or {}
+    for column, values in filter_dict.items():
+        df_counts = df_counts[df_counts[column].isin(values)]
+
+    adata.obs.set_index('barcode', inplace=True)
+    adata.var.set_index('gene_id', inplace=True)
+
+    new = np.zeros(adata.shape, dtype=int)
+    counts = counts = df_counts[df_counts[conversion] > 0].groupby(['barcode', 'GX']).size()
+    for (barcode, gene_id), count in counts.items():
+        i = adata.obs.index.get_loc(barcode)
+        j = adata.var.index.get_loc(gene_id)
+        new[i, j] = count
+    adata.layers['new_umi'] = new
+    adata.layers['old_umi'] = adata.X - new
+
+    adata.obs.reset_index(inplace=True)
+    adata.var.reset_index(inplace=True)
+    return adata
+
+
 def count_conversions_part(
     conversions_path,
     counter,
