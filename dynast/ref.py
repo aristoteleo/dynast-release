@@ -37,9 +37,15 @@ def STAR_genomeGenerate(
     if fasta_path.endswith('.gz'):
         plaintext_path = utils.mkstemp(dir=temp_dir)
         logger.warning(f'Decompressing {fasta_path} to {plaintext_path} because STAR requires a plaintext FASTA')
+        utils.decompress_gzip(fasta_path, plaintext_path)
         fasta_path = plaintext_path
+    if gtf_path.endswith('.gz'):
+        plaintext_path = utils.mkstemp(dir=temp_dir)
+        logger.warning(f'Decompressing {gtf_path} to {plaintext_path} because STAR requires a plaintext GTF')
+        utils.decompress_gzip(gtf_path, plaintext_path)
+        gtf_path = plaintext_path
 
-    print(f'Calculating optimal STAR index parameters for {memory} bytes of memory')
+    logger.debug(f'Calculating optimal STAR index parameters for {memory} bytes of memory')
     # Calculate genome length and number of FASTA entries
     genome_length = 0
     n_entries = 0
@@ -58,15 +64,14 @@ def STAR_genomeGenerate(
 
     # Adapted from Cellranger
     sa_index_memory = (4**sa_index_n_bases) * 8
-    genome_memory = genome_length
     sa_sparse_d = max(
-        1, math.ceil((8 * genome_length) / (max(1, memory - 2 * 1024**3) - genome_memory - sa_index_memory))
+        1, math.ceil((8 * genome_length) / (max(1, memory - 2 * 1024**3) - genome_length - sa_index_memory))
     )
-    min_memory = genome_memory + sa_index_memory + 3 * 1024**3
+    min_memory = genome_length + sa_index_memory + 3 * 1024**3
     if memory < min_memory:
         raise Exception(f'STAR requires at least {min_memory} to index this reference.')
 
-    print(
+    logger.debug(
         'Calculated parameters: '
         f'genome_length={genome_length} '
         f'n_entries={n_entries} '
@@ -75,7 +80,7 @@ def STAR_genomeGenerate(
         f'sa_sparse_d={sa_sparse_d}'
     )
 
-    print(f'Generating STAR index to {index_dir}')
+    logger.debug(f'Generating STAR index to {index_dir}')
     command = [config.get_STAR_binary_path(), '--runMode', 'genomeGenerate']
     command += ['--genomeDir', index_dir]
     command += ['--genomeFastaFiles', fasta_path]
@@ -95,5 +100,5 @@ def STAR_genomeGenerate(
     return {'index': index_dir}
 
 
-def ref():
-    pass
+def ref(fasta_path, gtf_path, index_dir, n_threads=8, memory=16**(1024**3), temp_dir=None):
+    STAR_genomeGenerate(fasta_path, gtf_path, index_dir, n_threads=n_threads, memory=memory, temp_dir=temp_dir)

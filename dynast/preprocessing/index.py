@@ -18,7 +18,7 @@ def split_index(index, n=8):
     number of lines), one for each read, into `n` approximately equal parts.
     This function is used to split the conversions CSV for multiprocessing.
 
-    :param index: conversions index
+    :param index: index
     :type index: list
     :param n: number of splits, defaults to `8`
     :type n: int, optional

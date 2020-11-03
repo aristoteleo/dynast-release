@@ -3,6 +3,8 @@ import os
 import pysam
 import tempfile
 
+import scanpy as sc
+
 from . import config, constants, estimation, preprocessing, utils
 
 logger = logging.getLogger(__name__)
@@ -394,4 +396,7 @@ def count(
         filter_dict={'barcode': barcodes}
     )
     adata = estimation.split_reads(adata, pis, group_by=pi_group_by)
-    adata.write_h5ad(adata_path, compression='gzip')
+    sc.pp.filter_genes(adata, min_counts=1)
+    adata.var.drop(columns='n_counts', inplace=True)
+    adata.var.reset_index(drop=True, inplace=True)
+    adata.write(adata_path, compression='gzip')

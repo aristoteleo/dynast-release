@@ -199,7 +199,14 @@ def parse_ref(parser, args, temp_dir=None):
             f'STAR index directory {args.i} already exists. '
             'Please provide a different directory or remove the existing one.'
         )
-    ref(args.fasta, args.gtf, args.i, n_threads=args.t, memory=args.m * (1024**3), temp_dir=temp_dir)
+    ref(
+        args.fasta,
+        args.gtf,
+        args.i,
+        n_threads=args.t,
+        memory=args.m * (1024**3),
+        temp_dir=temp_dir,
+    )
 
 
 def parse_count(parser, args, temp_dir=None):

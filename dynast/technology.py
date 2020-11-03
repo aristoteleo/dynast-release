@@ -40,6 +40,23 @@ BARCODE_UMI_TECHNOLOGIES = [
             'Velocyto',
         ], STAR_SOLO_BAM_TAGS, os.path.join(WHITELIST_DIR, 'scifate.txt.gz')
     ),
+    Technology(
+        '10xv2', [
+            '--soloType',
+            'CB_UMI_Simple',
+            '--soloCBstart',
+            1,
+            '--soloCBlen',
+            16,
+            '--soloUMIstart',
+            17,
+            '--soloUMIlen',
+            10,
+            '--soloFeatures',
+            'Gene',
+            'Velocyto',
+        ], STAR_SOLO_BAM_TAGS, os.path.join(WHITELIST_DIR, '10xv2.txt.gz')
+    ),
 ]
 
 PLATE_TECHNOLOGIES = [

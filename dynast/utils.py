@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from operator import add
 
 import anndata
+import numpy as np
 import pandas as pd
 import psutil
 import scipy.io
@@ -320,7 +321,7 @@ def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
     """
     df_barcodes = pd.read_csv(barcodes_path, names=['barcode'])
     df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1])
-    matrix = scipy.io.mmread(matrix_path).T.toarray()
+    matrix = scipy.io.mmread(matrix_path).astype(np.uint32).T.toarray()
 
     adata = anndata.AnnData(matrix, obs=df_barcodes, var=df_features)
     adata.obs.index = adata.obs.index.astype(str)
