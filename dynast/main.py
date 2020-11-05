@@ -43,6 +43,13 @@ def setup_ref_args(parser, parent):
         type=str,
         required=True
     )
+    required_ref.add_argument(
+        '-g',
+        metavar='GENES',
+        help='Path to where the CSV containing gene information will be generated',
+        type=str,
+        required=True
+    )
     parser_ref.add_argument(
         '-m', metavar='MEMORY', help='Maximum memory used, in GB (default: 16)', type=int, default=16
     )
@@ -83,6 +90,9 @@ def setup_count_args(parser, parent):
     required_count = parser_count.add_argument_group('required arguments')
     required_count.add_argument(
         '-i', metavar='INDEX', help='Path to the directory where the STAR index is located', type=str, required=True
+    )
+    required_count.add_argument(
+        '-g', metavar='GENES', help='Path to genes CSV. Required for some technologies', type=str, required=False
     )
     parser_count.add_argument(
         '-o',
@@ -127,18 +137,6 @@ def setup_count_args(parser, parent):
         type=str,
         choices=RE_CHOICES,
         default=None
-    )
-    parser_count.add_argument(
-        '--use-corrected-barcodes',
-        help=(
-            'Use STAR corrected barcodes instead of raw barcodes. This corresponds to '
-            'the `CB` tags in the STAR alignments BAM, as opposed to the `CR` tags. '
-            'All `barcode` columns in CSV files will correspond to '
-            'corrected barcodes instead of raw barcodes. This option is only '
-            'available if a whitelist is provided with the `-w` argument and is '
-            'highly recommended.'
-        ),
-        action='store_true'
     )
     parser_count.add_argument(
         '--p-group-by',
@@ -203,6 +201,7 @@ def parse_ref(parser, args, temp_dir=None):
         args.fasta,
         args.gtf,
         args.i,
+        args.g,
         n_threads=args.t,
         memory=args.m * (1024**3),
         temp_dir=temp_dir,
@@ -214,12 +213,6 @@ def parse_count(parser, args, temp_dir=None):
     :param args: Command-line arguments dictionary, as parsed by argparse
     :type args: dict
     """
-    # Whitelist must be provided if we want to use corrected barcodes
-    if args.use_corrected_barcodes and args.w is None:
-        parser.error('Whitelist must be provided for `--use-corrected-barcodes`')
-    if args.w is not None and not args.use_corrected_barcodes:
-        logger.warning('`--use-corrected-barcodes` is highly recommended when providing a whitelist')
-
     # Check quality
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
@@ -241,6 +234,10 @@ def parse_count(parser, args, temp_dir=None):
 
     technology = TECHNOLOGIES_MAP[args.x]
     if technology.name == 'smartseq':
+        # Genes CSV required
+        if args.g is None:
+            parser.error('`-g` is required for technology `smartseq`')
+
         if len(args.fastqs) != 1:
             parser.error('A single manifest TSV must be provided for technology `smartseq`')
         with open(args.fastqs[0], 'r') as f:
@@ -268,7 +265,7 @@ def parse_count(parser, args, temp_dir=None):
         args.i,
         args.o,
         TECHNOLOGIES_MAP[args.x],
-        use_corrected=args.use_corrected_barcodes,
+        genes_path=args.g,
         quality=args.quality,
         conversion=args.conversion,
         snp=args.snp,

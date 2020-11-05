@@ -49,19 +49,12 @@ def read_genes(genes_path):
     return pd.read_csv(genes_path, dtype=dtypes)
 
 
-def read_barcodes(barcodes_path):
-    dtypes = {
-        'CR': 'string',
-        'CB': 'string',
-    }
-    return dict(pd.read_csv(barcodes_path, dtype=dtypes).set_index('CR')['CB'])
-
-
 def parse_read_contig(
     bam_path,
     counter,
     lock,
     contig,
+    extract_genes=False,
     use_corrected=False,
     temp_dir=None,
     update_every=50000,
@@ -100,8 +93,6 @@ def parse_read_contig(
     # Will contain a tuple of (file position, number of lines) for every read
     # that has at least one mismatch.
     index = []
-
-    barcodes = {}
     genes = {}
 
     required_tags = ['GX', 'UB']
@@ -129,18 +120,17 @@ def parse_read_contig(
 
             # Extract read and reference information
             read_id = read.query_name
-            cr, ur = read.get_tag('CR'), read.get_tag('UR')
-            cb = read.get_tag('CB') if read.has_tag('CB') else ''
-            ub = read.get_tag('UB') if read.has_tag('UB') else ''
+            barcode = read.get_tag('CB') if use_corrected else read.get_tag('CR')
+            umi = read.get_tag('UB')
             gx = read.get_tag('GX')
-            gn = read.get_tag('GN') if read.has_tag('GN') else ''
-            strand = '-' if read.is_reverse else '+'
             sequence = read.seq.upper()
             qualities = read.query_qualities
             reference = read.get_reference_sequence().upper()
 
-            barcodes.setdefault(cr, cb)
-            genes.setdefault(gx, (gn, strand))
+            if extract_genes:
+                gn = read.get_tag('GN') if read.has_tag('GN') else ''
+                strand = '-' if read.is_reverse else '+'
+                genes.setdefault(gx, (gn, strand))
 
             # Count number of nucleotides in the region this read mapped to
             counts = Counter(reference)
@@ -155,7 +145,7 @@ def parse_read_contig(
                 if genome_base != read_base:
                     n_lines += 1
                     conversions_out.write(
-                        f'{read_id},{cr},{cb},{ur},{ub},{gx},{gn},{strand},{contig},{genome_i},{genome_base},'
+                        f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},{genome_base},'
                         f'{read_base},{qualities[read_i]},{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
                     )
 
@@ -170,11 +160,11 @@ def parse_read_contig(
     # Save index
     index_path = write_index(index, index_path)
 
-    return conversions_path, index_path, barcodes, genes
+    return (conversions_path, index_path, genes) if extract_genes else (conversions_path, index_path)
 
 
 def parse_all_reads(
-    bam_path, conversions_path, index_path, barcodes_path, genes_path, use_corrected=False, n_threads=8, temp_dir=None
+    bam_path, conversions_path, index_path, genes_path=None, use_corrected=False, n_threads=8, temp_dir=None
 ):
     """Parse all reads in the provided BAM file. Read conversion and coverage
     information is outputed to the provided corresponding paths.
@@ -190,7 +180,7 @@ def parse_all_reads(
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
 
-    :return: (`conversions_path`, `index_path`, `barcodes_path`, `genes_path`)
+    :return: (`conversions_path`, `index_path`)
     :rtype: tuple
     """
     logger.debug(f'Extracting contigs from BAM {bam_path}')
@@ -211,6 +201,7 @@ def parse_all_reads(
             bam_path,
             counter,
             lock,
+            extract_genes=genes_path is not None,
             use_corrected=use_corrected,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), contigs
@@ -224,17 +215,19 @@ def parse_all_reads(
 
     # Combine csvs
     logger.debug(f'Writing conversions to {conversions_path}')
-    barcodes = {}
-    genes = {}
     pos = 0
     index = []
+    genes = {}
     with open(conversions_path, 'wb') as conversions_out:
-        conversions_out.write(b'read_id,CR,CB,UR,UB,GX,GN,strand,contig,genome_i,original,converted,quality,A,C,G,T\n')
+        conversions_out.write(b'read_id,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
         pos = conversions_out.tell()
 
-        for conversions_part_path, index_part_path, barcodes_part, genes_part in async_result.get():
-            barcodes.update(barcodes_part)
-            genes.update(genes_part)
+        for parts in async_result.get():
+            conversions_part_path = parts[0]
+            index_part_path = parts[1]
+            if genes_path is not None:
+                genes_part = parts[2]
+                genes.update(genes_part)
             with open(conversions_part_path, 'rb') as f:
                 shutil.copyfileobj(f, conversions_out)
 
@@ -247,17 +240,12 @@ def parse_all_reads(
     logger.debug(f'Writing conversions index to {index_path}')
     index_path = write_index(index, index_path)
 
-    # Write barcode and gene mapping
-    logger.debug(f'Writing barcodes to {barcodes_path}')
-    with open(barcodes_path, 'w') as f:
-        f.write('CR,CB\n')
-        for cr in sorted(barcodes.keys()):
-            f.write(f'{cr},{barcodes[cr]}\n')
-    logger.debug(f'Writing genes to {genes_path}')
-    with open(genes_path, 'w') as f:
-        f.write('GX,GN,strand\n')
-        for gx in sorted(genes.keys()):
-            gn, strand = genes[gx]
-            f.write(f'{gx},{gn},{strand}\n')
+    if genes_path is not None:
+        logger.debug(f'Writing genes CSV to {genes_path}')
+        with open(genes_path, 'w') as f:
+            f.write('GX,GN,strand\n')
+            for gx in sorted(genes.keys()):
+                gn, strand = genes[gx]
+                f.write(f'{gx},{gn},{strand}\n')
 
-    return conversions_path, index_path
+    return (conversions_path, index_path, genes_path) if genes_path is not None else (conversions_path, index_path)

@@ -55,11 +55,11 @@ def calculate_coverage_contig(
             if any(not read.has_tag(tag) for tag in required_tags):
                 continue
 
-            cr = read.get_tag('CR')
+            barcode = read.get_tag('CB') if use_corrected else read.get_tag('CR')
 
             for genome_i in range(read.reference_start, read.reference_end):
                 if genome_i in indices:
-                    key = (cr, genome_i)
+                    key = (barcode, genome_i)
                     coverage.setdefault(key, 0)
                     coverage[key] += 1
 
@@ -139,7 +139,7 @@ def calculate_coverage(
     pos = 0
     index = []
     with open(coverage_path, 'wb') as coverage_out:
-        coverage_out.write(b'CR,contig,genome_i,coverage\n')
+        coverage_out.write(b'barcode,contig,genome_i,coverage\n')
         pos = coverage_out.tell()
 
         for coverage_part_path, index_part_path in async_result.get():

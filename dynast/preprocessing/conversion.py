@@ -16,13 +16,9 @@ logger = logging.getLogger(__name__)
 CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
-    (?P<CR>[^,]*),
-    (?P<CB>[^,]*),
-    (?P<UR>[^,]*),
-    (?P<UB>[^,]*),
+    (?P<barcode>[^,]*),
+    (?P<umi>[^,]*),
     (?P<GX>[^,]*),
-    (?P<GN>[^,]*),
-    (?P<strand>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
     (?P<original>[^,]*),
@@ -116,7 +112,6 @@ def count_conversions_part(
     n_lines,
     snps=None,
     group_by=None,
-    use_corrected=False,
     quality=27,
     temp_dir=None,
     update_every=10000,
@@ -137,9 +132,6 @@ def count_conversions_part(
     :param n_lines: number of lines to parse from the conversions CSV, starting
                     from position `pos`
     :type n_lines: int
-    :param use_corrected: whether or not to use corrected barcodes in the `barcode`
-                          column of the counts CSV, defaults to `False`
-    :type use_corrected: bool, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -179,10 +171,8 @@ def count_conversions_part(
 
             if read_id != groups['read_id']:
                 if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-
-                    barcode = prev_groups["CB"] if use_corrected else prev_groups["CR"]
                     out.write(
-                        f'{barcode},{prev_groups["UB"]},{prev_groups["GX"]},'
+                        f'{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)}\n'
                     )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
@@ -202,8 +192,7 @@ def count_conversions_part(
 
         # Add last record
         if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-            barcode = groups["CB"] if use_corrected else groups["CR"]
-            out.write(f'{barcode},{groups["UB"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
+            out.write(f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
 
     lock.acquire()
     counter.value += n_lines % update_every
@@ -213,15 +202,7 @@ def count_conversions_part(
 
 
 def count_conversions(
-    conversions_path,
-    index_path,
-    counts_path,
-    snps=None,
-    group_by=None,
-    use_corrected=False,
-    quality=27,
-    n_threads=8,
-    temp_dir=None
+    conversions_path, index_path, counts_path, snps=None, group_by=None, quality=27, n_threads=8, temp_dir=None
 ):
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode.
@@ -238,9 +219,6 @@ def count_conversions(
     :type genes_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
-    :param use_corrected: whether or not to use corrected barcodes in the `barcode`
-                          column of the counts CSV, defaults to `False`
-    :type use_corrected: bool, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -272,7 +250,6 @@ def count_conversions(
             lock,
             snps=snps,
             group_by=group_by,
-            use_corrected=use_corrected,
             quality=quality,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), parts
@@ -296,18 +273,18 @@ def count_conversions(
     logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
     df = pd.read_csv(
         combined_path,
-        names=['barcode', 'UB', 'GX'] + COLUMNS,
+        names=['barcode', 'umi', 'GX'] + COLUMNS,
         dtype={
             'barcode': 'string',
-            'CB': 'string',
+            'umi': 'string',
             'GX': 'string',
             **{column: np.uint8
                for column in COLUMNS}
         }
     )
     df_sorted = df.iloc[df[CONVERSION_COLUMNS].sum(axis=1).argsort()]
-    df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'UB'], keep='last')].drop(
-        columns='UB'
+    df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
+        columns='umi'
     ).sort_values('barcode').reset_index(drop=True)
     df_filtered.to_csv(counts_path, index=False)
 

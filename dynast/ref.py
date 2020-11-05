@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import re
 import tempfile
 
 from . import config, utils
@@ -100,5 +101,42 @@ def STAR_genomeGenerate(
     return {'index': index_dir}
 
 
-def ref(fasta_path, gtf_path, index_dir, n_threads=8, memory=16**(1024**3), temp_dir=None):
-    STAR_genomeGenerate(fasta_path, gtf_path, index_dir, n_threads=n_threads, memory=memory, temp_dir=temp_dir)
+def extract_gene_info_from_gtf(gtf_path):
+    gene_id_parser = re.compile(r'gene_id "(.+?)"')
+    gene_name_parser = re.compile(r'gene_name "(.+?)"')
+    genes = {}
+    with utils.open_as_text(gtf_path, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+
+            split = line.strip().split('\t')
+            groups = split[-1]
+
+            gene_id_match = gene_id_parser.search(groups)
+            gene_name_match = gene_name_parser.search(groups)
+
+            if gene_id_match:
+                gene_id = gene_id_match.group(1)
+                gene_name = ''
+                if gene_name_match:
+                    gene_name = gene_name_match.group(1)
+                strand = split[6]
+                genes.setdefault(gene_id, (gene_name, strand))
+    logger.debug(f'Extracted {len(genes)} genes from GTF')
+    return genes
+
+
+def ref(fasta_path, gtf_path, index_dir, genes_path, n_threads=8, memory=16**(1024**3), temp_dir=None):
+    logger.info(f'Extracting gene strand information from {gtf_path}')
+    genes = extract_gene_info_from_gtf(gtf_path)
+    with open(genes_path, 'w') as f:
+        f.write('GX,GN,strand\n')
+        for gx in sorted(genes.keys()):
+            gn, strand = genes[gx]
+            f.write(f'{gx},{gn},{strand}\n')
+
+    logger.info(f'Indexing FASTA {fasta_path} and GTF {gtf_path} with STAR')
+    index_dir = STAR_genomeGenerate(
+        fasta_path, gtf_path, index_dir, n_threads=n_threads, memory=memory, temp_dir=temp_dir
+    )

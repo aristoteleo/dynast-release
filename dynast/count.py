@@ -157,7 +157,7 @@ def count(
     index_dir,
     out_dir,
     technology,
-    use_corrected=False,
+    genes_path=None,
     quality=27,
     conversion='TC',
     snp=0.5,
@@ -244,20 +244,25 @@ def count(
     # Parse BAM and save results
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
     conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
-    barcodes_path = os.path.join(out_dir, constants.BARCODES_FILENAME)
-    genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
-    if not utils.all_exists([conversions_path, conversions_index_path, barcodes_path, genes_path]) or redo('parse'):
+    conversions_required = [conversions_path, conversions_index_path]
+    if genes_path is None:
+        genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
+        conversions_required.append(genes_path)
+    if not utils.all_exists(conversions_required) or redo('parse'):
         logger.info(f'Parsing read conversion information from BAM to {conversions_path}')
-        conversions_path, conversions_index_path = preprocessing.parse_all_reads(
+        paths = preprocessing.parse_all_reads(
             STAR_result['bam'],
             conversions_path,
             conversions_index_path,
-            barcodes_path,
-            genes_path,
-            use_corrected=use_corrected,
+            genes_path=genes_path,
+            use_corrected=whitelist_path is not None,
             n_threads=n_threads,
             temp_dir=temp_dir,
         )
+        conversions_path = paths[0]
+        conversions_index_path = paths[1]
+        if genes_path is not None:
+            genes_path = paths[2]
     else:
         logger.info('Skipped read and conversion parsing from BAM because files already exist.')
 
@@ -274,7 +279,7 @@ def count(
             preprocessing.read_conversions(conversions_path),
             coverage_path,
             coverage_index_path,
-            use_corrected=use_corrected,
+            use_corrected=whitelist_path is not None,
             n_threads=n_threads,
             temp_dir=temp_dir,
         )
@@ -284,7 +289,6 @@ def count(
             coverage_path,
             coverage_index_path,
             snps_path,
-            use_corrected=use_corrected,
             quality=quality,
             threshold=snp,
             n_threads=n_threads,
@@ -302,7 +306,6 @@ def count(
             counts_path,
             snps=preprocessing.read_snps(snps_path),
             group_by=snp_group_by,
-            use_corrected=use_corrected,
             quality=quality,
             n_threads=n_threads,
             temp_dir=temp_dir

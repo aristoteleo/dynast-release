@@ -14,11 +14,7 @@ logger = logging.getLogger(__name__)
 CONVERSIONS_PARSER = re.compile(
     r'''^
     ([^,]*),
-    (?P<CR>[^,]*),
-    (?P<CB>[^,]*),
-    ([^,]*),
-    ([^,]*),
-    ([^,]*),
+    (?P<barcode>[^,]*),
     ([^,]*),
     ([^,]*),
     (?P<contig>[^,]*),
@@ -35,7 +31,7 @@ CONVERSIONS_PARSER = re.compile(
 
 COVERAGE_PARSER = re.compile(
     r'''^
-    (?P<CR>[^,]*),
+    (?P<barcode>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
     (?P<coverage>[^,]*)\n
@@ -59,7 +55,7 @@ def read_snps(snps_path, group_by=None):
 
 
 def extract_conversions_part(
-    conversions_path, counter, lock, pos, n_lines, group_by=None, use_corrected=False, quality=27, update_every=10000
+    conversions_path, counter, lock, pos, n_lines, group_by=None, quality=27, update_every=10000
 ):
     conversions = {}
     with open(conversions_path, 'r') as f:
@@ -89,7 +85,7 @@ def extract_conversions_part(
     return conversions
 
 
-def extract_conversions(conversions_path, index_path, group_by=None, use_corrected=False, quality=27, n_threads=8):
+def extract_conversions(conversions_path, index_path, group_by=None, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {conversions_path}')
     index = read_index(index_path)
 
@@ -106,7 +102,6 @@ def extract_conversions(conversions_path, index_path, group_by=None, use_correct
             counter,
             lock,
             group_by=group_by,
-            use_corrected=use_corrected,
             quality=quality,
         ), parts
     )
@@ -124,9 +119,7 @@ def extract_conversions(conversions_path, index_path, group_by=None, use_correct
     return conversions
 
 
-def extract_coverage_part(
-    coverage_path, counter, lock, pos, n_lines, group_by=None, use_corrected=False, quality=27, update_every=10000
-):
+def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, group_by=None, quality=27, update_every=10000):
     coverage = {}
     with open(coverage_path, 'r') as f:
         f.seek(pos)
@@ -156,7 +149,7 @@ def extract_coverage_part(
     return coverage
 
 
-def extract_coverage(coverage_path, index_path, group_by=None, use_corrected=False, quality=27, n_threads=8):
+def extract_coverage(coverage_path, index_path, group_by=None, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {coverage_path}')
     index = read_index(index_path)
 
@@ -173,7 +166,6 @@ def extract_coverage(coverage_path, index_path, group_by=None, use_corrected=Fal
             counter,
             lock,
             group_by=group_by,
-            use_corrected=use_corrected,
             quality=quality,
         ), parts
     )
@@ -198,29 +190,18 @@ def detect_snps(
     coverage_index_path,
     snps_path,
     group_by=None,
-    use_corrected=False,
     quality=27,
     threshold=0.5,
     n_threads=8,
 ):
     logger.info('Counting number of conversions for each genomic position')
     conversions = extract_conversions(
-        conversions_path,
-        conversions_index_path,
-        group_by=group_by,
-        use_corrected=use_corrected,
-        quality=quality,
-        n_threads=n_threads
+        conversions_path, conversions_index_path, group_by=group_by, quality=quality, n_threads=n_threads
     )
 
     logger.info('Counting coverage for each genomic position')
     coverage = extract_coverage(
-        coverage_path,
-        coverage_index_path,
-        group_by=group_by,
-        use_corrected=use_corrected,
-        quality=quality,
-        n_threads=n_threads
+        coverage_path, coverage_index_path, group_by=group_by, quality=quality, n_threads=n_threads
     )
 
     logger.info('Calculating fraction of conversions for each genomic position')
