@@ -17,7 +17,7 @@ CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
     (?P<barcode>[^,]*),
-    (?P<umi>[^,]*),
+    (?P<umi>[^,]*?),?
     (?P<GX>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
@@ -110,6 +110,7 @@ def count_conversions_part(
     lock,
     pos,
     n_lines,
+    no_umi=False,
     snps=None,
     group_by=None,
     quality=27,
@@ -172,7 +173,7 @@ def count_conversions_part(
             if read_id != groups['read_id']:
                 if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
                     out.write(
-                        f'{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
+                        f'{prev_groups["barcode"]},{"" if no_umi else prev_groups["umi"] + ","}{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)}\n'
                     )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
@@ -192,7 +193,10 @@ def count_conversions_part(
 
         # Add last record
         if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
-            out.write(f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},' f'{",".join(str(c) for c in counts)}\n')
+            out.write(
+                f'{groups["barcode"]},{"" if no_umi else groups["umi"] + ","}{groups["GX"]},'
+                f'{",".join(str(c) for c in counts)}\n'
+            )
 
     lock.acquire()
     counter.value += n_lines % update_every
@@ -202,7 +206,15 @@ def count_conversions_part(
 
 
 def count_conversions(
-    conversions_path, index_path, counts_path, snps=None, group_by=None, quality=27, n_threads=8, temp_dir=None
+    conversions_path,
+    index_path,
+    counts_path,
+    no_umi=False,
+    snps=None,
+    group_by=None,
+    quality=27,
+    n_threads=8,
+    temp_dir=None
 ):
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode.
@@ -248,6 +260,7 @@ def count_conversions(
             conversions_path,
             counter,
             lock,
+            no_umi=no_umi,
             snps=snps,
             group_by=group_by,
             quality=quality,
@@ -261,31 +274,35 @@ def count_conversions(
     pool.join()
 
     # Combine csvs
-    combined_path = utils.mkstemp(dir=temp_dir)
+    combined_path = counts_path if no_umi else utils.mkstemp(dir=temp_dir)
     logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
+        if no_umi:
+            out.write(f'barcode,GX,{",".join(COLUMNS)}\n'.encode())
+        else:
+            out.write(f'barcode,umi,GX,{",".join(COLUMNS)}\n'.encode())
         for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
 
-    # Read in as dataframe and deduplicate based on CR and UB
-    # If there are duplicates, select the row with the most conversions
-    logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
-    df = pd.read_csv(
-        combined_path,
-        names=['barcode', 'umi', 'GX'] + COLUMNS,
-        dtype={
-            'barcode': 'string',
-            'umi': 'string',
-            'GX': 'string',
-            **{column: np.uint8
-               for column in COLUMNS}
-        }
-    )
-    df_sorted = df.iloc[df[CONVERSION_COLUMNS].sum(axis=1).argsort()]
-    df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
-        columns='umi'
-    ).sort_values('barcode').reset_index(drop=True)
-    df_filtered.to_csv(counts_path, index=False)
+    if not no_umi:
+        # Read in as dataframe and deduplicate based on CR and UB
+        # If there are duplicates, select the row with the most conversions
+        logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
+        df = pd.read_csv(
+            combined_path,
+            dtype={
+                'barcode': 'string',
+                'umi': 'string',
+                'GX': 'string',
+                **{column: np.uint8
+                   for column in COLUMNS}
+            }
+        )
+        df_sorted = df.iloc[df[CONVERSION_COLUMNS].sum(axis=1).argsort()]
+        df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
+            columns='umi'
+        ).sort_values('barcode').reset_index(drop=True)
+        df_filtered.to_csv(counts_path, index=False)
 
     return counts_path

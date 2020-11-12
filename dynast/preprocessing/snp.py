@@ -15,7 +15,7 @@ CONVERSIONS_PARSER = re.compile(
     r'''^
     ([^,]*),
     (?P<barcode>[^,]*),
-    ([^,]*),
+    ([^,]*?),?
     ([^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),

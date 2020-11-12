@@ -68,6 +68,16 @@ def STAR_solo(
         command += ['--readFilesIn'] + plaintext_fastqs
         command += ['--soloCBwhitelist', whitelist_path or 'None']
     else:
+        # STAR requires FIFO file support when running in smartseq mode
+        fifo_path = utils.mkstemp(dir=temp_dir)
+        try:
+            os.mkfifo(fifo_path)
+        except OSError:
+            raise config.UnsupportedOSException(
+                f'The filesystem at {temp_dir} does not support FIFO files. '
+                'STAR uses FIFO files to run alignment of Smart-seq files.'
+            )
+
         manifest_path = utils.mkstemp(dir=temp_dir)
         with open(fastqs[0], 'r') as f, open(manifest_path, 'w') as out:
             for line in f:
@@ -221,6 +231,9 @@ def count(
             'matrix': os.path.join(STAR_velocyto_dir, constants.STAR_MATRIX_FILENAME),
         }
     }
+    if technology.name == 'smartseq':
+        logger.warning('Technology `smartseq` does not support velocyto')
+        del STAR_result['velocyto']
     STAR_required = utils.flatten_dict_values(STAR_result)
     if not utils.all_exists(STAR_required) or redo('align'):
         STAR_result = STAR_solo(
@@ -245,7 +258,9 @@ def count(
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
     conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
     conversions_required = [conversions_path, conversions_index_path]
+    write_genes = False
     if genes_path is None:
+        write_genes = True
         genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
         conversions_required.append(genes_path)
     if not utils.all_exists(conversions_required) or redo('parse'):
@@ -254,14 +269,15 @@ def count(
             STAR_result['bam'],
             conversions_path,
             conversions_index_path,
-            genes_path=genes_path,
+            genes_path=genes_path if write_genes else None,
+            read_group_as_barcode=technology.name == 'smartseq',
             use_corrected=whitelist_path is not None,
             n_threads=n_threads,
             temp_dir=temp_dir,
         )
         conversions_path = paths[0]
         conversions_index_path = paths[1]
-        if genes_path is not None:
+        if write_genes:
             genes_path = paths[2]
     else:
         logger.info('Skipped read and conversion parsing from BAM because files already exist.')
@@ -279,6 +295,7 @@ def count(
             preprocessing.read_conversions(conversions_path),
             coverage_path,
             coverage_index_path,
+            read_group_as_barcode=technology.name == 'smartseq',
             use_corrected=whitelist_path is not None,
             n_threads=n_threads,
             temp_dir=temp_dir,
@@ -304,6 +321,7 @@ def count(
             conversions_path,
             conversions_index_path,
             counts_path,
+            no_umi=technology.name == 'smartseq',
             snps=preprocessing.read_snps(snps_path),
             group_by=snp_group_by,
             quality=quality,
@@ -346,7 +364,7 @@ def count(
 
         logger.info('Estimating average mismatch rate in new RNA')
         df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-            aggregates_paths[conversion]
+            aggregates_paths[conversion], filter_zeros=True
         )
         p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
             df_aggregates,
@@ -366,7 +384,7 @@ def count(
     if not utils.all_exists([pi_path]) or redo('pi'):
         logger.info('Estimating fraction of newly transcribed RNA')
         df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-            aggregates_paths[conversion]
+            aggregates_paths[conversion], filter_zeros=True
         )
         p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
         p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)

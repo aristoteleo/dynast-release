@@ -23,6 +23,7 @@ def calculate_coverage_contig(
     lock,
     contig,
     indices,
+    read_group_as_barcode=False,
     use_corrected=False,
     temp_dir=None,
     update_every=50000,
@@ -36,7 +37,9 @@ def calculate_coverage_contig(
 
     coverage = {}
 
-    required_tags = ['GX', 'UB']
+    required_tags = ['GX']
+    if not read_group_as_barcode:
+        required_tags.append('UB')
     if use_corrected:
         required_tags.append('CB')
 
@@ -55,7 +58,9 @@ def calculate_coverage_contig(
             if any(not read.has_tag(tag) for tag in required_tags):
                 continue
 
-            barcode = read.get_tag('CB') if use_corrected else read.get_tag('CR')
+            barcode = read.get_tag('RG') if read_group_as_barcode else (
+                read.get_tag('CB') if use_corrected else read.get_tag('CR')
+            )
 
             for genome_i in range(read.reference_start, read.reference_end):
                 if genome_i in indices:
@@ -93,6 +98,7 @@ def calculate_coverage(
     conversions,
     coverage_path,
     index_path,
+    read_group_as_barcode=False,
     use_corrected=False,
     n_threads=8,
     temp_dir=None,
@@ -117,6 +123,7 @@ def calculate_coverage(
             bam_path,
             counter,
             lock,
+            read_group_as_barcode=read_group_as_barcode,
             use_corrected=use_corrected,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), [(contig, conversions.get(contig, set())) for contig in contigs]

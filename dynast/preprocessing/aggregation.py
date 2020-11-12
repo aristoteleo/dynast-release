@@ -22,7 +22,7 @@ def read_rates(rates_path):
     return pd.read_csv(rates_path, index_col=None)
 
 
-def read_aggregates(aggregates_path):
+def read_aggregates(aggregates_path, filter_zeros=False):
     """Read aggregates CSV as a pandas dataframe.
 
     :param aggregates_path: path to aggregates CSV
@@ -32,7 +32,13 @@ def read_aggregates(aggregates_path):
     :rtype: pandas.DataFrame
     """
     dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint16 for column in COLUMNS}}
-    return pd.read_csv(aggregates_path, dtype=dtypes)
+    df = pd.read_csv(aggregates_path, dtype=dtypes)
+    if filter_zeros:
+        conversion = df.columns[2]
+        df_zeros = df.groupby(['barcode', 'GX'])[conversion].agg(['unique'])['unique'].apply(lambda x: list(x) == [0])
+        indices = df_zeros.index[~df_zeros]
+        df = df.set_index(['barcode', 'GX']).loc[indices].reset_index()
+    return df
 
 
 def calculate_mutation_rates(df_counts, rates_path, group_by=None):

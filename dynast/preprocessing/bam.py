@@ -54,6 +54,7 @@ def parse_read_contig(
     counter,
     lock,
     contig,
+    read_group_as_barcode=False,
     extract_genes=False,
     use_corrected=False,
     temp_dir=None,
@@ -95,9 +96,11 @@ def parse_read_contig(
     index = []
     genes = {}
 
-    required_tags = ['GX', 'UB']
-    if use_corrected:
-        required_tags.append('CB')
+    required_tags = ['GX']
+    if not read_group_as_barcode:
+        required_tags.append('UB')
+        if use_corrected:
+            required_tags.append('CB')
 
     # Can't use enumerate because n needs to be access outside from
     # the for loop.
@@ -120,8 +123,10 @@ def parse_read_contig(
 
             # Extract read and reference information
             read_id = read.query_name
-            barcode = read.get_tag('CB') if use_corrected else read.get_tag('CR')
-            umi = read.get_tag('UB')
+            barcode = read.get_tag('RG') if read_group_as_barcode else (
+                read.get_tag('CB') if use_corrected else read.get_tag('CR')
+            )
+            umi = None if read_group_as_barcode else read.get_tag('UB')
             gx = read.get_tag('GX')
             sequence = read.seq.upper()
             qualities = read.query_qualities
@@ -144,10 +149,18 @@ def parse_read_contig(
 
                 if genome_base != read_base:
                     n_lines += 1
-                    conversions_out.write(
-                        f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},{genome_base},'
-                        f'{read_base},{qualities[read_i]},{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
-                    )
+                    if read_group_as_barcode:
+                        conversions_out.write(
+                            f'{read_id},{barcode},{gx},{contig},{genome_i},'
+                            f'{genome_base},{read_base},{qualities[read_i]},'
+                            f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                        )
+                    else:
+                        conversions_out.write(
+                            f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},'
+                            f'{genome_base},{read_base},{qualities[read_i]},'
+                            f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                        )
 
             # Add to index if lines were written
             if n_lines > 0:
@@ -164,7 +177,14 @@ def parse_read_contig(
 
 
 def parse_all_reads(
-    bam_path, conversions_path, index_path, genes_path=None, use_corrected=False, n_threads=8, temp_dir=None
+    bam_path,
+    conversions_path,
+    index_path,
+    genes_path=None,
+    read_group_as_barcode=False,
+    use_corrected=False,
+    n_threads=8,
+    temp_dir=None,
 ):
     """Parse all reads in the provided BAM file. Read conversion and coverage
     information is outputed to the provided corresponding paths.
@@ -201,6 +221,7 @@ def parse_all_reads(
             bam_path,
             counter,
             lock,
+            read_group_as_barcode=read_group_as_barcode,
             extract_genes=genes_path is not None,
             use_corrected=use_corrected,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
@@ -219,7 +240,11 @@ def parse_all_reads(
     index = []
     genes = {}
     with open(conversions_path, 'wb') as conversions_out:
-        conversions_out.write(b'read_id,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
+        if read_group_as_barcode:
+            conversions_out.write(b'read_id,barcode,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
+        else:
+            conversions_out.write(b'read_id,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
+
         pos = conversions_out.tell()
 
         for parts in async_result.get():
