@@ -69,7 +69,7 @@ def STAR_solo(
         command += ['--soloCBwhitelist', whitelist_path or 'None']
     else:
         # STAR requires FIFO file support when running in smartseq mode
-        fifo_path = utils.mkstemp(dir=temp_dir)
+        fifo_path = utils.mkstemp(dir=temp_dir, delete=True)
         try:
             os.mkfifo(fifo_path)
         except OSError:

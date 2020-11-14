@@ -45,7 +45,7 @@ def fit_stan(
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
             data=data,
-            n_jobs=n_chains,
+            n_jobs=1,
             iter=n_iters,
             chains=n_chains,
             init=init,
@@ -107,6 +107,7 @@ def estimate_pi(
     p_cs = df_full['p_c'].values
     groups = df_full.groupby(group_by).indices
     pis = {}
+    logger.debug(f'Spawning {n_threads} processes')
     with ProcessPoolExecutor(max_workers=n_threads) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
         pbar.set_description('Queueing')
         futures = {}

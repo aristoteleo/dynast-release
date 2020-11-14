@@ -95,6 +95,7 @@ def parse_read_contig(
     # that has at least one mismatch.
     index = []
     genes = {}
+    paired = {}
 
     required_tags = ['GX']
     if not read_group_as_barcode:
@@ -139,6 +140,66 @@ def parse_read_contig(
 
             # Count number of nucleotides in the region this read mapped to
             counts = Counter(reference)
+
+            # If we are dealing with paired-end reads, we have to check for
+            # overlaps.
+            # NOTE: Any conversions in the overlap of the MATE are currently
+            # ignored.
+            if read.is_paired:
+                if read_id not in paired:
+                    paired[read_id] = (
+                        read.reference_start,
+                        read.reference_end,
+                        reference,
+                        sequence,
+                        qualities,
+                        barcode,
+                        umi,
+                        gx,
+                        read.get_aligned_pairs(matches_only=True, with_seq=True),
+                    )
+                    continue
+
+                (
+                    mate_reference_start,
+                    mate_reference_end,
+                    mate_reference,
+                    mate_sequence,
+                    mate_qualities,
+                    mate_barcode,
+                    mate_umi,
+                    mate_gx,
+                    aligned_pairs,
+                ) = paired[read_id]
+
+                # Update counts
+                counts += Counter(mate_reference[:read.reference_start - mate_reference_start])
+
+                for read_i, genome_i, _genome_base in aligned_pairs:
+                    # Only parse positions specific to this mate, because any
+                    # overlaps will be processed later.
+                    if genome_i >= read.reference_start:
+                        continue
+                    read_base = mate_sequence[read_i]
+                    genome_base = _genome_base.upper()
+                    if 'N' in (genome_base, read_base):
+                        continue
+
+                    if genome_base != read_base:
+                        n_lines += 1
+                        if read_group_as_barcode:
+                            conversions_out.write(
+                                f'{read_id},{mate_barcode},{mate_gx},{contig},{genome_i},'
+                                f'{genome_base},{read_base},{mate_qualities[read_i]},'
+                                f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                            )
+                        else:
+                            conversions_out.write(
+                                f'{read_id},{mate_barcode},{mate_umi},{mate_gx},{contig},{genome_i},'
+                                f'{genome_base},{read_base},{mate_qualities[read_i]},'
+                                f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                            )
+                del paired[read_id]
 
             # Iterate through every mapped position.
             for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=True, with_seq=True):

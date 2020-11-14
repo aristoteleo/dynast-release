@@ -267,7 +267,7 @@ def flatten_dict_values(d):
         return [d]
 
 
-def mkstemp(dir=None):
+def mkstemp(dir=None, delete=False):
     """Wrapper for `tempfile.mkstemp` that automatically closes the OS-level
     file descriptor. This function behaves like `tempfile.mkdtemp` but for
     files.
@@ -275,12 +275,17 @@ def mkstemp(dir=None):
     :param dir: directory to create the temporary file. This value is passed as
                 the `dir` kwarg of `tempfile.mkstemp`, defaults to `None`
     :type dir: str, optional
+    :param delete: whether to delete the temporary file before returning,
+                   defaults to `False`
+    :type delete: bool, optional
 
     :return: path to the temporary file
     :rtype: str
     """
     fd, path = tempfile.mkstemp(dir=dir)
     os.close(fd)
+    if delete:
+        os.remove(path)
     return path
 
 

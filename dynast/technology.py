@@ -21,6 +21,12 @@ BARCODE_UMI_TECHNOLOGIES = [
             '--soloFeatures',
             'Gene',
             'Velocyto',
+            '--outSAMmultNmax',
+            1,
+            '--outFilterScoreMinOverLread',
+            0.3,
+            '--outFilterMatchNminOverLread',
+            0.3,
         ], STAR_SOLO_BAM_TAGS, None
     ),
     Technology(
@@ -38,6 +44,12 @@ BARCODE_UMI_TECHNOLOGIES = [
             '--soloFeatures',
             'Gene',
             'Velocyto',
+            '--outSAMmultNmax',
+            1,
+            '--outFilterScoreMinOverLread',
+            0.3,
+            '--outFilterMatchNminOverLread',
+            0.3,
         ], STAR_SOLO_BAM_TAGS, os.path.join(WHITELIST_DIR, 'scifate.txt.gz')
     ),
     Technology(
@@ -55,6 +67,12 @@ BARCODE_UMI_TECHNOLOGIES = [
             '--soloFeatures',
             'Gene',
             'Velocyto',
+            '--outSAMmultNmax',
+            1,
+            '--outFilterScoreMinOverLread',
+            0.3,
+            '--outFilterMatchNminOverLread',
+            0.3,
         ], STAR_SOLO_BAM_TAGS, os.path.join(WHITELIST_DIR, '10xv2.txt.gz')
     ),
 ]
@@ -70,6 +88,12 @@ PLATE_TECHNOLOGIES = [
             'Unstranded',
             '--soloFeatures',
             'Gene',
+            '--outSAMmultNmax',
+            1,
+            '--outFilterScoreMinOverLread',
+            0.3,
+            '--outFilterMatchNminOverLread',
+            0.3,
         ], ['RG'], None
     )
 ]
