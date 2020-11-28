@@ -167,10 +167,12 @@ def count(
     index_dir,
     out_dir,
     technology,
+    filtered_only=False,
     genes_path=None,
     quality=27,
     conversion='TC',
-    snp=0.5,
+    snp_threshold=0.5,
+    snp_csv=None,
     snp_group_by=None,
     p_group_by=None,
     pi_group_by=None,
@@ -254,10 +256,20 @@ def count(
         logger.info(f'Indexing {STAR_result["bam"]} with samtools')
         pysam.index(STAR_result['bam'], bai_path, '-@', str(n_threads))
 
+    # Read filtered barcodes.
+    with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
+        barcodes = [line.strip() for line in f]
+    if filtered_only:
+        logger.warning(
+            f'Ignoring any barcodes not in the list of {len(barcodes)} filtered barcodes '
+            f'in {STAR_result["gene"]["filtered"]["barcodes"]}'
+        )
+
     # Parse BAM and save results
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
     conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
-    conversions_required = [conversions_path, conversions_index_path]
+    no_conversions_path = os.path.join(out_dir, constants.NO_CONVERSIONS_FILENAME)
+    conversions_required = [conversions_path, conversions_index_path, no_conversions_path]
     write_genes = False
     if genes_path is None:
         write_genes = True
@@ -269,6 +281,8 @@ def count(
             STAR_result['bam'],
             conversions_path,
             conversions_index_path,
+            no_conversions_path,
+            barcodes=barcodes if filtered_only else None,
             genes_path=genes_path if write_genes else None,
             read_group_as_barcode=technology.name == 'smartseq',
             use_corrected=whitelist_path is not None,
@@ -277,52 +291,64 @@ def count(
         )
         conversions_path = paths[0]
         conversions_index_path = paths[1]
+        no_conversions_path = paths[2]
         if write_genes:
-            genes_path = paths[2]
+            genes_path = paths[3]
     else:
         logger.info('Skipped read and conversion parsing from BAM because files already exist.')
 
-    # Detect SNPs
-    snp_dir = os.path.join(out_dir, constants.SNP_DIR)
-    coverage_path = os.path.join(snp_dir, constants.COVERAGE_FILENAME)
-    coverage_index_path = os.path.join(snp_dir, constants.COVERAGE_INDEX_FILENAME)
-    snps_path = os.path.join(snp_dir, constants.SNPS_FILENAME)
-    if not utils.all_exists([coverage_path, coverage_index_path, snps_path]) or redo('snp'):
-        logger.info('Calculating coverage and detecting SNPs')
-        os.makedirs(snp_dir, exist_ok=True)
-        coverage_path, coverage_index_path = preprocessing.calculate_coverage(
-            STAR_result['bam'],
-            preprocessing.read_conversions(conversions_path),
-            coverage_path,
-            coverage_index_path,
-            read_group_as_barcode=technology.name == 'smartseq',
-            use_corrected=whitelist_path is not None,
-            n_threads=n_threads,
-            temp_dir=temp_dir,
-        )
-        snps_path = preprocessing.detect_snps(
-            conversions_path,
-            conversions_index_path,
-            coverage_path,
-            coverage_index_path,
-            snps_path,
-            quality=quality,
-            threshold=snp,
-            n_threads=n_threads,
-        )
+    if snp_threshold:
+        # Detect SNPs
+        snp_dir = os.path.join(out_dir, constants.SNP_DIR)
+        coverage_path = os.path.join(snp_dir, constants.COVERAGE_FILENAME)
+        coverage_index_path = os.path.join(snp_dir, constants.COVERAGE_INDEX_FILENAME)
+        snps_path = os.path.join(snp_dir, constants.SNPS_FILENAME)
+        if not utils.all_exists([coverage_path, coverage_index_path, snps_path]) or redo('snp'):
+            logger.info('Calculating coverage and detecting SNPs')
+            os.makedirs(snp_dir, exist_ok=True)
+            coverage_path, coverage_index_path = preprocessing.calculate_coverage(
+                STAR_result['bam'],
+                preprocessing.read_conversions(conversions_path),
+                coverage_path,
+                coverage_index_path,
+                barcodes=barcodes if filtered_only else None,
+                read_group_as_barcode=technology.name == 'smartseq',
+                use_corrected=whitelist_path is not None,
+                n_threads=n_threads,
+                temp_dir=temp_dir,
+            )
+            snps_path = preprocessing.detect_snps(
+                conversions_path,
+                conversions_index_path,
+                coverage_path,
+                coverage_index_path,
+                snps_path,
+                quality=quality,
+                threshold=snp_threshold,
+                n_threads=n_threads,
+            )
+        else:
+            logger.info('Skipped coverage calculation and SNP detection because files already exist.')
     else:
-        logger.info('Skipped coverage calculation and SNP detection because files already exist.')
+        logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
 
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
     if not utils.all_exists([counts_path]) or redo('count'):
         logger.info('Counting conversions')
+        snps = utils.merge_dictionaries(
+            preprocessing.read_snps(snps_path) if snp_threshold else {},
+            preprocessing.read_snp_csv(snp_csv),
+            f=set.union,
+            default=set,
+        )
         counts_path = preprocessing.count_conversions(
             conversions_path,
             conversions_index_path,
+            no_conversions_path,
             counts_path,
             no_umi=technology.name == 'smartseq',
-            snps=preprocessing.read_snps(snps_path),
+            snps=snps,
             group_by=snp_group_by,
             quality=quality,
             n_threads=n_threads,
@@ -359,12 +385,18 @@ def count(
         os.makedirs(estimates_dir, exist_ok=True)
 
         logger.info('Estimating average mismatch rate in old RNA')
-        df_rates = preprocessing.read_rates(rates_path)
-        p_e, p_e_path = estimation.estimate_p_e(df_rates, p_e_path, group_by=p_group_by)
+        if df_counts is None:
+            df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
+        p_e, p_e_path = estimation.estimate_p_e(
+            df_counts,
+            p_e_path,
+            conversion=conversion,
+            group_by=p_group_by,
+        )
 
         logger.info('Estimating average mismatch rate in new RNA')
         df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-            aggregates_paths[conversion], filter_zeros=True
+            aggregates_paths[conversion]
         )
         p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
             df_aggregates,
@@ -378,13 +410,11 @@ def count(
     else:
         logger.info('Skipped rate estimation because files already exist.')
 
-    with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
-        barcodes = [line.strip() for line in f]
     pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
     if not utils.all_exists([pi_path]) or redo('pi'):
         logger.info('Estimating fraction of newly transcribed RNA')
         df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-            aggregates_paths[conversion], filter_zeros=True
+            aggregates_paths[conversion]
         )
         p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
         p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)
@@ -398,6 +428,7 @@ def count(
             group_by=pi_group_by,
             value_columns=value_columns,
             n_threads=n_threads,
+            temp_dir=temp_dir
         )
     else:
         logger.info('Skipped estimation of newly transcribed RNA because files already exist.')

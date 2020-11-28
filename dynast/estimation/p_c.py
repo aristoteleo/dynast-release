@@ -61,7 +61,7 @@ def filter_aggregates(df_aggregates, p_e, group_by=None, value_columns=['TC', 'T
     return filtered
 
 
-def expectation_maximization_part(sp, mask, threshold=10e-8):
+def expectation_maximization_part(sp, mask, threshold=1e-8):
     r = 1
     l = 0  # noqa
     p_c = (r + l) / 2
@@ -95,9 +95,9 @@ def expectation_maximization_part(sp, mask, threshold=10e-8):
             break
 
         if p_c < prev_p_c:
-            r = p_c
+            r = prev_p_c
         else:
-            l = p_c  # noqa
+            l = prev_p_c  # noqa
 
     return new_sp, p_c
 

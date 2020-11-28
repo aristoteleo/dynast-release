@@ -12,6 +12,7 @@ STAR_MATRIX_FILENAME = 'matrix.mtx'
 
 CONVERSIONS_FILENAME = 'conversions.csv'
 CONVERSIONS_INDEX_FILENAME = 'conversions.idx'
+NO_CONVERSIONS_FILENAME = 'no_conversions.csv'
 
 SNP_DIR = 'snp'
 COVERAGE_FILENAME = 'coverage.csv'

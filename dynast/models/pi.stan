@@ -7,8 +7,8 @@ data {
 }
 
 parameters {
-  real<lower=-3, upper=3> log_alpha;
-  real<lower=-3, upper=3> log_beta;
+  real<lower=-4, upper=4> log_alpha;
+  real<lower=-4, upper=4> log_beta;
   real<lower=0, upper=1> pi_g;
 }
 

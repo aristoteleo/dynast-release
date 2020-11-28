@@ -1,17 +1,15 @@
-import gzip
 import logging
 import os
-import pickle
 import shutil
 import tempfile
 from collections import Counter
 from functools import partial
 
+import numpy as np
 import pandas as pd
 import pysam
 
 from .. import utils
-from .index import write_index
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +28,22 @@ def read_conversions(conversions_path):
     for contig, idx in df.groupby('contig').indices.items():
         conversions[contig] = set(df.iloc[idx]['genome_i'])
     return conversions
+
+
+def read_no_conversions(no_conversions_path):
+    df = pd.read_csv(
+        no_conversions_path,
+        dtype={
+            'read_id': 'string',
+            'barcode': 'string',
+            'umi': 'string',
+            'A': np.uint8,
+            'C': np.uint8,
+            'G': np.uint8,
+            'T': np.uint8,
+        }
+    )
+    return df
 
 
 def read_genes(genes_path):
@@ -54,6 +68,7 @@ def parse_read_contig(
     counter,
     lock,
     contig,
+    barcodes=None,
     read_group_as_barcode=False,
     extract_genes=False,
     use_corrected=False,
@@ -88,6 +103,7 @@ def parse_read_contig(
     :rtype: tuple
     """
     conversions_path = utils.mkstemp(dir=temp_dir)
+    no_conversions_path = utils.mkstemp(dir=temp_dir)
     index_path = utils.mkstemp(dir=temp_dir)
 
     # Index will be used later for fast splitting
@@ -107,7 +123,8 @@ def parse_read_contig(
     # the for loop.
     n = 0
     with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
-        open(conversions_path, 'w') as conversions_out:
+        open(conversions_path, 'w') as conversions_out, \
+        open(no_conversions_path, 'w') as no_conversions_out:
         for read in bam.fetch(contig):
             n_lines = 0
             pos = conversions_out.tell()
@@ -127,6 +144,11 @@ def parse_read_contig(
             barcode = read.get_tag('RG') if read_group_as_barcode else (
                 read.get_tag('CB') if use_corrected else read.get_tag('CR')
             )
+
+            # If barcodes are provided, skip any barcodes not in the list.
+            if barcodes and barcode not in barcodes:
+                continue
+
             umi = None if read_group_as_barcode else read.get_tag('UB')
             gx = read.get_tag('GX')
             sequence = read.seq.upper()
@@ -226,21 +248,34 @@ def parse_read_contig(
             # Add to index if lines were written
             if n_lines > 0:
                 index.append((pos, n_lines))
+            else:
+                # Otherwise, this read did not contain any conversions.
+                if read_group_as_barcode:
+                    no_conversions_out.write(
+                        f'{read_id},{barcode},{gx},{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                    )
+                else:
+                    no_conversions_out.write(
+                        f'{read_id},{barcode},{umi},{gx},{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                    )
 
     lock.acquire()
     counter.value += n % update_every
     lock.release()
 
     # Save index
-    index_path = write_index(index, index_path)
+    index_path = utils.write_pickle(index, index_path, protocol=4)
 
-    return (conversions_path, index_path, genes) if extract_genes else (conversions_path, index_path)
+    return (conversions_path, index_path, no_conversions_path,
+            genes) if extract_genes else (conversions_path, index_path, no_conversions_path)
 
 
 def parse_all_reads(
     bam_path,
     conversions_path,
     index_path,
+    no_conversions_path,
+    barcodes=None,
     genes_path=None,
     read_group_as_barcode=False,
     use_corrected=False,
@@ -282,6 +317,7 @@ def parse_all_reads(
             bam_path,
             counter,
             lock,
+            barcodes=barcodes,
             read_group_as_barcode=read_group_as_barcode,
             extract_genes=genes_path is not None,
             use_corrected=use_corrected,
@@ -300,31 +336,36 @@ def parse_all_reads(
     pos = 0
     index = []
     genes = {}
-    with open(conversions_path, 'wb') as conversions_out:
+    with open(conversions_path, 'wb') as conversions_out, \
+        open(no_conversions_path, 'wb') as no_conversions_out:
         if read_group_as_barcode:
             conversions_out.write(b'read_id,barcode,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
+            no_conversions_out.write(b'read_id,barcode,GX,A,C,G,T\n')
         else:
             conversions_out.write(b'read_id,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T\n')
+            no_conversions_out.write(b'read_id,barcode,umi,GX,A,C,G,T\n')
 
         pos = conversions_out.tell()
 
         for parts in async_result.get():
             conversions_part_path = parts[0]
             index_part_path = parts[1]
+            no_conversions_part_path = parts[2]
             if genes_path is not None:
-                genes_part = parts[2]
+                genes_part = parts[3]
                 genes.update(genes_part)
             with open(conversions_part_path, 'rb') as f:
                 shutil.copyfileobj(f, conversions_out)
+            with open(no_conversions_part_path, 'rb') as f:
+                shutil.copyfileobj(f, no_conversions_out)
 
             # Parse index
-            with gzip.open(index_part_path, 'rb') as f:
-                index_part = pickle.load(f)
+            index_part = utils.read_pickle(index_part_path)
             for p, n in index_part:
                 index.append((pos + p, n))
             pos += os.path.getsize(conversions_part_path)
     logger.debug(f'Writing conversions index to {index_path}')
-    index_path = write_index(index, index_path)
+    index_path = utils.write_pickle(index, index_path, protocol=4)
 
     if genes_path is not None:
         logger.debug(f'Writing genes CSV to {genes_path}')
@@ -334,4 +375,5 @@ def parse_all_reads(
                 gn, strand = genes[gx]
                 f.write(f'{gx},{gn},{strand}\n')
 
-    return (conversions_path, index_path, genes_path) if genes_path is not None else (conversions_path, index_path)
+    return (conversions_path, index_path, no_conversions_path,
+            genes_path) if genes_path is not None else (conversions_path, index_path, no_conversions_path)

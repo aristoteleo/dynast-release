@@ -12,7 +12,6 @@ import pysam
 from tqdm import tqdm
 
 from .. import utils
-from .index import write_index
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +22,7 @@ def calculate_coverage_contig(
     lock,
     contig,
     indices,
+    barcodes=None,
     read_group_as_barcode=False,
     use_corrected=False,
     temp_dir=None,
@@ -61,6 +61,8 @@ def calculate_coverage_contig(
             barcode = read.get_tag('RG') if read_group_as_barcode else (
                 read.get_tag('CB') if use_corrected else read.get_tag('CR')
             )
+            if barcodes and barcode not in barcodes:
+                continue
 
             for genome_i in range(read.reference_start, read.reference_end):
                 if genome_i in indices:
@@ -88,7 +90,7 @@ def calculate_coverage_contig(
     lock.acquire()
     counter.value += n % update_every
     lock.release()
-    index_path = write_index(index, index_path)
+    index_path = utils.write_pickle(index, index_path, protocol=4)
 
     return coverage_path, index_path
 
@@ -98,6 +100,7 @@ def calculate_coverage(
     conversions,
     coverage_path,
     index_path,
+    barcodes=None,
     read_group_as_barcode=False,
     use_corrected=False,
     n_threads=8,
@@ -123,6 +126,7 @@ def calculate_coverage(
             bam_path,
             counter,
             lock,
+            barcodes=barcodes,
             read_group_as_barcode=read_group_as_barcode,
             use_corrected=use_corrected,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
@@ -161,6 +165,6 @@ def calculate_coverage(
             pos += os.path.getsize(coverage_part_path)
 
     logger.debug(f'Writing coverage index to {index_path}')
-    index_path = write_index(index, index_path)
+    index_path = utils.write_pickle(index, index_path, protocol=4)
 
     return coverage_path, index_path

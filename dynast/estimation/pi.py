@@ -20,14 +20,51 @@ def read_pi(pi_path, group_by=None):
     return dict(df.set_index(group_by)['pi'])
 
 
-def fit_stan(
+# Process initializer.
+# When creating a ProcessPoolExecutor, we specify an initializer, which performs
+# some expensive calculation ONCE for each process. In our case, serialization of
+# the STAN model takes a long time (~500ms), which we do not want to do every
+# time the process performs a job, but just once when the process is created.
+_model = None
+
+
+def initializer(model):
+    global _model
+    _model = model
+
+
+def beta_mean(alpha, beta):
+    return alpha / (alpha + beta)
+
+
+def beta_mode(alpha, beta):
+    pi = None
+
+    # We ignore the following two cases:
+    # If alpha=1 and beta=1, mode=any value in (0, 1)
+    # If alpha<1 and beta<1, mode=0, 1 (bimodal)
+    if alpha > 1 and beta > 1:
+        pi = (alpha - 1) / (alpha + beta - 2)
+    elif alpha > 1 and beta <= 1:
+        pi = 1
+    elif alpha <= 1 and beta > 1:
+        pi = 0
+
+    return pi
+
+
+def fit_stan_optimize(
     values,
     p_e,
     p_c,
-    model,
-    n_chains=3,
+    model=None,
+    guess=0.5,
+    pi_func=lambda alpha,
+    beta: None,
+    n_chains=4,
     n_iters=2000,
 ):
+    model = model or _model
     conversions = []
     contents = []
     for k, n, count in values:
@@ -40,7 +77,64 @@ def fit_stan(
         'p_c': p_c,
         'p_e': p_e,
     }
-    init = [{'log_alpha': 0.0, 'log_beta': 0.0, 'pi_g': 0.5}] * n_chains
+
+    # First, try optimizing.
+    try:
+        with utils.suppress_stdout_stderr():
+            init = [{'log_alpha': 0., 'log_beta': 0., 'pi_g': guess}]
+            fit = model.optimizing(
+                data=data,
+                init=init,
+            )
+        alpha, beta = fit['alpha'], fit['beta']
+        pi = pi_func(alpha, beta)
+        if pi is not None:
+            return alpha, beta, pi, False
+    except Exception:
+        pass
+
+    # Fallback to MCMC
+    with utils.suppress_stdout_stderr():
+        init = [{'log_alpha': 0., 'log_beta': 0., 'pi_g': guess}] * n_chains
+        fit = model.sampling(
+            data=data,
+            n_jobs=1,
+            iter=n_iters,
+            chains=n_chains,
+            init=init,
+            control={'adapt_delta': 0.99},
+        )
+    samples = fit.extract(('alpha', 'beta'))
+    alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
+    pi = pi_func(alpha, beta)
+    return alpha, beta, pi, True
+
+
+def fit_stan_mcmc(
+    values,
+    p_e,
+    p_c,
+    model=None,
+    guess=0.5,
+    pi_func=lambda alpha,
+    beta: None,
+    n_chains=3,
+    n_iters=2000,
+):
+    model = model or _model
+    conversions = []
+    contents = []
+    for k, n, count in values:
+        conversions.extend([k] * count)
+        contents.extend([n] * count)
+    data = {
+        'N': len(conversions),
+        'contents': contents,
+        'conversions': conversions,
+        'p_c': p_c,
+        'p_e': p_e,
+    }
+    init = [{'log_alpha': 0.0, 'log_beta': 0.0, 'pi_g': guess}] * n_chains
 
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
@@ -49,10 +143,12 @@ def fit_stan(
             iter=n_iters,
             chains=n_chains,
             init=init,
-            control={'adapt_delta': 0.95},
+            control={'adapt_delta': 0.99},
         )
     samples = fit.extract(('alpha', 'beta'))
-    return np.mean(samples['alpha']), np.mean(samples['beta'])
+    alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
+    pi = pi_func(alpha, beta)
+    return alpha, beta, pi, False
 
 
 def estimate_pi(
@@ -65,7 +161,10 @@ def estimate_pi(
     group_by=None,
     value_columns=['TC', 'T', 'count'],
     n_threads=8,
+    temp_dir=None,
 ):
+    pi_func = beta_mode
+
     logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
     filter_dict = filter_dict or {}
@@ -74,20 +173,16 @@ def estimate_pi(
         for column, values in filter_dict.items():
             df_aggregates = df_aggregates[df_aggregates[column].isin(values)]
 
-    logger.debug(f'Loading STAN model from {config.MODEL_PATH}')
+    logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
     if group_by is None:
         if p_group_by is not None:
             raise Exception('Can not group all aggregates when p_e and p_c are not constants')
-        alpha, beta = fit_stan(df_aggregates[value_columns].values, p_e, p_c, model)
-        pi = None
-        # pi = mode of Beta(alpha, beta)
-        if alpha > 1 and beta > 1:
-            pi = (alpha - 1) / (alpha + beta - 2)
-        elif alpha > 1 and beta <= 1:
-            pi = 1
-        elif alpha <= 1 and beta > 1:
-            pi = 0
+        alpha, beta, pi, fallback = fit_stan_optimize(
+            df_aggregates[value_columns].values, p_e, p_c, model=model, pi_func=pi_func
+        )
+        if fallback:
+            logger.warning('STAN optimization failed. Fallback to MCMC.')
 
         with open(pi_path, 'w') as f:
             f.write(f'{alpha},{beta},{pi}')
@@ -108,7 +203,8 @@ def estimate_pi(
     groups = df_full.groupby(group_by).indices
     pis = {}
     logger.debug(f'Spawning {n_threads} processes')
-    with ProcessPoolExecutor(max_workers=n_threads) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
+    with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer,
+                             initargs=(model,)) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
         pbar.set_description('Queueing')
         futures = {}
         for key, idx in groups.items():
@@ -123,25 +219,20 @@ def estimate_pi(
 
             p_e = p_e_unique[0]
             p_c = p_c_unique[0]
-            futures[executor.submit(fit_stan, values[idx], p_e, p_c, model)] = key
+            futures[executor.submit(fit_stan_optimize, values[idx], p_e, p_c, pi_func=pi_func)] = key
             pbar.update(1)
 
         pbar.set_description('Executing')
+        fallbacks = 0
         for future in as_completed(futures):
             key = futures[future]
-            alpha, beta = future.result()
-            pi = None
-
-            # pi = mode of Beta(alpha, beta)
-            if alpha > 1 and beta > 1:
-                pi = (alpha - 1) / (alpha + beta - 2)
-            elif alpha > 1 and beta <= 1:
-                pi = 1
-            elif alpha <= 1 and beta > 1:
-                pi = 0
+            alpha, beta, pi, fallback = future.result()
+            if fallback:
+                fallbacks += 1
 
             pis[key] = (alpha, beta, pi)
             pbar.update(1)
+    logger.warning(f'STAN optimization failed and fallback to MCMC {fallbacks} times.')
 
     with open(pi_path, 'w') as f:
         f.write(f'{",".join(group_by)},alpha,beta,pi\n')

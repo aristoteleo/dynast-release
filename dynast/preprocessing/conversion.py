@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-from .bam import read_genes
-from .index import read_index, split_index
+from .bam import read_genes, read_no_conversions
+from .index import split_index
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def read_counts_complemented(counts_path, genes_path):
     df_reverse.columns = ['barcode', 'GX'] + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
     df_reverse = df_reverse[columns]
 
-    return pd.concat((df_forward, df_reverse))
+    return pd.concat((df_forward, df_reverse)).reset_index()
 
 
 def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
@@ -91,7 +91,7 @@ def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
     adata.var.set_index('gene_id', inplace=True)
 
     new = np.zeros(adata.shape, dtype=int)
-    counts = counts = df_counts[df_counts[conversion] > 0].groupby(['barcode', 'GX']).size()
+    counts = df_counts[df_counts[conversion] > 0].groupby(['barcode', 'GX']).size()
     for (barcode, gene_id), count in counts.items():
         i = adata.obs.index.get_loc(barcode)
         j = adata.var.index.get_loc(gene_id)
@@ -171,7 +171,7 @@ def count_conversions_part(
             groups = CONVERSIONS_PARSER.match(line).groupdict()
 
             if read_id != groups['read_id']:
-                if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
+                if read_id is not None:
                     out.write(
                         f'{prev_groups["barcode"]},{"" if no_umi else prev_groups["umi"] + ","}{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)}\n'
@@ -192,7 +192,7 @@ def count_conversions_part(
                 lock.release()
 
         # Add last record
-        if read_id is not None and any(c > 0 for c in counts[:len(CONVERSION_IDX)]):
+        if read_id is not None:
             out.write(
                 f'{groups["barcode"]},{"" if no_umi else groups["umi"] + ","}{groups["GX"]},'
                 f'{",".join(str(c) for c in counts)}\n'
@@ -208,6 +208,7 @@ def count_conversions_part(
 def count_conversions(
     conversions_path,
     index_path,
+    no_conversions_path,
     counts_path,
     no_umi=False,
     snps=None,
@@ -244,7 +245,7 @@ def count_conversions(
     """
     # Load index
     logger.debug(f'Loading index {index_path} for {conversions_path}')
-    index = read_index(index_path)
+    index = utils.read_pickle(index_path)
 
     # Split index into n contiguous pieces
     logger.debug(f'Splitting index into {n_threads} parts')
@@ -285,6 +286,18 @@ def count_conversions(
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
 
+        # Write reads without any conversions
+        logger.debug(f'Writing reads with no conversions to {combined_path}')
+        df = read_no_conversions(no_conversions_path)
+        if not no_umi:
+            df = df.iloc[df[BASE_COLUMNS].sum(axis=1).argsort()]
+            df = df[~df.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
+                columns=['read_id']
+            ).sort_values('barcode').reset_index(drop=True)
+        df[CONVERSION_COLUMNS] = 0
+        columns = ['barcode', 'GX'] + COLUMNS if no_umi else ['barcode', 'umi', 'GX'] + COLUMNS
+        out.write(df[columns].to_csv(header=None, index=False).encode())
+
     if not no_umi:
         # Read in as dataframe and deduplicate based on CR and UB
         # If there are duplicates, select the row with the most conversions
@@ -299,7 +312,12 @@ def count_conversions(
                    for column in COLUMNS}
             }
         )
-        df_sorted = df.iloc[df[CONVERSION_COLUMNS].sum(axis=1).argsort()]
+
+        # Add columns for conversion and base sums, which are used to prioritize
+        # duplicates.
+        df['conversion_sum'] = df[CONVERSION_COLUMNS].sum(axis=1)
+        df['base_sum'] = df[BASE_COLUMNS].sum(axis=1)
+        df_sorted = df.sort_values(['base_sum', 'conversion_sum']).drop(columns=['conversion_sum', 'base_sum'])
         df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
             columns='umi'
         ).sort_values('barcode').reset_index(drop=True)

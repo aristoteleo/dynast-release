@@ -2,6 +2,7 @@ import gzip
 import logging
 import multiprocessing
 import os
+import pickle
 import shutil
 import subprocess as sp
 import tempfile
@@ -358,7 +359,7 @@ def merge_dictionaries(d1, d2, f=add, default=0):
         if key in d1 and isinstance(d1[key], dict) != isinstance(value2, dict):
             raise Exception(f'Inconsistent key {key}')
 
-        value1 = d1.get(key, {} if isinstance(value2, dict) else default)
+        value1 = d1.get(key, {} if isinstance(value2, dict) else (default() if callable(default) else default))
         if isinstance(value1, dict) and isinstance(value2, dict):
             merged[key] = merge_dictionaries(value1, value2, f=f, default=default)
         else:
@@ -374,3 +375,14 @@ def flatten_dictionary(d, keys=None):
             yield from flatten_dictionary(v, new_keys)
         else:
             yield new_keys, v
+
+
+def write_pickle(obj, path, *args, **kwargs):
+    with gzip.open(path, 'wb') as f:
+        pickle.dump(obj, f, *args, **kwargs)
+    return path
+
+
+def read_pickle(path):
+    with gzip.open(path, 'rb') as f:
+        return pickle.load(f)

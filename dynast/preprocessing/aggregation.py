@@ -22,7 +22,7 @@ def read_rates(rates_path):
     return pd.read_csv(rates_path, index_col=None)
 
 
-def read_aggregates(aggregates_path, filter_zeros=False):
+def read_aggregates(aggregates_path):
     """Read aggregates CSV as a pandas dataframe.
 
     :param aggregates_path: path to aggregates CSV
@@ -33,11 +33,6 @@ def read_aggregates(aggregates_path, filter_zeros=False):
     """
     dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint16 for column in COLUMNS}}
     df = pd.read_csv(aggregates_path, dtype=dtypes)
-    if filter_zeros:
-        conversion = df.columns[2]
-        df_zeros = df.groupby(['barcode', 'GX'])[conversion].agg(['unique'])['unique'].apply(lambda x: list(x) == [0])
-        indices = df_zeros.index[~df_zeros]
-        df = df.set_index(['barcode', 'GX']).loc[indices].reset_index()
     return df
 
 
@@ -76,7 +71,7 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
 
 
 def aggregate_counts(df_counts, aggregates_dir):
-    """Calculate mutation aggregates for each pair of bases.
+    """Aggregate conversion counts for each pair of bases.
 
     :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame

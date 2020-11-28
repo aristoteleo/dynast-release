@@ -141,21 +141,23 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--p-group-by',
         metavar='GROUPBY',
-        help=(
-            'Comma-delimited column names to group by when calculating p_e and p_c estimates. '
-            'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
-            'either raw or corrected barcodes, depending on whether '
-            '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
-            '(default: `barcode`)'
-        ),
+        help=argparse.SUPPRESS,
+        # help=(
+        #     'Comma-delimited column names to group by when calculating p_e and p_c estimates. '
+        #     'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
+        #     'either raw or corrected barcodes, depending on whether '
+        #     '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
+        #     '(default: `barcode`)'
+        # ),
         type=str,
         default='barcode',
     )
     parser_count.add_argument(
         '--pi-group-by',
         metavar='GROUPBY',
-        help=('Same as `--p-group-by`, but for pi estimation. (default: `barcode,GX`)'
-              '(default: `barcode,GX`)'),
+        help=argparse.SUPPRESS,
+        # help=('Same as `--p-group-by`, but for pi estimation. (default: `barcode,GX`)'
+        #       '(default: `barcode,GX`)'),
         type=str,
         default='barcode,GX',
     )
@@ -168,11 +170,34 @@ def setup_count_args(parser, parent):
         default='TC',
     )
     parser_count.add_argument(
-        '--snp',
-        metavar='CONVERSION',
-        help=argparse.SUPPRESS,
+        '--snp-threshold',
+        metavar='THRESHOLD',
+        help=(
+            'Conversions with (# conversions) / (# reads) greater than this '
+            'threshold will be considered a SNP and ignored. '
+            '(default: no SNP detection)'
+        ),
         type=float,
-        default=0.5,
+        default=False,
+    )
+    parser_count.add_argument(
+        '--snp-csv',
+        metavar='CSV',
+        help=(
+            'CSV file of two columns: contig (i.e. chromosome) and genome position '
+            'of known SNPs. No header should be provided. (default: None)'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_count.add_argument(
+        '--filtered-only',
+        help=(
+            'Only parse reads from barcodes in the STAR-filtered count matrix. '
+            'This option can improve runtime considerably. Note that pi estimation '
+            'is always only done for filtered barcodes regardless of this option.'
+        ),
+        action='store_true',
     )
     parser_count.add_argument(
         'fastqs',
@@ -265,10 +290,12 @@ def parse_count(parser, args, temp_dir=None):
         args.i,
         args.o,
         TECHNOLOGIES_MAP[args.x],
+        filtered_only=args.filtered_only,
         genes_path=args.g,
         quality=args.quality,
         conversion=args.conversion,
-        snp=args.snp,
+        snp_threshold=args.snp_threshold,
+        snp_csv=args.snp_csv,
         snp_group_by=None,
         p_group_by=args.p_group_by,
         pi_group_by=args.pi_group_by,

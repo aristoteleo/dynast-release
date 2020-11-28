@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-from .index import read_index, split_index
+from .index import split_index
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,12 @@ def read_snps(snps_path, group_by=None):
         return dict(df.groupby('contig').agg(set)['genome_i'])
     else:
         # TODO
-        return None
+        raise Exception()
+
+
+def read_snp_csv(snp_csv):
+    df = pd.read_csv(snp_csv, names=['contig', 'genome_i'])
+    return dict(df.groupby('contig').agg(set)['genome_i'])
 
 
 def extract_conversions_part(
@@ -87,7 +92,7 @@ def extract_conversions_part(
 
 def extract_conversions(conversions_path, index_path, group_by=None, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {conversions_path}')
-    index = read_index(index_path)
+    index = utils.read_pickle(index_path)
 
     logger.debug(f'Splitting index into {n_threads} parts')
     parts = split_index(index, n=n_threads)
@@ -151,7 +156,7 @@ def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, group_by=N
 
 def extract_coverage(coverage_path, index_path, group_by=None, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {coverage_path}')
-    index = read_index(index_path)
+    index = utils.read_pickle(index_path)
 
     logger.debug(f'Splitting index into {n_threads} parts')
     parts = split_index(index, n=n_threads)

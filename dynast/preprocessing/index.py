@@ -1,18 +1,3 @@
-import gzip
-import pickle
-
-
-def write_index(index, index_path):
-    with gzip.open(index_path, 'wb') as f:
-        pickle.dump(index, f, protocol=4)
-    return index_path
-
-
-def read_index(index_path):
-    with gzip.open(index_path, 'rb') as f:
-        return pickle.load(f)
-
-
 def split_index(index, n=8):
     """Split a conversions index, which is a list of tuples (file position,
     number of lines), one for each read, into `n` approximately equal parts.
