@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from .conversion import BASE_IDX, COLUMNS, CONVERSION_COLUMNS
 
@@ -83,7 +82,7 @@ def aggregate_counts(df_counts, aggregates_dir):
     :rtype: dict
     """
     paths = {}
-    for conversion in tqdm(CONVERSION_COLUMNS, ascii=True):
+    for conversion in CONVERSION_COLUMNS:
         csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
         logger.debug(f'Aggregating counts for {conversion} conversion to {csv_path}')
         df_agg = pd.DataFrame(df_counts.groupby(['barcode', 'GX', conversion, conversion[0]]).size())

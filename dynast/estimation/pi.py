@@ -57,8 +57,8 @@ def fit_stan_optimize(
     values,
     p_e,
     p_c,
-    model=None,
     guess=0.5,
+    model=None,
     pi_func=lambda alpha,
     beta: None,
     n_chains=4,
@@ -82,10 +82,7 @@ def fit_stan_optimize(
     try:
         with utils.suppress_stdout_stderr():
             init = [{'log_alpha': 0., 'log_beta': 0., 'pi_g': guess}]
-            fit = model.optimizing(
-                data=data,
-                init=init,
-            )
+            fit = model.optimizing(data=data, init=init, algorithm='BFGS')
         alpha, beta = fit['alpha'], fit['beta']
         pi = pi_func(alpha, beta)
         if pi is not None:
@@ -107,19 +104,18 @@ def fit_stan_optimize(
     samples = fit.extract(('alpha', 'beta'))
     alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
     pi = pi_func(alpha, beta)
-    return alpha, beta, pi, True
+    return guess, alpha, beta, pi, True
 
 
 def fit_stan_mcmc(
     values,
     p_e,
     p_c,
-    model=None,
     guess=0.5,
-    pi_func=lambda alpha,
-    beta: None,
-    n_chains=3,
-    n_iters=2000,
+    model=None,
+    pi_func=(lambda alpha, beta: None),
+    n_chains=2,
+    n_iters=1500,
 ):
     model = model or _model
     conversions = []
@@ -127,6 +123,7 @@ def fit_stan_mcmc(
     for k, n, count in values:
         conversions.extend([k] * count)
         contents.extend([n] * count)
+
     data = {
         'N': len(conversions),
         'contents': contents,
@@ -139,16 +136,17 @@ def fit_stan_mcmc(
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
             data=data,
+            pars=['alpha', 'beta'],
             n_jobs=1,
             iter=n_iters,
             chains=n_chains,
             init=init,
-            control={'adapt_delta': 0.99},
+            control={'adapt_delta': 0.8},
         )
     samples = fit.extract(('alpha', 'beta'))
     alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
     pi = pi_func(alpha, beta)
-    return alpha, beta, pi, False
+    return guess, alpha, beta, pi, False
 
 
 def estimate_pi(
@@ -161,9 +159,15 @@ def estimate_pi(
     group_by=None,
     value_columns=['TC', 'T', 'count'],
     n_threads=8,
-    temp_dir=None,
+    nasc=False,
+    method='mcmc',
+    threshold=16,
 ):
     pi_func = beta_mode
+    if method == 'optimization':
+        fit = fit_stan_optimize
+    else:
+        fit = fit_stan_mcmc
 
     logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
@@ -178,14 +182,15 @@ def estimate_pi(
     if group_by is None:
         if p_group_by is not None:
             raise Exception('Can not group all aggregates when p_e and p_c are not constants')
-        alpha, beta, pi, fallback = fit_stan_optimize(
+        guess, alpha, beta, pi, fallback = fit(
             df_aggregates[value_columns].values, p_e, p_c, model=model, pi_func=pi_func
         )
-        if fallback:
+        if method == 'optimization' and fallback:
             logger.warning('STAN optimization failed. Fallback to MCMC.')
 
         with open(pi_path, 'w') as f:
-            f.write(f'{alpha},{beta},{pi}')
+            f.write('guess,alpha,beta,pi\n')
+            f.write(f'{guess},{alpha},{beta},{pi}\n')
         return pi_path
 
     if p_group_by is not None:
@@ -202,12 +207,14 @@ def estimate_pi(
     p_cs = df_full['p_c'].values
     groups = df_full.groupby(group_by).indices
     pis = {}
+    fallbacks = 0
+    skipped = 0
     logger.debug(f'Spawning {n_threads} processes')
     with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer,
                              initargs=(model,)) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
         pbar.set_description('Queueing')
         futures = {}
-        for key, idx in groups.items():
+        for key, idx in list(groups.items()):
             p_e_unique = np.unique(p_es[idx])
             p_c_unique = np.unique(p_cs[idx])
 
@@ -219,26 +226,43 @@ def estimate_pi(
 
             p_e = p_e_unique[0]
             p_c = p_c_unique[0]
-            futures[executor.submit(fit_stan_optimize, values[idx], p_e, p_c, pi_func=pi_func)] = key
+            vals = values[idx]
+            count = sum(vals[:, 2])
+
+            if count < 16:
+                skipped += 1
+                pbar.update(2)
+                continue
+
+            # Make a naive guess of the fraction of new RNA
+            # Clip guess to [0.01, 0.99] because STAN initialization will fail
+            # if guess is either 0 or 1.
+            guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
+
+            futures[executor.submit(fit, values[idx], p_e, p_c, guess=guess, pi_func=pi_func)] = key
             pbar.update(1)
 
         pbar.set_description('Executing')
-        fallbacks = 0
         for future in as_completed(futures):
             key = futures[future]
-            alpha, beta, pi, fallback = future.result()
+            guess, alpha, beta, pi, fallback = future.result()
             if fallback:
                 fallbacks += 1
 
-            pis[key] = (alpha, beta, pi)
+            pis[key] = (guess, alpha, beta, pi)
             pbar.update(1)
-    logger.warning(f'STAN optimization failed and fallback to MCMC {fallbacks} times.')
+    logger.warning(
+        f'Estimation skipped {skipped} times because there were less reads than '
+        f'threshold ({threshold}).'
+    )
+    if method == 'optimization':
+        logger.warning(f'STAN optimization failed and fallback to MCMC {fallbacks} times.')
 
     with open(pi_path, 'w') as f:
-        f.write(f'{",".join(group_by)},alpha,beta,pi\n')
+        f.write(f'{",".join(group_by)},guess,alpha,beta,pi\n')
         for key in sorted(pis.keys()):
-            alpha, beta, pi = pis[key]
-            f.write(f'{key if isinstance(key, str) else ",".join(key)},{alpha},{beta},{pi}\n')
+            guess, alpha, beta, pi = pis[key]
+            f.write(f'{key if isinstance(key, str) else ",".join(key)},{guess},{alpha},{beta},{pi}\n')
 
     return pi_path
 

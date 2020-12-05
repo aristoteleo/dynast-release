@@ -125,7 +125,7 @@ def setup_count_args(parser, parent):
             'this value will be considered when counting conversions. (default: 27)'
         ),
         type=int,
-        default=27
+        default=20
     )
     parser_count.add_argument(
         '--re',
@@ -200,6 +200,25 @@ def setup_count_args(parser, parent):
         action='store_true',
     )
     parser_count.add_argument(
+        '--read-threshold',
+        metavar='THRESHOLD',
+        help=('Do not attempt statistical correction if there are less than this '
+              'many reads. (default: 16)'),
+        type=int,
+        default=16,
+    )
+    parser_count.add_argument(
+        '--method',
+        help=argparse.SUPPRESS,
+        choices=['mcmc', 'optimization'],
+        default='mcmc',
+    )
+    parser_count.add_argument(
+        '--nasc',
+        help=argparse.SUPPRESS,
+        action='store_true',
+    )
+    parser_count.add_argument(
         'fastqs',
         help=(
             'FASTQ files. If `-x smartseq`, this is a single manifest CSV file where '
@@ -268,6 +287,9 @@ def parse_count(parser, args, temp_dir=None):
         with open(args.fastqs[0], 'r') as f:
             cell_ids = []
             for line in f:
+                if line.isspace():
+                    continue
+
                 cell_id, fastq_1, fastq_2 = line.strip().split(',')
                 if cell_id in cell_ids:
                     parser.error(f'Found duplicate cell ID in manifest CSV: {cell_id}')
@@ -285,6 +307,10 @@ def parse_count(parser, args, temp_dir=None):
                     )
                 cell_ids.append(cell_id)
 
+    # Correction method
+    if args.method is None:
+        args.method = 'mcmc' if args.nasc else 'optimization'
+
     count(
         args.fastqs,
         args.i,
@@ -297,12 +323,15 @@ def parse_count(parser, args, temp_dir=None):
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
         snp_group_by=None,
+        read_threshold=args.read_threshold,
         p_group_by=args.p_group_by,
         pi_group_by=args.pi_group_by,
         whitelist_path=args.w,
         n_threads=args.t,
         re=args.re,
         temp_dir=temp_dir,
+        nasc=args.nasc,
+        method=args.method,
     )
 
 

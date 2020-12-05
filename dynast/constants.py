@@ -1,3 +1,5 @@
+STATS_FILENAME = 'run_info.json'
+
 STAR_OUTPUT_DIR = 'STAR'
 STAR_SOLO_DIR = 'Solo.out'
 STAR_GENE_DIR = 'Gene'

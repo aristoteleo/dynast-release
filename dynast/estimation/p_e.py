@@ -40,22 +40,17 @@ def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
     return p_e, p_e_path
 
 
-# def estimate_p_e(df_rates, p_e_path, conversion='TC', group_by=None):
-#     logger.debug(f'p_e estimation will be grouped by {group_by} to {p_e_path}')
-#     if group_by is not None:
-#         df_rates = df_rates.set_index(group_by)
-#     columns = CONVERSION_COLUMNS.copy()
-#     columns.remove(conversion)
-#     p_e = df_rates[columns[0]]
-#     for column in columns[1:]:
-#         p_e += df_rates[column]
-#     p_e /= len(columns)
-#     logger.debug(f'Writing p_e estimates to {p_e_path}')
-#     if group_by is not None:
-#         p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
-#     else:
-#         p_e = p_e[0]
-#         with open(p_e_path, 'w') as f:
-#             f.write(str(p_e))
-#
-#     return p_e, p_e_path
+def estimate_p_e_nasc(df_rates, p_e_path, conversion='TC', group_by=None):
+    logger.debug(f'p_e estimation will be grouped by {group_by} to {p_e_path}')
+    if group_by is not None:
+        df_rates = df_rates.set_index(group_by)
+    p_e = (df_rates['CT'] + df_rates['GA']) / 2
+    logger.debug(f'Writing p_e estimates to {p_e_path}')
+    if group_by is not None:
+        p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
+    else:
+        p_e = p_e[0]
+        with open(p_e_path, 'w') as f:
+            f.write(str(p_e))
+
+    return p_e, p_e_path

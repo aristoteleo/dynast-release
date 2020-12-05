@@ -6,6 +6,7 @@ import tempfile
 import scanpy as sc
 
 from . import config, constants, estimation, preprocessing, utils
+from .stats import STATS
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ def STAR_solo(
     n_threads=8,
     n_bins=50,
     temp_dir=None,
+    nasc=False,
 ):
     """Align FASTQs with STARsolo.
 
@@ -53,8 +55,14 @@ def STAR_solo(
     if not out_dir.endswith(('/', '\\')):
         out_dir += os.path.sep
 
-    command = [config.get_STAR_binary_path()] + config.STAR_SOLO_OPTIONS + technology.bam_tags
+    command = [config.get_STAR_binary_path()]
+    arguments = config.STAR_ARGUMENTS
     if technology.name != 'smartseq':
+        arguments = config.combine_arguments(arguments, config.STAR_SOLO_ARGUMENTS)
+        arguments = config.combine_arguments(arguments, technology.arguments)
+        if whitelist_path:
+            arguments = config.combine_arguments(arguments, {'--soloCBwhitelist', whitelist_path})
+
         # Input FASTQs must be plaintext
         plaintext_fastqs = []
         for fastq in fastqs:
@@ -66,7 +74,6 @@ def STAR_solo(
                 plaintext_path = fastq
             plaintext_fastqs.append(plaintext_path)
         command += ['--readFilesIn'] + plaintext_fastqs
-        command += ['--soloCBwhitelist', whitelist_path or 'None']
     else:
         # STAR requires FIFO file support when running in smartseq mode
         fifo_path = utils.mkstemp(dir=temp_dir, delete=True)
@@ -78,9 +85,16 @@ def STAR_solo(
                 'STAR uses FIFO files to run alignment of Smart-seq files.'
             )
 
+        arguments = config.combine_arguments(arguments, technology.arguments)
+        if nasc:
+            arguments = config.combine_arguments(arguments, config.NASC_ARGUMENTS)
+
         manifest_path = utils.mkstemp(dir=temp_dir)
         with open(fastqs[0], 'r') as f, open(manifest_path, 'w') as out:
             for line in f:
+                if line.isspace():
+                    continue
+
                 cell_id, fastq_1, fastq_2 = line.strip().split(',')
                 if fastq_1.endswith('.gz'):
                     plaintext_path = utils.mkstemp(dir=temp_dir)
@@ -106,7 +120,7 @@ def STAR_solo(
         '--outTmpDir',
         os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
     ]
-    command += technology.STAR_args
+    command += config.arguments_to_list(arguments)
     # Attempt to increase NOFILE limit if n_threads * n_bins is greater than
     # current limit
     requested = n_threads * n_bins
@@ -129,9 +143,11 @@ def STAR_solo(
                     f'number of BAM bins from 50 to {n_bins}.'
                 )
             command += ['--outBAMsortingBinsN', n_bins]
+            STATS.STAR['command'] = ' '.join(command)
             utils.run_executable(command)
     else:
         command += ['--outBAMsortingBinsN', n_bins]
+        STATS.STAR['command'] = ' '.join(command)
         utils.run_executable(command)
 
     solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
@@ -174,12 +190,15 @@ def count(
     snp_threshold=0.5,
     snp_csv=None,
     snp_group_by=None,
+    read_threshold=16,
     p_group_by=None,
     pi_group_by=None,
     whitelist_path=None,
     n_threads=8,
     temp_dir=None,
     re=None,
+    nasc=False,
+    method='optimization',
 ):
     """
     """
@@ -187,6 +206,7 @@ def count(
     def redo(key):
         return re in config.RE_CHOICES[:config.RE_CHOICES.index(key) + 1]
 
+    STATS.start()
     os.makedirs(out_dir, exist_ok=True)
 
     # Check memory.
@@ -246,6 +266,7 @@ def count(
             whitelist_path=whitelist_path,
             n_threads=n_threads,
             temp_dir=temp_dir,
+            nasc=nasc,
         )
     else:
         logger.info('Skipped STAR because alignment files already exist.')
@@ -288,6 +309,7 @@ def count(
             use_corrected=whitelist_path is not None,
             n_threads=n_threads,
             temp_dir=temp_dir,
+            nasc=nasc
         )
         conversions_path = paths[0]
         conversions_index_path = paths[1]
@@ -338,7 +360,7 @@ def count(
         logger.info('Counting conversions')
         snps = utils.merge_dictionaries(
             preprocessing.read_snps(snps_path) if snp_threshold else {},
-            preprocessing.read_snp_csv(snp_csv),
+            preprocessing.read_snp_csv(snp_csv) if snp_csv else {},
             f=set.union,
             default=set,
         )
@@ -369,7 +391,9 @@ def count(
         logger.info('Computing mutation rates and aggregating counts')
         os.makedirs(aggregates_dir, exist_ok=True)
         df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
-        rates_path = preprocessing.calculate_mutation_rates(df_counts, rates_path, group_by=p_group_by)
+        rates_path = preprocessing.calculate_mutation_rates(
+            df_counts if not nasc else preprocessing.read_counts(counts_path), rates_path, group_by=p_group_by
+        )
         aggregates_paths = preprocessing.aggregate_counts(df_counts, aggregates_dir)
     else:
         logger.info('Skipped count aggregation because files already exist.')
@@ -385,10 +409,15 @@ def count(
         os.makedirs(estimates_dir, exist_ok=True)
 
         logger.info('Estimating average mismatch rate in old RNA')
-        if df_counts is None:
+        if df_counts is None and not nasc:
             df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
         p_e, p_e_path = estimation.estimate_p_e(
             df_counts,
+            p_e_path,
+            conversion=conversion,
+            group_by=p_group_by,
+        ) if not nasc else estimation.estimate_p_e_nasc(
+            preprocessing.read_rates(rates_path),
             p_e_path,
             conversion=conversion,
             group_by=p_group_by,
@@ -428,7 +457,8 @@ def count(
             group_by=pi_group_by,
             value_columns=value_columns,
             n_threads=n_threads,
-            temp_dir=temp_dir
+            method=method,
+            threshold=read_threshold,
         )
     else:
         logger.info('Skipped estimation of newly transcribed RNA because files already exist.')
@@ -452,3 +482,5 @@ def count(
     adata.var.drop(columns='n_counts', inplace=True)
     adata.var.reset_index(drop=True, inplace=True)
     adata.write(adata_path, compression='gzip')
+    STATS.end()
+    STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))

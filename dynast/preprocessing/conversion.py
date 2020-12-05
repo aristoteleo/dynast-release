@@ -113,7 +113,7 @@ def count_conversions_part(
     no_umi=False,
     snps=None,
     group_by=None,
-    quality=27,
+    quality=20,
     temp_dir=None,
     update_every=10000,
 ):
@@ -213,7 +213,7 @@ def count_conversions(
     no_umi=False,
     snps=None,
     group_by=None,
-    quality=27,
+    quality=20,
     n_threads=8,
     temp_dir=None
 ):

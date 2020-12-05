@@ -74,6 +74,7 @@ def parse_read_contig(
     use_corrected=False,
     temp_dir=None,
     update_every=50000,
+    nasc=False
 ):
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
@@ -122,7 +123,7 @@ def parse_read_contig(
     # Can't use enumerate because n needs to be access outside from
     # the for loop.
     n = 0
-    with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
+    with pysam.AlignmentFile(bam_path, 'rb') as bam, \
         open(conversions_path, 'w') as conversions_out, \
         open(no_conversions_path, 'w') as no_conversions_out:
         for read in bam.fetch(contig):
@@ -136,7 +137,7 @@ def parse_read_contig(
                 lock.release()
 
             # Skip reads that do not contain these tags
-            if any(not read.has_tag(tag) for tag in required_tags):
+            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate:
                 continue
 
             # Extract read and reference information
@@ -150,7 +151,7 @@ def parse_read_contig(
                 continue
 
             umi = None if read_group_as_barcode else read.get_tag('UB')
-            gx = read.get_tag('GX')
+            gx = read.get_tag('GX') if read.has_tag('GX') else ''
             sequence = read.seq.upper()
             qualities = read.query_qualities
             reference = read.get_reference_sequence().upper()
@@ -163,15 +164,17 @@ def parse_read_contig(
             # Count number of nucleotides in the region this read mapped to
             counts = Counter(reference)
 
+            # Used exclusively for paired reads. So that we don't count conversions
+            # in overlapping regions twice.
+            # key: genome_i, value: (quality, original, converted)
+            conversions = {}
+
             # If we are dealing with paired-end reads, we have to check for
             # overlaps.
-            # NOTE: Any conversions in the overlap of the MATE are currently
-            # ignored.
             if read.is_paired:
                 if read_id not in paired:
                     paired[read_id] = (
-                        read.reference_start,
-                        read.reference_end,
+                        set(read.get_reference_positions()),
                         reference,
                         sequence,
                         qualities,
@@ -183,8 +186,7 @@ def parse_read_contig(
                     continue
 
                 (
-                    mate_reference_start,
-                    mate_reference_end,
+                    mate_reference_positions,
                     mate_reference,
                     mate_sequence,
                     mate_qualities,
@@ -194,33 +196,29 @@ def parse_read_contig(
                     aligned_pairs,
                 ) = paired[read_id]
 
-                # Update counts
-                counts += Counter(mate_reference[:read.reference_start - mate_reference_start])
+                # Update counts. union(A, B) = A + B - intersection(A, B)
+                counts += Counter(mate_reference)
+                read_reference_positions = read.get_reference_positions()
+                overlap_pos = list(mate_reference_positions.intersection(read_reference_positions))
+                overlap = Counter()
+                for base, i in zip(reference, read_reference_positions):
+                    if i in overlap_pos:
+                        overlap[base] += 1
+                counts -= overlap
 
                 for read_i, genome_i, _genome_base in aligned_pairs:
-                    # Only parse positions specific to this mate, because any
-                    # overlaps will be processed later.
-                    if genome_i >= read.reference_start:
-                        continue
                     read_base = mate_sequence[read_i]
                     genome_base = _genome_base.upper()
                     if 'N' in (genome_base, read_base):
                         continue
 
-                    if genome_base != read_base:
-                        n_lines += 1
-                        if read_group_as_barcode:
-                            conversions_out.write(
-                                f'{read_id},{mate_barcode},{mate_gx},{contig},{genome_i},'
-                                f'{genome_base},{read_base},{mate_qualities[read_i]},'
-                                f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
-                            )
-                        else:
-                            conversions_out.write(
-                                f'{read_id},{mate_barcode},{mate_umi},{mate_gx},{contig},{genome_i},'
-                                f'{genome_base},{read_base},{mate_qualities[read_i]},'
-                                f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
-                            )
+                    if genome_base != read_base and (not nasc or genome_i not in overlap_pos):
+                        # Add this conversion to the conversions dictionary.
+                        # We don't write this conversion immediately because
+                        # we want to take the conversion with higher quality
+                        # if conversions exist in same positions in overlapping
+                        # segments.
+                        conversions[genome_i] = (mate_qualities[read_i], genome_base, read_base)
                 del paired[read_id]
 
             # Iterate through every mapped position.
@@ -230,20 +228,47 @@ def parse_read_contig(
                 if 'N' in (genome_base, read_base):
                     continue
 
+                quality = qualities[read_i]
+                # If this index exists in the conversions dictionary,
+                # then select the conversion with higher quality
+                if genome_i in conversions:
+                    if not nasc:
+                        mate_quality, _, mate_read_base = conversions[genome_i]
+                        if mate_quality > quality:
+                            read_base = mate_read_base
+                            quality = mate_quality
+                    del conversions[genome_i]
+
                 if genome_base != read_base:
                     n_lines += 1
                     if read_group_as_barcode:
                         conversions_out.write(
                             f'{read_id},{barcode},{gx},{contig},{genome_i},'
-                            f'{genome_base},{read_base},{qualities[read_i]},'
+                            f'{genome_base},{read_base},{quality},'
                             f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
                         )
                     else:
                         conversions_out.write(
                             f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},'
-                            f'{genome_base},{read_base},{qualities[read_i]},'
+                            f'{genome_base},{read_base},{quality},'
                             f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
                         )
+
+            # Flush cached conversions
+            for genome_i, (quality, genome_base, read_base) in conversions.items():
+                n_lines += 1
+                if read_group_as_barcode:
+                    conversions_out.write(
+                        f'{read_id},{barcode},{gx},{contig},{genome_i},'
+                        f'{genome_base},{read_base},{quality},'
+                        f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                    )
+                else:
+                    conversions_out.write(
+                        f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},'
+                        f'{genome_base},{read_base},{quality},'
+                        f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]}\n'
+                    )
 
             # Add to index if lines were written
             if n_lines > 0:
@@ -281,6 +306,7 @@ def parse_all_reads(
     use_corrected=False,
     n_threads=8,
     temp_dir=None,
+    nasc=False,
 ):
     """Parse all reads in the provided BAM file. Read conversion and coverage
     information is outputed to the provided corresponding paths.
@@ -321,7 +347,8 @@ def parse_all_reads(
             read_group_as_barcode=read_group_as_barcode,
             extract_genes=genes_path is not None,
             use_corrected=use_corrected,
-            temp_dir=tempfile.mkdtemp(dir=temp_dir)
+            temp_dir=tempfile.mkdtemp(dir=temp_dir),
+            nasc=nasc
         ), contigs
     )
     pool.close()
