@@ -16,7 +16,7 @@ setup(
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     keywords='',
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     license='MIT',
     packages=find_packages(exclude=('tests')),
     zip_safe=False,

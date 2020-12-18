@@ -115,7 +115,7 @@ def fit_stan_mcmc(
     model=None,
     pi_func=(lambda alpha, beta: None),
     n_chains=2,
-    n_iters=1500,
+    n_iters=2000,
 ):
     model = model or _model
     conversions = []
@@ -141,7 +141,7 @@ def fit_stan_mcmc(
             iter=n_iters,
             chains=n_chains,
             init=init,
-            control={'adapt_delta': 0.8},
+            control={'adapt_delta': 0.99},
         )
     samples = fit.extract(('alpha', 'beta'))
     alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
