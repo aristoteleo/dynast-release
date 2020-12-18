@@ -76,7 +76,7 @@ class Stats:
             step.start()
         yield
         if not skipped:
-            step.stop()
+            step.end()
 
     def save(self, path):
         """Save statistics as JSON to path.
