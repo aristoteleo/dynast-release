@@ -38,7 +38,7 @@ def beta_mean(alpha, beta):
 
 
 def beta_mode(alpha, beta):
-    pi = None
+    pi = float('nan')
 
     # We ignore the following two cases:
     # If alpha=1 and beta=1, mode=any value in (0, 1)
@@ -114,7 +114,7 @@ def fit_stan_mcmc(
     guess=0.5,
     model=None,
     pi_func=(lambda alpha, beta: None),
-    n_chains=2,
+    n_chains=1,
     n_iters=2000,
 ):
     model = model or _model
@@ -276,6 +276,11 @@ def split_reads(adata, pis, group_by=None):
     gene_id_index = {gene_id: i for i, gene_id in enumerate(gene_ids)}
 
     for key, pi in pis.items():
+        try:
+            pi = float(pi)
+        except ValueError:
+            continue
+
         if group_by == ['barcode', 'GX']:
             barcode, gx = key
             pi_matrix[barcode_index[barcode], gene_id_index[gx]] = pi
