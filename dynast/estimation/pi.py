@@ -116,6 +116,7 @@ def fit_stan_mcmc(
     pi_func=(lambda alpha, beta: None),
     n_chains=1,
     n_iters=2000,
+    subset_threshold=10000,
 ):
     model = model or _model
     conversions = []
@@ -123,6 +124,13 @@ def fit_stan_mcmc(
     for k, n, count in values:
         conversions.extend([k] * count)
         contents.extend([n] * count)
+
+    # If we have many conversions, randomly select a subset. This keeps runtimes
+    # down while minimally impacting accuracy.
+    if len(conversions) > subset_threshold:
+        choices = np.random.choice(len(conversions), subset_threshold, replace=False)
+        conversions = list(np.array(conversions)[choices])
+        contents = list(np.array(contents)[choices])
 
     data = {
         'N': len(conversions),
