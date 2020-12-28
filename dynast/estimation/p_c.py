@@ -1,11 +1,12 @@
 import logging
-from concurrent.futures import as_completed, ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
 from numba import njit
 from scipy import sparse
-from tqdm import tqdm
+
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +46,14 @@ def filter_aggregates(df_aggregates, p_e, group_by=None, value_columns=['TC', 'T
 
     groups = df_aggregates.groupby(group_by).indices
     filtered = {}
-    with ProcessPoolExecutor(max_workers=n_threads) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
-        pbar.set_description('Queueing')
+    with ProcessPoolExecutor(max_workers=n_threads) as executor:
         futures = {}
         for key in groups.keys():
             futures[executor.submit(filter_aggregates_part, values[groups[key]], p_e[key])] = key
-            pbar.update(1)
 
-        pbar.set_description('Executing')
-        for future in as_completed(futures):
+        for future in utils.as_completed_with_progress(futures):
             key = futures[future]
             filtered[key] = future.result()
-            pbar.update(1)
 
     return filtered
 
@@ -108,18 +105,14 @@ def expectation_maximization(filtered, group_by=None, n_threads=8):
         return expectation_maximization_part(sp, mask)
 
     em = {}
-    with ProcessPoolExecutor(max_workers=n_threads) as executor, tqdm(total=2 * len(filtered), ascii=True) as pbar:
-        pbar.set_description('Queueing')
+    with ProcessPoolExecutor(max_workers=n_threads) as executor:
         futures = {}
         for key, (sp, mask) in filtered.items():
             futures[executor.submit(expectation_maximization_part, sp, mask)] = key
-            pbar.update(1)
 
-        pbar.set_description('Executing')
-        for future in as_completed(futures):
+        for future in utils.as_completed_with_progress(futures):
             key = futures[future]
             em[key] = future.result()
-            pbar.update(1)
 
     return em
 

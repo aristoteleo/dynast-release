@@ -2,14 +2,11 @@ import gzip
 import logging
 import os
 import pickle
-import time
-import multiprocessing
 import shutil
 import tempfile
 from functools import partial
 
 import pysam
-from tqdm import tqdm
 
 from .. import utils
 
@@ -116,10 +113,7 @@ def calculate_coverage(
                 contigs.append(index.contig)
 
     logger.debug(f'Spawning {n_threads} processes')
-    manager = multiprocessing.Manager()
-    counter = manager.Value('I', 0)
-    lock = manager.Lock()
-    pool = multiprocessing.Pool(n_threads)
+    pool, counter, lock = utils.make_pool_with_counter(n_threads)
     async_result = pool.starmap_async(
         partial(
             calculate_coverage_contig,
@@ -136,14 +130,8 @@ def calculate_coverage(
 
     # Display progres bar
     logger.debug(f'Processing contigs {contigs} from BAM')
-    with tqdm(unit='reads', total=n_reads, ascii=True, unit_scale=True) as pbar:
-        previous_progress = 0
-        while not async_result.ready():
-            time.sleep(0.05)
-            progress = counter.value
-            pbar.update(progress - previous_progress)
-            previous_progress = progress
-        pool.join()
+    utils.display_progress_with_counter(async_result, counter, n_reads)
+    pool.join()
 
     # Combine csvs
     logger.debug(f'Writing coverage to {coverage_path}')

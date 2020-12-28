@@ -208,16 +208,11 @@ def setup_count_args(parser, parent):
         default=16,
     )
     parser_count.add_argument(
-        '--method',
-        help=argparse.SUPPRESS,
-        choices=['mcmc', 'optimization'],
-        default='mcmc',
-    )
-    parser_count.add_argument(
         '--nasc',
         help=argparse.SUPPRESS,
         action='store_true',
     )
+    parser_count.add_argument('--subset-threshold', help=argparse.SUPPRESS, type=int, default=8000)
     parser_count.add_argument(
         'fastqs',
         help=(
@@ -307,10 +302,6 @@ def parse_count(parser, args, temp_dir=None):
                     )
                 cell_ids.append(cell_id)
 
-    # Correction method
-    if args.method is None:
-        args.method = 'mcmc' if args.nasc else 'optimization'
-
     count(
         args.fastqs,
         args.i,
@@ -331,7 +322,7 @@ def parse_count(parser, args, temp_dir=None):
         re=args.re,
         temp_dir=temp_dir,
         nasc=args.nasc,
-        method=args.method,
+        subset_threshold=args.subset_threshold
     )
 
 

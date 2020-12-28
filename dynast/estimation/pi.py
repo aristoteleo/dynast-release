@@ -1,10 +1,9 @@
 import logging
-from concurrent.futures import as_completed, ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import pandas as pd
 import pystan
-from tqdm import tqdm
 
 from .. import config, utils
 
@@ -53,58 +52,10 @@ def beta_mode(alpha, beta):
     return pi
 
 
-def fit_stan_optimize(
-    values,
-    p_e,
-    p_c,
-    guess=0.5,
-    model=None,
-    pi_func=lambda alpha,
-    beta: None,
-    n_chains=4,
-    n_iters=2000,
-):
-    model = model or _model
-    conversions = []
-    contents = []
-    for k, n, count in values:
-        conversions.extend([k] * count)
-        contents.extend([n] * count)
-    data = {
-        'N': len(conversions),
-        'contents': contents,
-        'conversions': conversions,
-        'p_c': p_c,
-        'p_e': p_e,
-    }
-
-    # First, try optimizing.
-    try:
-        with utils.suppress_stdout_stderr():
-            init = [{'log_alpha': 0., 'log_beta': 0., 'pi_g': guess}]
-            fit = model.optimizing(data=data, init=init, algorithm='BFGS')
-        alpha, beta = fit['alpha'], fit['beta']
-        pi = pi_func(alpha, beta)
-        if pi is not None:
-            return alpha, beta, pi, False
-    except Exception:
-        pass
-
-    # Fallback to MCMC
-    with utils.suppress_stdout_stderr():
-        init = [{'log_alpha': 0., 'log_beta': 0., 'pi_g': guess}] * n_chains
-        fit = model.sampling(
-            data=data,
-            n_jobs=1,
-            iter=n_iters,
-            chains=n_chains,
-            init=init,
-            control={'adapt_delta': 0.99},
-        )
-    samples = fit.extract(('alpha', 'beta'))
-    alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
-    pi = pi_func(alpha, beta)
-    return guess, alpha, beta, pi, True
+def guess_beta_parameters(guess, strength=5):
+    alpha = max(strength * guess, 0.1)
+    beta = max(strength - alpha, 0.1)
+    return alpha, beta
 
 
 def fit_stan_mcmc(
@@ -115,8 +66,11 @@ def fit_stan_mcmc(
     model=None,
     pi_func=(lambda alpha, beta: None),
     n_chains=1,
-    n_iters=2000,
-    subset_threshold=10000,
+    n_warmup=500,
+    n_iters=1000,
+    seed=None,
+    subset_threshold=8000,
+    subset_seed=None,
 ):
     model = model or _model
     conversions = []
@@ -128,9 +82,14 @@ def fit_stan_mcmc(
     # If we have many conversions, randomly select a subset. This keeps runtimes
     # down while minimally impacting accuracy.
     if len(conversions) > subset_threshold:
-        choices = np.random.choice(len(conversions), subset_threshold, replace=False)
+        choices = np.random.RandomState(subset_seed).choice(len(conversions), subset_threshold, replace=False)
         conversions = list(np.array(conversions)[choices])
         contents = list(np.array(contents)[choices])
+
+    # Skew beta distribution toward the guess.
+    alpha_guess, beta_guess = guess_beta_parameters(guess)
+    alpha_guess_log = np.log(alpha_guess)
+    beta_guess_log = np.log(beta_guess)
 
     data = {
         'N': len(conversions),
@@ -139,22 +98,24 @@ def fit_stan_mcmc(
         'p_c': p_c,
         'p_e': p_e,
     }
-    init = [{'log_alpha': 0.0, 'log_beta': 0.0, 'pi_g': guess}] * n_chains
+    init = [{'log_alpha': alpha_guess_log, 'log_beta': beta_guess_log, 'pi_g': guess}] * n_chains
 
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
             data=data,
             pars=['alpha', 'beta'],
             n_jobs=1,
-            iter=n_iters,
             chains=n_chains,
+            warmup=n_warmup,
+            iter=n_iters + n_warmup,
             init=init,
             control={'adapt_delta': 0.99},
+            seed=seed,
         )
     samples = fit.extract(('alpha', 'beta'))
     alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
     pi = pi_func(alpha, beta)
-    return guess, alpha, beta, pi, False
+    return guess, alpha, beta, pi
 
 
 def estimate_pi(
@@ -167,15 +128,11 @@ def estimate_pi(
     group_by=None,
     value_columns=['TC', 'T', 'count'],
     n_threads=8,
-    nasc=False,
-    method='mcmc',
     threshold=16,
+    subset_threshold=8000,
 ):
+    print('1')
     pi_func = beta_mode
-    if method == 'optimization':
-        fit = fit_stan_optimize
-    else:
-        fit = fit_stan_mcmc
 
     logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
@@ -190,11 +147,9 @@ def estimate_pi(
     if group_by is None:
         if p_group_by is not None:
             raise Exception('Can not group all aggregates when p_e and p_c are not constants')
-        guess, alpha, beta, pi, fallback = fit(
+        guess, alpha, beta, pi = fit_stan_mcmc(
             df_aggregates[value_columns].values, p_e, p_c, model=model, pi_func=pi_func
         )
-        if method == 'optimization' and fallback:
-            logger.warning('STAN optimization failed. Fallback to MCMC.')
 
         with open(pi_path, 'w') as f:
             f.write('guess,alpha,beta,pi\n')
@@ -215,14 +170,13 @@ def estimate_pi(
     p_cs = df_full['p_c'].values
     groups = df_full.groupby(group_by).indices
     pis = {}
-    fallbacks = 0
     skipped = 0
     logger.debug(f'Spawning {n_threads} processes')
-    with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer,
-                             initargs=(model,)) as executor, tqdm(total=2 * len(groups), ascii=True) as pbar:
-        pbar.set_description('Queueing')
+    with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
         futures = {}
-        for key, idx in list(groups.items()):
+        # Run larger groups first
+        for key in sorted(groups.keys(), key=lambda key: len(groups[key]), reverse=True):
+            idx = groups[key]
             p_e_unique = np.unique(p_es[idx])
             p_c_unique = np.unique(p_cs[idx])
 
@@ -239,7 +193,6 @@ def estimate_pi(
 
             if count < 16:
                 skipped += 1
-                pbar.update(2)
                 continue
 
             # Make a naive guess of the fraction of new RNA
@@ -247,24 +200,19 @@ def estimate_pi(
             # if guess is either 0 or 1.
             guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
 
-            futures[executor.submit(fit, values[idx], p_e, p_c, guess=guess, pi_func=pi_func)] = key
-            pbar.update(1)
+            futures[executor.submit(
+                fit_stan_mcmc, values[idx], p_e, p_c, guess=guess, pi_func=pi_func, subset_threshold=subset_threshold
+            )] = key
 
-        pbar.set_description('Executing')
-        for future in as_completed(futures):
+        for future in utils.as_completed_with_progress(futures):
             key = futures[future]
-            guess, alpha, beta, pi, fallback = future.result()
-            if fallback:
-                fallbacks += 1
+            guess, alpha, beta, pi = future.result()
 
             pis[key] = (guess, alpha, beta, pi)
-            pbar.update(1)
     logger.warning(
         f'Estimation skipped {skipped} times because there were less reads than '
         f'threshold ({threshold}).'
     )
-    if method == 'optimization':
-        logger.warning(f'STAN optimization failed and fallback to MCMC {fallbacks} times.')
 
     with open(pi_path, 'w') as f:
         f.write(f'{",".join(group_by)},guess,alpha,beta,pi\n')

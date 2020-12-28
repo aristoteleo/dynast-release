@@ -7,6 +7,7 @@ import shutil
 import subprocess as sp
 import tempfile
 import time
+from concurrent.futures import as_completed
 from contextlib import contextmanager
 from operator import add
 
@@ -20,24 +21,6 @@ from tqdm import tqdm
 from . import config
 
 logger = logging.getLogger(__name__)
-
-
-class TqdmLoggingHandler(logging.Handler):
-    """Custom logging handler so that logging does not affect progress bars.
-    """
-
-    def __init__(self, level=logging.NOTSET):
-        super().__init__(level)
-
-    def emit(self, record):
-        try:
-            msg = self.format(record)
-            tqdm.write(msg)
-            self.flush()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception:
-            self.handleError(record)
 
 
 class suppress_stdout_stderr:
@@ -386,3 +369,10 @@ def write_pickle(obj, path, *args, **kwargs):
 def read_pickle(path):
     with gzip.open(path, 'rb') as f:
         return pickle.load(f)
+
+
+def as_completed_with_progress(futures):
+    with tqdm(total=len(futures), ascii=True) as pbar:
+        for future in as_completed(futures):
+            yield future
+            pbar.update(1)

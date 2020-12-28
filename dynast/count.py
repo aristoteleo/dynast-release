@@ -199,7 +199,7 @@ def count(
     temp_dir=None,
     re=None,
     nasc=False,
-    method='optimization',
+    subset_threshold=8000,
 ):
     """
     """
@@ -475,8 +475,8 @@ def count(
                 group_by=pi_group_by,
                 value_columns=value_columns,
                 n_threads=n_threads,
-                method=method,
                 threshold=read_threshold,
+                subset_threshold=subset_threshold,
             )
         else:
             logger.info('Skipped estimation of newly transcribed RNA because files already exist.')
