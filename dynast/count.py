@@ -184,6 +184,7 @@ def count(
     index_dir,
     out_dir,
     technology,
+    control=False,
     filtered_only=False,
     genes_path=None,
     quality=27,
@@ -363,6 +364,12 @@ def count(
                 logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
             else:
                 logger.info('Skipped coverage calculation and SNP detection.')
+
+    if control:
+        logger.info('Downstream processing skipped for controls')
+        STATS.end()
+        STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
+        return
 
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)

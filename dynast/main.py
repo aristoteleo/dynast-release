@@ -92,6 +92,15 @@ def setup_count_args(parser, parent):
         '-i', metavar='INDEX', help='Path to the directory where the STAR index is located', type=str, required=True
     )
     required_count.add_argument(
+        '-x',
+        metavar='TECHNOLOGY',
+        help=f'Single-cell technology used. Available choices are: {",".join(TECHNOLOGIES_MAP.keys())}',
+        type=str,
+        required=True,
+        choices=TECHNOLOGIES_MAP.keys()
+    )
+
+    parser_count.add_argument(
         '-g', metavar='GENES', help='Path to genes CSV. Required for some technologies', type=str, required=False
     )
     parser_count.add_argument(
@@ -100,14 +109,6 @@ def setup_count_args(parser, parent):
         help='Path to output directory (default: current directory)',
         type=str,
         default='.',
-    )
-    parser_count.add_argument(
-        '-x',
-        metavar='TECHNOLOGY',
-        help=f'Single-cell technology used. Available choices are: {",".join(TECHNOLOGIES_MAP.keys())}',
-        type=str,
-        required=True,
-        choices=TECHNOLOGIES_MAP.keys()
     )
     parser_count.add_argument(
         '-w',
@@ -209,6 +210,16 @@ def setup_count_args(parser, parent):
         help=argparse.SUPPRESS,
         action='store_true',
     )
+    parser_count.add_argument(
+        '--control',
+        help=(
+            'Indicate this is a control sample for the purposes of SNP detection. '
+            'The sample will be aligned, and SNPs will be called. No further processing '
+            'is done. After using this option, the called SNPs are intended to be used as '
+            'input to the `--snp-csv` option when running the test sample.'
+        ),
+        action='store_true',
+    )
     parser_count.add_argument('--subset-threshold', help=argparse.SUPPRESS, type=int, default=8000)
     parser_count.add_argument(
         'fastqs',
@@ -298,12 +309,25 @@ def parse_count(parser, args, temp_dir=None):
                         'current working directory or absolute.'
                     )
                 cell_ids.append(cell_id)
+    else:
+        # Check number of fastqs
+        if len(args.fastqs) != 2:
+            parser.error(f'Two input FASTQs were expected, but {len(args.fastqs)} were provided')
+
+    # Check requirements for controls
+    if args.control:
+        # snp_threshold needs to be provided
+        if not args.snp_threshold:
+            parser.error('`--snp-threshold` must be provided for controls')
+        if args.snp_csv:
+            parser.error('`--snp-csv` can not be used for controls')
 
     count(
         args.fastqs,
         args.i,
         args.o,
         TECHNOLOGIES_MAP[args.x],
+        control=args.control,
         filtered_only=args.filtered_only,
         genes_path=args.g,
         quality=args.quality,

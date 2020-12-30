@@ -175,7 +175,7 @@ def estimate_pi(
     with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
         futures = {}
         # Run larger groups first
-        for key in sorted(groups.keys(), key=lambda key: len(groups[key]), reverse=True):
+        for key in sorted(groups.keys(), key=lambda key: sum(values[groups[key]][:, 2]), reverse=True):
             idx = groups[key]
             p_e_unique = np.unique(p_es[idx])
             p_c_unique = np.unique(p_cs[idx])

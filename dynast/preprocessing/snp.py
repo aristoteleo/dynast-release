@@ -55,7 +55,16 @@ def read_snps(snps_path, group_by=None):
 
 
 def read_snp_csv(snp_csv):
-    df = pd.read_csv(snp_csv, names=['contig', 'genome_i'])
+    # Check if header exists
+    header = False
+    with open(snp_csv, 'r') as f:
+        line = f.readline().strip()
+        try:
+            int(line.split(',')[-1])
+        except ValueError:
+            header = True
+
+    df = pd.read_csv(snp_csv, names=['contig', 'genome_i'], skiprows=1 if header else None)
     return dict(df.groupby('contig').agg(set)['genome_i'])
 
 
