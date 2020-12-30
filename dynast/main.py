@@ -130,10 +130,7 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--re',
         metavar='RE',
-        help=(
-            'Re-do a step in the pipeline. Available choices are: `align`, '
-            '`parse`, `count`, `aggregate`, `estimate`.'
-        ),
+        help=(f'Re-do a step in the pipeline. Available choices are: {", ".join(RE_CHOICES)}.'),
         type=str,
         choices=RE_CHOICES,
         default=None

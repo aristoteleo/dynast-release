@@ -4,6 +4,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import pandas as pd
 import pystan
+from scipy import sparse
 
 from .. import config, utils
 
@@ -131,7 +132,6 @@ def estimate_pi(
     threshold=16,
     subset_threshold=8000,
 ):
-    print('1')
     pi_func = beta_mode
 
     logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
@@ -224,8 +224,8 @@ def estimate_pi(
 
 
 def split_reads(adata, pis, group_by=None):
-    barcodes = adata.obs.barcode
-    gene_ids = adata.var.gene_id
+    barcodes = adata.obs.index
+    gene_ids = adata.var.index
 
     pi_matrix = np.full(adata.shape, np.nan)
     barcode_index = {barcode: i for i, barcode in enumerate(barcodes)}
@@ -252,6 +252,9 @@ def split_reads(adata, pis, group_by=None):
             raise Exception(f'Unknown group_by {group_by}')
 
     adata.layers['pi'] = pi_matrix
-    adata.layers['new_estimated'] = adata.X * pi_matrix
-    adata.layers['old_estimated'] = adata.X * (1 - pi_matrix)
+    X = adata.X
+    if sparse.issparse(X):
+        X = X.toarray()
+    adata.layers['new_estimated'] = X * pi_matrix
+    adata.layers['old_estimated'] = X * (1 - pi_matrix)
     return adata

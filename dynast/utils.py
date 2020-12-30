@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import psutil
 import scipy.io
+from scipy import sparse
 from tqdm import tqdm
 
 from . import config
@@ -308,13 +309,34 @@ def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
     :return: cells x genes AnnData matrix
     :rtype: AnnData
     """
-    df_barcodes = pd.read_csv(barcodes_path, names=['barcode'])
-    df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1])
-    matrix = scipy.io.mmread(matrix_path).astype(np.uint32).T.toarray()
+    df_barcodes = pd.read_csv(barcodes_path, names=['barcode'], index_col=0)
+    df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1], index_col=0)
+    matrix = scipy.io.mmread(matrix_path).T.tocsr()
 
-    adata = anndata.AnnData(matrix, obs=df_barcodes, var=df_features)
-    adata.obs.index = adata.obs.index.astype(str)
-    adata.var.index = adata.var.index.astype(str)
+    adata = anndata.AnnData(X=matrix, obs=df_barcodes, var=df_features)
+    adata.X = adata.X.astype(np.uint32)
+    return adata
+
+
+def overlay_STAR_velocity_matrix(adata, barcodes_path, features_path, matrix_path):
+    barcodes = pd.read_csv(barcodes_path, names=['barcode'], index_col=0).index
+    features = pd.read_csv(features_path, names=['gene_id'], sep='\t', usecols=[0], index_col=0).index
+
+    # Mask barcodes and features to those in the filtered matrix
+    # IMPORTANT: barcodes and features must appear in the same order
+    barcodes_mask = barcodes.isin(adata.obs.index)
+    features_mask = features.isin(adata.var.index)
+
+    mtx = np.loadtxt(matrix_path, skiprows=3, delimiter=' ', dtype=np.uint32)
+    shape = (len(features), len(barcodes))
+    spliced = sparse.coo_matrix((mtx[:, 2], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
+    unspliced = sparse.coo_matrix((mtx[:, 3], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
+    ambiguous = sparse.coo_matrix((mtx[:, 4], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
+
+    adata.layers['spliced'] = spliced[barcodes_mask][:, features_mask]
+    adata.layers['unspliced'] = unspliced[barcodes_mask][:, features_mask]
+    adata.layers['ambiguous'] = ambiguous[barcodes_mask][:, features_mask]
+
     return adata
 
 

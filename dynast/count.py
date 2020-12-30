@@ -324,7 +324,7 @@ def count(
             if write_genes:
                 genes_path = paths[3]
         else:
-            logger.info('Skipped read and conversion parsing from BAM because files already exist.')
+            logger.info('Skipped read and conversion parsing from BAM.')
 
     # Detect SNPs
     snp_dir = os.path.join(out_dir, constants.SNP_DIR)
@@ -362,7 +362,7 @@ def count(
             if not snp_threshold:
                 logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
             else:
-                logger.info('Skipped coverage calculation and SNP detection because files already exist.')
+                logger.info('Skipped coverage calculation and SNP detection.')
 
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
@@ -389,7 +389,7 @@ def count(
                 temp_dir=temp_dir
             )
         else:
-            logger.info('Skipped conversion counting and mutation rate calculation because files already exist.')
+            logger.info('Skipped conversion counting and mutation rate calculation.')
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
@@ -410,7 +410,7 @@ def count(
             )
             aggregates_paths = preprocessing.aggregate_counts(df_counts, aggregates_dir)
         else:
-            logger.info('Skipped count aggregation because files already exist.')
+            logger.info('Skipped count aggregation.')
 
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
@@ -453,7 +453,7 @@ def count(
                 n_threads=n_threads,
             )
         else:
-            logger.info('Skipped rate estimation because files already exist.')
+            logger.info('Skipped rate estimation.')
 
     pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
     skip = utils.all_exists([pi_path]) and not redo('pi')
@@ -479,7 +479,7 @@ def count(
                 subset_threshold=subset_threshold,
             )
         else:
-            logger.info('Skipped estimation of newly transcribed RNA because files already exist.')
+            logger.info('Skipped estimation of newly transcribed RNA.')
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     skip = utils.all_exists([adata_path]) and not redo('split')
@@ -499,11 +499,15 @@ def count(
                 filter_dict={'barcode': barcodes}
             )
             adata = estimation.split_reads(adata, pis, group_by=pi_group_by)
+            if 'velocyto' in STAR_result:
+                adata = utils.overlay_STAR_velocity_matrix(
+                    adata, STAR_result['velocyto']['barcodes'], STAR_result['velocyto']['features'],
+                    STAR_result['velocyto']['matrix']
+                )
             sc.pp.filter_genes(adata, min_counts=1)
             adata.var.drop(columns='n_counts', inplace=True)
-            adata.var.reset_index(drop=True, inplace=True)
             adata.write(adata_path, compression='gzip')
         else:
-            logger.info('Skipped splitting of new and old RNA because files already exist.')
+            logger.info('Skipped splitting of new and old RNA.')
     STATS.end()
     STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
