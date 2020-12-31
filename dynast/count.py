@@ -157,7 +157,7 @@ def STAR_solo(
     filtered_gene_dir = os.path.join(gene_dir, constants.STAR_FILTERED_DIR)
     velocyto_dir = os.path.join(solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
 
-    return {
+    result = {
         'bam': os.path.join(out_dir, constants.STAR_BAM_FILENAME),
         'gene': {
             'raw': {
@@ -177,6 +177,9 @@ def STAR_solo(
             'matrix': os.path.join(velocyto_dir, constants.STAR_MATRIX_FILENAME),
         },
     }
+    if technology.name == 'smartseq':
+        del result['velocyto']
+    return result
 
 
 def count(
