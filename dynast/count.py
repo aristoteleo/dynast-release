@@ -1,9 +1,10 @@
+import datetime as dt
 import logging
 import os
 import pysam
-import tempfile
 
-import scanpy as sc
+import anndata
+import pandas as pd
 
 from . import config, constants, estimation, preprocessing, utils
 from .stats import STATS
@@ -11,199 +12,29 @@ from .stats import STATS
 logger = logging.getLogger(__name__)
 
 
-def STAR_solo(
-    fastqs,
-    index_dir,
-    out_dir,
-    technology,
-    whitelist_path=None,
-    n_threads=8,
-    n_bins=50,
-    temp_dir=None,
-    nasc=False,
-):
-    """Align FASTQs with STARsolo.
-
-    :param fastqs: list of path to FASTQs. Order matters -- STAR assumes the
-                   UMI and barcode are in read 2
-    :type fastqs: list
-    :param index_dir: path to directory containing STAR index
-    :type index_dir: str
-    :param out_dir: path to directory to place STAR output
-    :type out_dir: str
-    :param technology: a `Technology` object defined in `technology.py`
-    :type technology: collections.namedtuple
-    :param whitelist_path: path to textfile containing barcode whitelist,
-                           defaults to `None`
-    :type whitelist_path: str, optional
-    :param n_threads: number of threads to use, defaults to `8`
-    :type n_threads: int, optional
-    :param n_bins: number of bins to use when sorting BAM, defaults to `50`
-    :type n_bins: int, optional
-    :param temp_dir: STAR temporary directory, defaults to `None`, which
-                     uses the system temporary directory
-    :type temp_dir: str, optional
-
-    :return: dictionary containing output files
-    :rtype: dict
-    """
-    STATS.steps['align'].extra.update({'version': config.get_STAR_version()})
-    logger.info('Aligning the following FASTQs with STAR')
-    for fastq in fastqs:
-        logger.info((' ' * 8) + fastq)
-
-    # out_dir must end with a directory separator
-    if not out_dir.endswith(('/', '\\')):
-        out_dir += os.path.sep
-
-    command = [config.get_STAR_binary_path()]
-    arguments = config.STAR_ARGUMENTS
-    if technology.name != 'smartseq':
-        arguments = config.combine_arguments(arguments, config.STAR_SOLO_ARGUMENTS)
-        arguments = config.combine_arguments(arguments, technology.arguments)
-        if whitelist_path:
-            arguments = config.combine_arguments(arguments, {'--soloCBwhitelist', whitelist_path})
-
-        # Input FASTQs must be plaintext
-        plaintext_fastqs = []
-        for fastq in fastqs:
-            if fastq.endswith('.gz'):
-                plaintext_path = utils.mkstemp(dir=temp_dir)
-                logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
-                utils.decompress_gzip(fastq, plaintext_path)
-            else:
-                plaintext_path = fastq
-            plaintext_fastqs.append(plaintext_path)
-        command += ['--readFilesIn'] + plaintext_fastqs
-    else:
-        # STAR requires FIFO file support when running in smartseq mode
-        fifo_path = utils.mkstemp(dir=temp_dir, delete=True)
-        try:
-            os.mkfifo(fifo_path)
-        except OSError:
-            raise config.UnsupportedOSException(
-                f'The filesystem at {temp_dir} does not support FIFO files. '
-                'STAR uses FIFO files to run alignment of Smart-seq files.'
-            )
-
-        arguments = config.combine_arguments(arguments, technology.arguments)
-        if nasc:
-            arguments = config.combine_arguments(arguments, config.NASC_ARGUMENTS)
-
-        manifest_path = utils.mkstemp(dir=temp_dir)
-        with open(fastqs[0], 'r') as f, open(manifest_path, 'w') as out:
-            for line in f:
-                if line.isspace():
-                    continue
-
-                cell_id, fastq_1, fastq_2 = line.strip().split(',')
-                if fastq_1.endswith('.gz'):
-                    plaintext_path = utils.mkstemp(dir=temp_dir)
-                    logger.warning(
-                        f'Decompressing {fastq_1} to {plaintext_path} because STAR requires plaintext FASTQs'
-                    )
-                    utils.decompress_gzip(fastq_1, plaintext_path)
-                    fastq_1 = plaintext_path
-                if fastq_2.endswith('.gz'):
-                    plaintext_path = utils.mkstemp(dir=temp_dir)
-                    logger.warning(
-                        f'Decompressing {fastq_2} to {plaintext_path} because STAR requires plaintext FASTQs'
-                    )
-                    utils.decompress_gzip(fastq_2, plaintext_path)
-                    fastq_2 = plaintext_path
-
-                out.write(f'{fastq_1}\t{fastq_2}\t{cell_id}\n')
-        command += ['--readFilesManifest', manifest_path]
-    command += ['--genomeDir', index_dir]
-    command += ['--runThreadN', n_threads]
-    command += ['--outFileNamePrefix', out_dir]
-    command += [
-        '--outTmpDir',
-        os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}')
-    ]
-    command += config.arguments_to_list(arguments)
-    # Attempt to increase NOFILE limit if n_threads * n_bins is greater than
-    # current limit
-    requested = n_threads * n_bins
-    current = utils.get_file_descriptor_limit()
-    if requested > current:
-        maximum = utils.get_max_file_descriptor_limit()
-
-        logger.warning(
-            f'Requested number of file descriptors ({requested}) exceeds '
-            f'current maximum ({current}). Attempting to increase maximum '
-            f'number of file descriptors to {maximum}.'
-        )
-        with utils.increase_file_descriptor_limit(maximum):
-            # Modify n_bins if maximum > requested
-            n_bins = min(n_bins, maximum // n_threads)
-            if requested > maximum:
-                logger.warning(
-                    f'Requested number of file descriptors ({requested}) exceeds '
-                    f'maximum possible defined by the OS ({maximum}). Reducing '
-                    f'number of BAM bins from 50 to {n_bins}.'
-                )
-            command += ['--outBAMsortingBinsN', n_bins]
-            STATS.steps['align'].extra.update({'command': ' '.join(str(c) for c in command)})
-            utils.run_executable(command)
-    else:
-        command += ['--outBAMsortingBinsN', n_bins]
-        STATS.steps['align'].extra.update({'command': ' '.join(str(c) for c in command)})
-        utils.run_executable(command)
-
-    solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
-    gene_dir = os.path.join(solo_dir, constants.STAR_GENE_DIR)
-    raw_gene_dir = os.path.join(gene_dir, constants.STAR_RAW_DIR)
-    filtered_gene_dir = os.path.join(gene_dir, constants.STAR_FILTERED_DIR)
-    velocyto_dir = os.path.join(solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
-
-    result = {
-        'bam': os.path.join(out_dir, constants.STAR_BAM_FILENAME),
-        'gene': {
-            'raw': {
-                'barcodes': os.path.join(raw_gene_dir, constants.STAR_BARCODES_FILENAME),
-                'features': os.path.join(raw_gene_dir, constants.STAR_FEATURES_FILENAME),
-                'matrix': os.path.join(raw_gene_dir, constants.STAR_MATRIX_FILENAME),
-            },
-            'filtered': {
-                'barcodes': os.path.join(filtered_gene_dir, constants.STAR_BARCODES_FILENAME),
-                'features': os.path.join(filtered_gene_dir, constants.STAR_FEATURES_FILENAME),
-                'matrix': os.path.join(filtered_gene_dir, constants.STAR_MATRIX_FILENAME),
-            },
-        },
-        'velocyto': {
-            'barcodes': os.path.join(velocyto_dir, constants.STAR_BARCODES_FILENAME),
-            'features': os.path.join(velocyto_dir, constants.STAR_FEATURES_FILENAME),
-            'matrix': os.path.join(velocyto_dir, constants.STAR_MATRIX_FILENAME),
-        },
-    }
-    if technology.name == 'smartseq':
-        del result['velocyto']
-    return result
-
-
 def count(
-    fastqs,
-    index_dir,
+    bam_path,
+    gtf_path,
     out_dir,
-    technology,
+    strand='forward',
+    umi_tag=None,
+    barcode_tag=None,
+    barcodes=None,
     control=False,
     filtered_only=False,
-    genes_path=None,
     quality=27,
     conversion='TC',
     snp_threshold=0.5,
     snp_csv=None,
-    snp_group_by=None,
     read_threshold=16,
     p_group_by=None,
-    pi_group_by=None,
     whitelist_path=None,
     n_threads=8,
     temp_dir=None,
     re=None,
     nasc=False,
     subset_threshold=8000,
+    velocity=True,
 ):
     """
     """
@@ -223,112 +54,69 @@ def count(
             'free when running dynast. Continuing may cause dynast to crash with an out-of-memory error.'
         )
 
-    # If whitelist was not provided but one is available, decompress into output
-    # directory.
-    if whitelist_path is None and technology.whitelist_path is not None:
-        whitelist_path = os.path.join(out_dir, f'{technology.name}_whitelist.txt')
-        logger.info(f'Copying prepackaged whitelist for technology {technology.name} to {whitelist_path}')
-        utils.decompress_gzip(technology.whitelist_path, whitelist_path)
-
-    STAR_out_dir = os.path.join(out_dir, constants.STAR_OUTPUT_DIR)
-    STAR_solo_dir = os.path.join(STAR_out_dir, constants.STAR_SOLO_DIR)
-    STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR)
-    STAR_raw_gene_dir = os.path.join(STAR_gene_dir, constants.STAR_RAW_DIR)
-    STAR_filtered_gene_dir = os.path.join(STAR_gene_dir, constants.STAR_FILTERED_DIR)
-    STAR_velocyto_dir = os.path.join(STAR_solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
-
-    # Check if these files exist. If they do, we can skip alignment.
-    STAR_result = {
-        'bam': os.path.join(STAR_out_dir, constants.STAR_BAM_FILENAME),
-        'gene': {
-            'raw': {
-                'barcodes': os.path.join(STAR_raw_gene_dir, constants.STAR_BARCODES_FILENAME),
-                'features': os.path.join(STAR_raw_gene_dir, constants.STAR_FEATURES_FILENAME),
-                'matrix': os.path.join(STAR_raw_gene_dir, constants.STAR_MATRIX_FILENAME),
-            },
-            'filtered': {
-                'barcodes': os.path.join(STAR_filtered_gene_dir, constants.STAR_BARCODES_FILENAME),
-                'features': os.path.join(STAR_filtered_gene_dir, constants.STAR_FEATURES_FILENAME),
-                'matrix': os.path.join(STAR_filtered_gene_dir, constants.STAR_MATRIX_FILENAME),
-            },
-        },
-        'velocyto': {
-            'barcodes': os.path.join(STAR_velocyto_dir, constants.STAR_BARCODES_FILENAME),
-            'features': os.path.join(STAR_velocyto_dir, constants.STAR_FEATURES_FILENAME),
-            'matrix': os.path.join(STAR_velocyto_dir, constants.STAR_MATRIX_FILENAME),
-        }
-    }
-    if technology.name == 'smartseq':
-        logger.warning('Technology `smartseq` does not support velocyto')
-        del STAR_result['velocyto']
-    STAR_required = utils.flatten_dict_values(STAR_result)
-    skip = utils.all_exists(STAR_required) and not redo('align')
-    with STATS.step('align', skipped=skip):
+    # Check that BAM is sorted by coordinate. If not, run samtools sort.
+    sorted_bam_path = '{}.sortedByCoord{}'.format(*os.path.splitext(bam_path))
+    bam_sorted = False
+    with pysam.AlignmentFile(bam_path, 'rb') as f:
+        if f.header.get('HD', {}).get('SO') == 'coordinate':
+            bam_sorted = True
+    skip = utils.all_exists([sorted_bam_path]) or bam_sorted
+    with STATS.step('sort', skipped=skip) or redo('sort'):
         if not skip:
-            STAR_result = STAR_solo(
-                fastqs,
-                index_dir,
-                STAR_out_dir,
-                technology,
-                whitelist_path=whitelist_path,
-                n_threads=n_threads,
-                temp_dir=temp_dir,
-                nasc=nasc,
-            )
-        else:
-            logger.info('Skipped STAR because alignment files already exist.')
+            logger.info(f'Sorting {bam_path} with samtools to {sorted_bam_path}')
+            pysam.sort(bam_path, '-o', sorted_bam_path, '-@', str(n_threads))
+            bam_path = sorted_bam_path
 
     # Check if BAM index exists and create one if it doesn't.
-    bai_path = os.path.join(STAR_out_dir, constants.STAR_BAI_FILENAME)
+    bai_path = f'{bam_path}.bai'
     skip = utils.all_exists([bai_path]) and not redo('index')
     with STATS.step('index', skipped=skip):
-        if not os.path.exists(bai_path) or redo('align'):
-            logger.info(f'Indexing {STAR_result["bam"]} with samtools')
-            pysam.index(STAR_result['bam'], bai_path, '-@', str(n_threads))
-
-    # Read filtered barcodes.
-    with open(STAR_result['gene']['filtered']['barcodes'], 'r') as f:
-        barcodes = [line.strip() for line in f]
-    if filtered_only:
-        logger.warning(
-            f'Ignoring any barcodes not in the list of {len(barcodes)} filtered barcodes '
-            f'in {STAR_result["gene"]["filtered"]["barcodes"]}'
-        )
+        if not skip:
+            logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
+            pysam.index(bam_path, bai_path, '-@', str(n_threads))
 
     # Parse BAM and save results
-    conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
-    conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
-    no_conversions_path = os.path.join(out_dir, constants.NO_CONVERSIONS_FILENAME)
-    conversions_required = [conversions_path, conversions_index_path, no_conversions_path]
-    write_genes = False
-    if genes_path is None:
-        write_genes = True
-        genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
-        conversions_required.append(genes_path)
+    parse_dir = os.path.join(out_dir, constants.PARSE_DIR)
+    conversions_path = os.path.join(parse_dir, constants.CONVERSIONS_FILENAME)
+    conversions_index_path = os.path.join(parse_dir, constants.CONVERSIONS_INDEX_FILENAME)
+    no_conversions_path = os.path.join(parse_dir, constants.NO_CONVERSIONS_FILENAME)
+    no_index_path = os.path.join(parse_dir, constants.NO_CONVERSIONS_INDEX_FILENAME)
+    genes_path = os.path.join(parse_dir, constants.GENES_FILENAME)
+    transcripts_path = os.path.join(parse_dir, constants.TRANSCRIPTS_FILENAME)
+    conversions_required = [
+        conversions_path, conversions_index_path, no_conversions_path, no_index_path, genes_path, transcripts_path
+    ]
+    gene_infos = None
+    transcript_infos = None
     skip = utils.all_exists(conversions_required) and not redo('parse')
     with STATS.step('parse', skipped=skip):
         if not skip:
+            os.makedirs(parse_dir, exist_ok=True)
+            logger.info('Parsing gene and transcript information from GTF')
+            gene_infos, transcript_infos = preprocessing.parse_gtf(gtf_path)
+            utils.write_pickle(gene_infos, genes_path)
+            utils.write_pickle(transcript_infos, transcripts_path)
+
             logger.info(f'Parsing read conversion information from BAM to {conversions_path}')
-            paths = preprocessing.parse_all_reads(
-                STAR_result['bam'],
+            conversions_path, index_path, no_conversions_path, no_index_path = preprocessing.parse_all_reads(
+                bam_path,
                 conversions_path,
                 conversions_index_path,
                 no_conversions_path,
-                barcodes=barcodes if filtered_only else None,
-                genes_path=genes_path if write_genes else None,
-                read_group_as_barcode=technology.name == 'smartseq',
-                use_corrected=whitelist_path is not None,
+                no_index_path,
+                gene_infos,
+                transcript_infos,
+                strand=strand,
+                umi_tag=umi_tag,
+                barcode_tag=barcode_tag,
+                barcodes=barcodes,
                 n_threads=n_threads,
                 temp_dir=temp_dir,
-                nasc=nasc
+                nasc=nasc,
+                velocity=velocity
             )
-            conversions_path = paths[0]
-            conversions_index_path = paths[1]
-            no_conversions_path = paths[2]
-            if write_genes:
-                genes_path = paths[3]
         else:
-            logger.info('Skipped read and conversion parsing from BAM.')
+            logger.info('Skipped read and conversion parsing from BAM')
 
     # Detect SNPs
     snp_dir = os.path.join(out_dir, constants.SNP_DIR)
@@ -342,15 +130,20 @@ def count(
             logger.info('Calculating coverage and detecting SNPs')
             os.makedirs(snp_dir, exist_ok=True)
             coverage_path, coverage_index_path = preprocessing.calculate_coverage(
-                STAR_result['bam'],
-                preprocessing.read_conversions(conversions_path),
+                bam_path, {
+                    contig: set(df_part['genome_i'])
+                    for contig, df_part in preprocessing.read_conversions(
+                        conversions_path, usecols=['contig', 'genome_i']
+                    ).drop_duplicates().groupby('contig')
+                },
                 coverage_path,
                 coverage_index_path,
-                barcodes=barcodes if filtered_only else None,
-                read_group_as_barcode=technology.name == 'smartseq',
-                use_corrected=whitelist_path is not None,
+                umi_tag=umi_tag,
+                barcode_tag=barcode_tag,
+                barcodes=barcodes,
                 n_threads=n_threads,
                 temp_dir=temp_dir,
+                velocity=velocity
             )
             snps_path = preprocessing.detect_snps(
                 conversions_path,
@@ -366,7 +159,7 @@ def count(
             if not snp_threshold:
                 logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
             else:
-                logger.info('Skipped coverage calculation and SNP detection.')
+                logger.info('Skipped coverage calculation and SNP detection')
 
     if control:
         logger.info('Downstream processing skipped for controls')
@@ -375,10 +168,13 @@ def count(
         return
 
     # Count conversions and calculate mutation rates
-    counts_path = os.path.join(out_dir, constants.COUNT_FILENAME)
-    skip = utils.all_exists([counts_path]) and not redo('count')
+    count_dir = os.path.join(out_dir, constants.COUNT_DIR)
+    counts_path = os.path.join(count_dir, constants.COUNTS_FILENAME)
+    count_required = [counts_path]
+    skip = utils.all_exists(count_required) and not redo('count')
     with STATS.step('count', skipped=skip):
         if not skip:
+            os.makedirs(count_dir, exist_ok=True)
             logger.info('Counting conversions')
             snps = utils.merge_dictionaries(
                 preprocessing.read_snps(snps_path) if snp_threshold else {},
@@ -390,55 +186,73 @@ def count(
                 conversions_path,
                 conversions_index_path,
                 no_conversions_path,
+                no_index_path,
                 counts_path,
-                no_umi=technology.name == 'smartseq',
+                deduplicate=umi_tag is not None,
                 snps=snps,
-                group_by=snp_group_by,
                 quality=quality,
                 n_threads=n_threads,
                 temp_dir=temp_dir
             )
         else:
-            logger.info('Skipped conversion counting and mutation rate calculation.')
+            logger.info('Skipped conversion counting and mutation rate calculation')
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
     aggregates_paths = {
-        conversion: os.path.join(aggregates_dir, f'{conversion}.csv')
+        key: {
+            conversion: os.path.join(aggregates_dir, key, f'{conversion}.csv')
+            for conversion in preprocessing.CONVERSION_COLUMNS
+        }
+        for key in preprocessing.read_counts(counts_path, usecols=['velocity'])['velocity'].unique()
+    } if velocity else {}
+    aggregates_paths['transcriptome'] = {
+        conversion: os.path.join(aggregates_dir, constants.TRANSCRIPTOME_DIR, f'{conversion}.csv')
         for conversion in preprocessing.CONVERSION_COLUMNS
     }
-    aggregates_required = list(aggregates_paths.values()) + [rates_path]
-    df_counts = None
+    aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
+    df_counts_uncomplemented = None
+    df_counts_complemented = None
+    df_counts_transcriptome = None
     skip = utils.all_exists(aggregates_required) and not redo('aggregate')
     with STATS.step('aggregate', skipped=skip):
         if not skip:
-            logger.info('Computing mutation rates and aggregating counts')
+            logger.info('Computing mutation rates')
             os.makedirs(aggregates_dir, exist_ok=True)
-            df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
-            rates_path = preprocessing.calculate_mutation_rates(
-                df_counts if not nasc else preprocessing.read_counts(counts_path), rates_path, group_by=p_group_by
+            df_counts_uncomplemented = preprocessing.read_counts(counts_path)
+            df_counts_complemented = preprocessing.complement_counts(
+                df_counts_uncomplemented, gene_infos or utils.read_pickle(genes_path)
             )
-            aggregates_paths = preprocessing.aggregate_counts(df_counts, aggregates_dir)
+            rates_path = preprocessing.calculate_mutation_rates(
+                df_counts_uncomplemented if nasc else df_counts_complemented, rates_path, group_by=p_group_by
+            )
+
+            df_counts_transcriptome = df_counts_complemented[df_counts_complemented['transcriptome']]
+            dfs = {'transcriptome': df_counts_transcriptome}
+            if velocity:
+                dfs.update(preprocessing.split_counts_by_velocity(df_counts_complemented))
+            for key, df in dfs.items():
+                logger.info(f'Aggregating counts for `{key}` reads')
+                velocity_aggregates_dir = os.path.join(aggregates_dir, key)
+                os.makedirs(velocity_aggregates_dir, exist_ok=True)
+                aggregates_paths[key] = preprocessing.aggregate_counts(df, velocity_aggregates_dir)
         else:
-            logger.info('Skipped count aggregation.')
+            logger.info('Skipped count aggregation')
 
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
     p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
-    aggregate_path = os.path.join(estimates_dir, f'{conversion}.csv')
-    estimates_paths = [p_e_path, p_c_path, aggregate_path]
-    df_aggregates = None
+    estimates_paths = [p_e_path, p_c_path]
     value_columns = [conversion, conversion[0], 'count']
     skip = utils.all_exists(estimates_paths) and not redo('p')
     with STATS.step('p', skipped=skip):
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
 
-            logger.info('Estimating average mismatch rate in old RNA')
-            if df_counts is None and not nasc:
-                df_counts = preprocessing.read_counts_complemented(counts_path, genes_path)
+            logger.info('Estimating average mismatch rate in unlabeled RNA')
             p_e, p_e_path = estimation.estimate_p_e(
-                df_counts,
+                df_counts_complemented if df_counts_complemented is not None else preprocessing.
+                complement_counts(preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)),
                 p_e_path,
                 conversion=conversion,
                 group_by=p_group_by,
@@ -449,75 +263,113 @@ def count(
                 group_by=p_group_by,
             )
 
-            logger.info('Estimating average mismatch rate in new RNA')
-            df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-                aggregates_paths[conversion]
-            )
-            p_c, p_c_path, aggregate_path = estimation.estimate_p_c(
+            logger.info('Estimating average mismatch rate in labeled RNA')
+            df_aggregates = preprocessing.merge_aggregates(
+                *[
+                    preprocessing.read_aggregates(paths[conversion])
+                    for key, paths in aggregates_paths.items()
+                    if key != 'transcriptome'
+                ],
+                conversion=conversion
+            ) if velocity else preprocessing.read_aggregates(aggregates_paths['transcriptome'][conversion])
+            p_c, p_c_path = estimation.estimate_p_c(
                 df_aggregates,
                 p_e,
                 p_c_path,
-                aggregate_path,
                 group_by=p_group_by,
                 value_columns=value_columns,
                 n_threads=n_threads,
             )
         else:
-            logger.info('Skipped rate estimation.')
+            logger.info('Skipped rate estimation')
 
-    pi_path = os.path.join(estimates_dir, constants.PI_FILENAME)
-    skip = utils.all_exists([pi_path]) and not redo('pi')
+    velocity_blacklist = ['unassigned', 'ambiguous']
+    pi_paths = {
+        key: os.path.join(estimates_dir, f'{key}.csv')
+        for key in aggregates_paths.keys()
+        if key not in velocity_blacklist
+    }
+    skip = utils.all_exists(list(pi_paths.values())) and not redo('pi')
     with STATS.step('pi', skipped=skip):
         if not skip:
-            logger.info('Estimating fraction of newly transcribed RNA')
-            df_aggregates = df_aggregates if df_aggregates is not None else preprocessing.read_aggregates(
-                aggregates_paths[conversion]
-            )
             p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
             p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)
-            pi_path = estimation.estimate_pi(
-                df_aggregates,
-                p_e,
-                p_c,
-                pi_path,
-                filter_dict={'barcode': barcodes},
-                p_group_by=p_group_by,
-                group_by=pi_group_by,
-                value_columns=value_columns,
-                n_threads=n_threads,
-                threshold=read_threshold,
-                subset_threshold=subset_threshold,
-            )
+            for key, paths in aggregates_paths.items():
+                if key in velocity_blacklist:
+                    continue
+                logger.info(f'Estimating fraction of labeled RNA for `{key}` reads')
+                pi_paths[key] = estimation.estimate_pi(
+                    preprocessing.read_aggregates(paths[conversion]),
+                    p_e,
+                    p_c,
+                    pi_paths[key],
+                    p_group_by=p_group_by,
+                    value_columns=value_columns,
+                    n_threads=n_threads,
+                    threshold=read_threshold,
+                    subset_threshold=subset_threshold,
+                )
         else:
-            logger.info('Skipped estimation of newly transcribed RNA.')
+            logger.info('Skipped estimation of labeled RNA')
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     skip = utils.all_exists([adata_path]) and not redo('split')
     with STATS.step('split', skipped=skip):
         if not skip:
-            logger.info('Splitting reads')
-            pis = estimation.read_pi(pi_path, group_by=pi_group_by)
-            adata = utils.read_STAR_count_matrix(
-                STAR_result['gene']['filtered']['barcodes'],
-                STAR_result['gene']['filtered']['features'],
-                STAR_result['gene']['filtered']['matrix'],
+            logger.info(f'Combining results into an Anndata object at {adata_path}')
+
+            logger.info('Loading results for `transcriptome` reads')
+            df_counts = (
+                df_counts_uncomplemented
+                if df_counts_uncomplemented is not None else preprocessing.read_counts(counts_path)
             )
-            adata = preprocessing.split_counts_by_umi(
-                adata,
-                preprocessing.read_counts_complemented(counts_path, genes_path) if df_counts is None else df_counts,
-                conversion=conversion,
-                filter_dict={'barcode': barcodes}
+            barcodes = barcodes or sorted(df_counts['barcode'].unique())
+            features = sorted(df_counts['GX'].unique())
+
+            # Deal with transcriptome reads first because those need to be
+            # in adata.X
+            df_counts_transcriptome = df_counts[df_counts['transcriptome']]
+            matrix, matrix_unlabeled, matrix_labeled = preprocessing.split_counts(
+                df_counts_transcriptome, barcodes, features, conversion=conversion
             )
-            adata = estimation.split_reads(adata, pis, group_by=pi_group_by)
-            if 'velocyto' in STAR_result:
-                adata = utils.overlay_STAR_velocity_matrix(
-                    adata, STAR_result['velocyto']['barcodes'], STAR_result['velocyto']['features'],
-                    STAR_result['velocyto']['matrix']
-                )
-            sc.pp.filter_genes(adata, min_counts=1)
-            adata.var.drop(columns='n_counts', inplace=True)
+            # Construct adata with umi counts as layers
+            adata = anndata.AnnData(
+                X=matrix,
+                obs=pd.DataFrame(index=pd.Series(barcodes, name='barcodes')),
+                var=pd.DataFrame(index=pd.Series(features, name='gene_id')),
+                layers={
+                    'X_unlabeled': matrix_unlabeled,
+                    'X_labeled': matrix_labeled
+                }
+            )
+            pis = estimation.read_pi(pi_paths['transcriptome'])
+            (adata.layers['X_pi'], adata.layers['X_unlabeled_estimate'],
+             adata.layers['X_labeled_estimate']) = estimation.split_matrix(adata.X, pis, barcodes, features)
+
+            # All the other counts as layers
+            for key in aggregates_paths.keys():
+                if key != 'transcriptome' and key not in velocity_blacklist:
+                    logger.info(f'Loading result for `{key}` reads')
+                    df_counts_velocity = df_counts[df_counts['velocity'] == key]
+                    # UMI counts
+                    (adata.layers[key], adata.layers[f'{key}_unlabeled'],
+                     adata.layers[f'{key}_labeled']) = preprocessing.split_counts(
+                         df_counts_velocity, barcodes, features, conversion=conversion
+                     )
+
+                    # Estimates
+                    pis = estimation.read_pi(pi_paths[key])
+                    (
+                        adata.layers[f'{key}_pi'], adata.layers[f'{key}_unlabeled_estimate'],
+                        adata.layers[f'{key}_labeled_estimate']
+                    ) = estimation.split_matrix(adata.layers[key], pis, barcodes, features)
+
             adata.write(adata_path, compression='gzip')
         else:
-            logger.info('Skipped splitting of new and old RNA.')
+            logger.info('Skipped splitting of new and old RNA')
     STATS.end()
-    STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
+    STATS.save(
+        os.path.join(
+            out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(STATS.start_time, "%Y%m%d_%H%M%S_%f")}.json'
+        )
+    )

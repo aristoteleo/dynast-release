@@ -9,6 +9,7 @@ import tempfile
 import time
 from concurrent.futures import as_completed
 from contextlib import contextmanager
+from functools import lru_cache
 from operator import add
 
 import anndata
@@ -22,6 +23,10 @@ from tqdm import tqdm
 from . import config
 
 logger = logging.getLogger(__name__)
+
+
+class UnsupportedOSException(Exception):
+    pass
 
 
 class suppress_stdout_stderr:
@@ -134,6 +139,67 @@ def run_executable(
             raise sp.CalledProcessError(p.returncode, ' '.join(command))
 
     return p
+
+
+@lru_cache
+def get_STAR_binary_path():
+    """Get the path to the platform-dependent STAR binary included with
+    the installation.
+
+    :return: path to the binary
+    :rtype: str
+    """
+    bin_filename = 'STAR.exe' if config.PLATFORM == 'windows' else 'STAR'
+    path = os.path.join(config.BINS_DIR, config.PLATFORM, 'STAR', bin_filename)
+    if not os.path.exists(path):
+        raise UnsupportedOSException(f'This operating system ({config.PLATFORM}) is not supported.')
+    return path
+
+
+@lru_cache
+def get_STAR_version():
+    """Get the provided STAR version.
+
+    :return: version string
+    :rtype: str
+    """
+    p = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
+    version = p.stdout.read().strip()
+    return version
+
+
+def combine_arguments(args, additional):
+    """Combine two dictionaries representing command-line arguments.
+
+    Any duplicate keys will be merged according to the following procedure:
+    1. If the value in both dictionaries are lists, the two lists are combined.
+    2. Otherwise, the value in the first dictionary is OVERWRITTEN.
+    """
+    new_args = args.copy()
+
+    for key, value in additional.items():
+        if key in new_args:
+            if isinstance(value, list) and isinstance(new_args[key], list):
+                new_args[key] += value
+            else:
+                new_args[key] = value
+        else:
+            new_args[key] = value
+
+    return new_args
+
+
+def arguments_to_list(args):
+    """Convert a dictionary of command-line arguments to a list.
+    """
+    arguments = []
+    for key, value in args.items():
+        arguments.append(key)
+        if isinstance(value, list):
+            arguments.extend(value)
+        else:
+            arguments.append(value)
+    return arguments
 
 
 def open_as_text(path, mode):
@@ -348,11 +414,11 @@ def make_pool_with_counter(n_threads):
     return pool, counter, lock
 
 
-def display_progress_with_counter(async_result, counter, total):
-    with tqdm(total=total, ascii=True, unit_scale=True) as pbar:
+def display_progress_with_counter(counter, total, *async_results):
+    with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1) as pbar:
         previous_progress = 0
-        while not async_result.ready():
-            time.sleep(0.05)
+        while any(not async_result.ready() for async_result in async_results):
+            time.sleep(0.1)
             progress = counter.value
             pbar.update(progress - previous_progress)
             previous_progress = progress
@@ -394,7 +460,7 @@ def read_pickle(path):
 
 
 def as_completed_with_progress(futures):
-    with tqdm(total=len(futures), ascii=True) as pbar:
+    with tqdm(total=len(futures), ascii=True, smoothing=0.1) as pbar:
         for future in as_completed(futures):
             yield future
             pbar.update(1)

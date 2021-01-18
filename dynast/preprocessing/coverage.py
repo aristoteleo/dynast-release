@@ -19,12 +19,13 @@ def calculate_coverage_contig(
     lock,
     contig,
     indices,
+    umi_tag=None,
+    barcode_tag=None,
     barcodes=None,
-    read_group_as_barcode=False,
-    use_corrected=False,
     temp_dir=None,
     update_every=50000,
-    flush_every=10000
+    flush_every=10000,
+    velocity=True
 ):
     coverage_path = utils.mkstemp(dir=temp_dir)
     index_path = utils.mkstemp(dir=temp_dir)
@@ -32,13 +33,16 @@ def calculate_coverage_contig(
     # Index will be used for fast splitting, just like for conversions.csv
     index = []
 
+    paired = {}
     coverage = {}
 
-    required_tags = ['GX']
-    if not read_group_as_barcode:
-        required_tags.append('UB')
-    if use_corrected:
-        required_tags.append('CB')
+    required_tags = []
+    if not velocity:
+        required_tags.append('GX')
+    if umi_tag:
+        required_tags.append(umi_tag)
+    if barcode_tag:
+        required_tags.append(barcode_tag)
 
     n = 0
     with pysam.AlignmentFile(bam_path, 'rb') as bam, \
@@ -55,13 +59,23 @@ def calculate_coverage_contig(
             if any(not read.has_tag(tag) for tag in required_tags):
                 continue
 
-            barcode = read.get_tag('RG') if read_group_as_barcode else (
-                read.get_tag('CB') if use_corrected else read.get_tag('CR')
-            )
+            barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'
             if barcodes and barcode not in barcodes:
                 continue
 
-            for genome_i in range(read.reference_start, read.reference_end):
+            read_id = read.query_name
+            reference_positions = read.get_reference_positions()
+
+            # For paired end reads, don't count overlap twice
+            if read.is_paired:
+                if read_id not in paired:
+                    paired[read_id] = set(reference_positions)
+                    continue
+
+                reference_positions = list(paired[read_id].union(reference_positions))
+                del paired[read_id]
+
+            for genome_i in reference_positions:
                 if genome_i in indices:
                     key = (barcode, genome_i)
                     coverage.setdefault(key, 0)
@@ -97,11 +111,12 @@ def calculate_coverage(
     conversions,
     coverage_path,
     index_path,
+    umi_tag=None,
+    barcode_tag=None,
     barcodes=None,
-    read_group_as_barcode=False,
-    use_corrected=False,
     n_threads=8,
     temp_dir=None,
+    velocity=True,
 ):
     logger.debug(f'Extracting contigs from BAM {bam_path}')
     contigs = []
@@ -120,17 +135,18 @@ def calculate_coverage(
             bam_path,
             counter,
             lock,
+            umi_tag=umi_tag,
+            barcode_tag=barcode_tag,
             barcodes=barcodes,
-            read_group_as_barcode=read_group_as_barcode,
-            use_corrected=use_corrected,
-            temp_dir=tempfile.mkdtemp(dir=temp_dir)
+            temp_dir=tempfile.mkdtemp(dir=temp_dir),
+            velocity=velocity
         ), [(contig, conversions.get(contig, set())) for contig in contigs]
     )
     pool.close()
 
     # Display progres bar
     logger.debug(f'Processing contigs {contigs} from BAM')
-    utils.display_progress_with_counter(async_result, counter, n_reads)
+    utils.display_progress_with_counter(counter, n_reads, async_result)
     pool.join()
 
     # Combine csvs

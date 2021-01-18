@@ -15,7 +15,7 @@ CONVERSIONS_PARSER = re.compile(
     r'''^
     ([^,]*),
     (?P<barcode>[^,]*),
-    ([^,]*?),?
+    ([^,]*),
     ([^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
@@ -25,7 +25,9 @@ CONVERSIONS_PARSER = re.compile(
     ([^,]*),
     ([^,]*),
     ([^,]*),
-    ([^,]*)\n
+    ([^,]*),
+    (?P<velocity>[^,]*),
+    (?P<transcriptome>[^,]*)\n
     $''', re.VERBOSE
 )
 
@@ -39,7 +41,7 @@ COVERAGE_PARSER = re.compile(
 )
 
 
-def read_snps(snps_path, group_by=None):
+def read_snps(snps_path):
     df = pd.read_csv(
         snps_path, dtype={
             'barcode': 'string',
@@ -47,11 +49,7 @@ def read_snps(snps_path, group_by=None):
             'genome_i': np.uint32,
         }
     )
-    if group_by is None:
-        return dict(df.groupby('contig').agg(set)['genome_i'])
-    else:
-        # TODO
-        raise Exception()
+    return dict(df.groupby('contig').agg(set)['genome_i'])
 
 
 def read_snp_csv(snp_csv):
@@ -68,9 +66,7 @@ def read_snp_csv(snp_csv):
     return dict(df.groupby('contig').agg(set)['genome_i'])
 
 
-def extract_conversions_part(
-    conversions_path, counter, lock, pos, n_lines, group_by=None, quality=27, update_every=10000
-):
+def extract_conversions_part(conversions_path, counter, lock, pos, n_lines, quality=27, update_every=10000):
     conversions = {}
     with open(conversions_path, 'r') as f:
         f.seek(pos)
@@ -82,12 +78,8 @@ def extract_conversions_part(
                 contig = groupdict['contig']
                 genome_i = int(groupdict['genome_i'])
 
-                if group_by is None:
-                    conversions.setdefault(contig, {}).setdefault(genome_i, 0)
-                    conversions[contig][genome_i] += 1
-                else:
-                    # TODO
-                    pass
+                conversions.setdefault(contig, {}).setdefault(genome_i, 0)
+                conversions[contig][genome_i] += 1
             if (i + 1) % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
@@ -99,7 +91,7 @@ def extract_conversions_part(
     return conversions
 
 
-def extract_conversions(conversions_path, index_path, group_by=None, quality=27, n_threads=8):
+def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {conversions_path}')
     index = utils.read_pickle(index_path)
 
@@ -115,14 +107,13 @@ def extract_conversions(conversions_path, index_path, group_by=None, quality=27,
             conversions_path,
             counter,
             lock,
-            group_by=group_by,
             quality=quality,
         ), parts
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(async_result, counter, n_lines)
+    utils.display_progress_with_counter(counter, n_lines, async_result)
     pool.join()
 
     logger.debug('Combining conversions')
@@ -133,7 +124,7 @@ def extract_conversions(conversions_path, index_path, group_by=None, quality=27,
     return conversions
 
 
-def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, group_by=None, quality=27, update_every=10000):
+def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, quality=27, update_every=10000):
     coverage = {}
     with open(coverage_path, 'r') as f:
         f.seek(pos)
@@ -146,12 +137,8 @@ def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, group_by=N
             genome_i = int(groupdict['genome_i'])
             count = int(groupdict['coverage'])
 
-            if group_by is None:
-                coverage.setdefault(contig, {}).setdefault(genome_i, 0)
-                coverage[contig][genome_i] += count
-            else:
-                # TODO
-                pass
+            coverage.setdefault(contig, {}).setdefault(genome_i, 0)
+            coverage[contig][genome_i] += count
             if (i + 1) % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
@@ -163,7 +150,7 @@ def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, group_by=N
     return coverage
 
 
-def extract_coverage(coverage_path, index_path, group_by=None, quality=27, n_threads=8):
+def extract_coverage(coverage_path, index_path, quality=27, n_threads=8):
     logger.debug(f'Loading index {index_path} for {coverage_path}')
     index = utils.read_pickle(index_path)
 
@@ -179,14 +166,13 @@ def extract_coverage(coverage_path, index_path, group_by=None, quality=27, n_thr
             coverage_path,
             counter,
             lock,
-            group_by=group_by,
             quality=quality,
         ), parts
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(async_result, counter, n_lines)
+    utils.display_progress_with_counter(counter, n_lines, async_result)
     pool.join()
 
     logger.debug('Combining coverage')
@@ -203,32 +189,26 @@ def detect_snps(
     coverage_path,
     coverage_index_path,
     snps_path,
-    group_by=None,
     quality=27,
     threshold=0.5,
     n_threads=8,
 ):
     logger.info('Counting number of conversions for each genomic position')
-    conversions = extract_conversions(
-        conversions_path, conversions_index_path, group_by=group_by, quality=quality, n_threads=n_threads
-    )
+    conversions = extract_conversions(conversions_path, conversions_index_path, quality=quality, n_threads=n_threads)
 
     logger.info('Counting coverage for each genomic position')
-    coverage = extract_coverage(
-        coverage_path, coverage_index_path, group_by=group_by, quality=quality, n_threads=n_threads
-    )
+    coverage = extract_coverage(coverage_path, coverage_index_path, quality=quality, n_threads=n_threads)
 
     logger.info('Calculating fraction of conversions for each genomic position')
     fractions = utils.merge_dictionaries(conversions, coverage, f=truediv)
 
     logger.info(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:
-        prefix = '' if group_by is None else f'{",".join(group_by)},'
-        f.write(f'{prefix}contig,genome_i\n')
-        for key, fraction in utils.flatten_dictionary(fractions):
+        f.write('contig,genome_i\n')
+        for (contig, genome_i), fraction in utils.flatten_dictionary(fractions):
             # If (# conversions) / (# coverage) is greater than a threshold,
             # consider this a SNP and write to CSV
             if fraction > threshold:
-                f.write(f'{",".join(str(k) for k in key)}\n')
+                f.write(f'{contig},{genome_i}\n')
 
     return snps_path

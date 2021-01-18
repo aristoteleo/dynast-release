@@ -1,6 +1,7 @@
 # flake8: noqa
-from .aggregation import aggregate_counts, calculate_mutation_rates, read_aggregates, read_rates
-from .bam import parse_all_reads, read_conversions, read_genes
-from .conversion import CONVERSION_COLUMNS, count_conversions, read_counts, read_counts_complemented, split_counts_by_umi
+from .aggregation import aggregate_counts, calculate_mutation_rates, merge_aggregates, read_aggregates, read_rates
+from .bam import parse_all_reads, read_conversions
+from .conversion import complement_counts, CONVERSION_COLUMNS, count_conversions, counts_to_matrix, deduplicate_counts, read_counts, split_counts, split_counts_by_umi, split_counts_by_velocity
 from .coverage import calculate_coverage
+from .gtf import parse_gtf
 from .snp import detect_snps, read_snp_csv, read_snps

@@ -3,7 +3,7 @@ import json
 import sys
 from contextlib import contextmanager
 
-from . import __version__, config
+from . import __version__
 
 
 class Step:
@@ -45,11 +45,6 @@ class Stats:
 
         self.steps = {}
         self.step_order = []
-
-        self.STAR = {
-            'version': config.get_STAR_version(),
-            'command': None,
-        }
 
         self.version = __version__
 

@@ -121,7 +121,6 @@ def estimate_p_c(
     df_aggregates,
     p_e,
     p_c_path,
-    aggregate_path,
     group_by=None,
     value_columns=['TC', 'T', 'count'],
     n_threads=8,
@@ -135,26 +134,17 @@ def estimate_p_c(
     logger.debug('Running EM algorithm')
     em = expectation_maximization(filtered, group_by=group_by, n_threads=n_threads)
 
-    logger.debug(f'Writing p_c estimates to {p_c_path} and aggregates to {aggregate_path}')
-    with open(p_c_path, 'w') as p_c_out, open(aggregate_path, 'w') as aggregate_out:
+    logger.debug(f'Writing p_c estimates to {p_c_path}')
+    with open(p_c_path, 'w') as p_c_out:
         if group_by is None:
-            aggregate_out.write(f'{",".join(value_columns)}\n')
-
             sp, p_c = em
             p_c_out.write(str(p_c))
-
-            for (k, n), count in sp.todok().items():
-                aggregate_out.write(f'{k},{n},{count}\n')
         else:
             p_c_out.write(f'{",".join(group_by)},p_c\n')
-            aggregate_out.write(f'{",".join(group_by)},{",".join(value_columns)}\n')
             for key in sorted(em.keys()):
                 sp, p_c = em[key]
                 formatted_key = key if isinstance(key, str) else ",".join(key)
                 p_c_out.write(f'{formatted_key},{p_c}\n')
-
-                for (k, n), count in sp.todok().items():
-                    aggregate_out.write(f'{formatted_key},{k},{n},{count}\n')
     p_c = {key: pair[1] for key, pair in em.items()} if group_by is not None else em[1]
 
-    return p_c, p_c_path, aggregate_path
+    return p_c, p_c_path

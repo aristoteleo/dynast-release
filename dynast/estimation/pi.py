@@ -11,13 +11,9 @@ from .. import config, utils
 logger = logging.getLogger(__name__)
 
 
-def read_pi(pi_path, group_by=None):
-    if group_by is None:
-        with open(pi_path, 'r') as f:
-            return float(f.read().split(',')[-1])
-
-    df = pd.read_csv(pi_path, usecols=group_by + ['pi'])
-    return dict(df.set_index(group_by)['pi'])
+def read_pi(pi_path):
+    df = pd.read_csv(pi_path, usecols=['barcode', 'GX', 'pi'])
+    return dict(df.set_index(['barcode', 'GX'])['pi'])
 
 
 # Process initializer.
@@ -124,37 +120,16 @@ def estimate_pi(
     p_e,
     p_c,
     pi_path,
-    filter_dict=None,
     p_group_by=None,
-    group_by=None,
     value_columns=['TC', 'T', 'count'],
     n_threads=8,
     threshold=16,
     subset_threshold=8000,
 ):
-    pi_func = beta_mode
-
-    logger.debug(f'pi estimation will be grouped by {group_by} using columns {value_columns}')
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
-    filter_dict = filter_dict or {}
-    if filter_dict:
-        logger.debug(f'Filtering aggregates by the following keys: {list(filter_dict.keys())}')
-        for column, values in filter_dict.items():
-            df_aggregates = df_aggregates[df_aggregates[column].isin(values)]
 
     logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
-    if group_by is None:
-        if p_group_by is not None:
-            raise Exception('Can not group all aggregates when p_e and p_c are not constants')
-        guess, alpha, beta, pi = fit_stan_mcmc(
-            df_aggregates[value_columns].values, p_e, p_c, model=model, pi_func=pi_func
-        )
-
-        with open(pi_path, 'w') as f:
-            f.write('guess,alpha,beta,pi\n')
-            f.write(f'{guess},{alpha},{beta},{pi}\n')
-        return pi_path
 
     if p_group_by is not None:
         df_full = df_aggregates.set_index(p_group_by, drop=True)
@@ -168,7 +143,7 @@ def estimate_pi(
     values = df_full[value_columns].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
-    groups = df_full.groupby(group_by).indices
+    groups = df_full.groupby(['barcode', 'GX']).indices
     pis = {}
     skipped = 0
     logger.debug(f'Spawning {n_threads} processes')
@@ -191,7 +166,7 @@ def estimate_pi(
             vals = values[idx]
             count = sum(vals[:, 2])
 
-            if count < 16:
+            if count < threshold:
                 skipped += 1
                 continue
 
@@ -201,7 +176,7 @@ def estimate_pi(
             guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
 
             futures[executor.submit(
-                fit_stan_mcmc, values[idx], p_e, p_c, guess=guess, pi_func=pi_func, subset_threshold=subset_threshold
+                fit_stan_mcmc, values[idx], p_e, p_c, guess=guess, pi_func=beta_mode, subset_threshold=subset_threshold
             )] = key
 
         for future in utils.as_completed_with_progress(futures):
@@ -215,46 +190,26 @@ def estimate_pi(
     )
 
     with open(pi_path, 'w') as f:
-        f.write(f'{",".join(group_by)},guess,alpha,beta,pi\n')
-        for key in sorted(pis.keys()):
-            guess, alpha, beta, pi = pis[key]
-            f.write(f'{key if isinstance(key, str) else ",".join(key)},{guess},{alpha},{beta},{pi}\n')
+        f.write('barcode,GX,guess,alpha,beta,pi\n')
+        for barcode, gx in sorted(pis.keys()):
+            guess, alpha, beta, pi = pis[(barcode, gx)]
+            f.write(f'{barcode},{gx},{guess},{alpha},{beta},{pi}\n')
 
     return pi_path
 
 
-def split_reads(adata, pis, group_by=None):
-    barcodes = adata.obs.index
-    gene_ids = adata.var.index
+def split_matrix(matrix, pis, barcodes, features):
+    pi_matrix = np.full((len(barcodes), len(features)), np.nan)
+    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
+    feature_indices = {feature: i for i, feature in enumerate(features)}
 
-    pi_matrix = np.full(adata.shape, np.nan)
-    barcode_index = {barcode: i for i, barcode in enumerate(barcodes)}
-    gene_id_index = {gene_id: i for i, gene_id in enumerate(gene_ids)}
-
-    for key, pi in pis.items():
+    for (barcode, gx), pi in pis.items():
         try:
             pi = float(pi)
         except ValueError:
             continue
+        pi_matrix[barcode_indices[barcode], feature_indices[gx]] = pi
 
-        if group_by == ['barcode', 'GX']:
-            barcode, gx = key
-            pi_matrix[barcode_index[barcode], gene_id_index[gx]] = pi
-        elif group_by == ['barcode']:
-            barcode = key
-            pi_matrix[barcode_index[barcode]] = pi
-        elif group_by == ['GX']:
-            gx = key
-            pi_matrix[:, gene_id_index[gx]] = pi
-        elif group_by is None:
-            pi_matrix[:, :] = pi
-        else:
-            raise Exception(f'Unknown group_by {group_by}')
-
-    adata.layers['pi'] = pi_matrix
-    X = adata.X
-    if sparse.issparse(X):
-        X = X.toarray()
-    adata.layers['new_estimated'] = X * pi_matrix
-    adata.layers['old_estimated'] = X * (1 - pi_matrix)
-    return adata
+    if sparse.issparse(matrix):
+        matrix = matrix.toarray()
+    return pi_matrix, matrix * (1 - pi_matrix), matrix * pi_matrix

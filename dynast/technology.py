@@ -37,16 +37,13 @@ BARCODE_UMI_TECHNOLOGIES = [
 
 PLATE_TECHNOLOGIES = [
     Technology(
-        'smartseq',
-        {
+        'smartseq', {
             '--soloType': 'SmartSeq',
             '--soloUMIdedup': 'Exact',
-            '--soloStrand': 'Forward',
-            '--soloFeatures': 'Gene',  # Velocyto not yet supported
+            '--soloStrand': 'Unstranded',
             '--outSAMattributes': ['RG']
-        },
-        None
-    )
+        }, None
+    ),
 ]
 
 TECHNOLOGIES = BARCODE_UMI_TECHNOLOGIES + PLATE_TECHNOLOGIES

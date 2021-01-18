@@ -9,8 +9,7 @@ import pandas as pd
 from scipy import sparse
 
 from .. import utils
-from .bam import read_genes, read_no_conversions
-from .index import split_index
+from . import index
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
     (?P<barcode>[^,]*),
-    (?P<umi>[^,]*?),?
+    (?P<umi>[^,]*),
     (?P<GX>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
@@ -28,7 +27,24 @@ CONVERSIONS_PARSER = re.compile(
     (?P<A>[^,]*),
     (?P<C>[^,]*),
     (?P<G>[^,]*),
-    (?P<T>[^,]*)\n
+    (?P<T>[^,]*),
+    (?P<velocity>[^,]*),
+    (?P<transcriptome>[^,]*)\n
+    $''', re.VERBOSE
+)
+
+NO_CONVERSIONS_PARSER = re.compile(
+    r'''^
+    (?P<read_id>[^,]*),
+    (?P<barcode>[^,]*),
+    (?P<umi>[^,]*),
+    (?P<GX>[^,]*),
+    (?P<A>[^,]*),
+    (?P<C>[^,]*),
+    (?P<G>[^,]*),
+    (?P<T>[^,]*),
+    (?P<velocity>[^,]*),
+    (?P<transcriptome>[^,]*)\n
     $''', re.VERBOSE
 )
 
@@ -57,7 +73,7 @@ BASE_COLUMNS = sorted(BASE_IDX.keys())
 COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 
 
-def read_counts(counts_path):
+def read_counts(counts_path, *args, **kwargs):
     """Read counts CSV as a pandas dataframe.
 
     :param counts_path: path to CSV
@@ -66,21 +82,48 @@ def read_counts(counts_path):
     :return: counts dataframe
     :rtype: pandas.DataFrame
     """
-    dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint8 for column in COLUMNS}}
-    return pd.read_csv(counts_path, dtype=dtypes)
+    dtypes = {
+        'barcode': 'string',
+        'umi': 'string',
+        'GX': 'string',
+        'velocity': 'category',
+        'transcriptome': bool,
+        **{column: np.uint8
+           for column in COLUMNS}
+    }
+    return pd.read_csv(counts_path, dtype=dtypes, *args, **kwargs)
 
 
-def read_counts_complemented(counts_path, genes_path):
-    df_counts = read_counts(counts_path).merge(read_genes(genes_path)[['GX', 'strand']], on='GX')
+def complement_counts(df_counts, gene_infos):
+    df_counts['strand'] = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand'])
 
-    columns = ['barcode', 'GX'] + COLUMNS
+    columns = ['barcode', 'GX', 'velocity', 'transcriptome'] + COLUMNS
     df_forward = df_counts[df_counts.strand == '+'][columns]
     df_reverse = df_counts[df_counts.strand == '-'][columns]
 
-    df_reverse.columns = ['barcode', 'GX'] + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
+    df_reverse.columns = ['barcode', 'GX', 'velocity', 'transcriptome'] + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
     df_reverse = df_reverse[columns]
 
     return pd.concat((df_forward, df_reverse)).reset_index()
+
+
+def deduplicate_counts(df_counts):
+    # Add columns for conversion and base sums, which are used to prioritize
+    # duplicates.
+    df_counts['base_sum'] = df_counts[BASE_COLUMNS].sum(axis=1)
+    df_sorted = df_counts.sort_values(['base_sum', 'transcriptome']).drop(columns='base_sum')
+    df_deduplicated = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi', 'GX'], keep='last')].sort_values(
+        'barcode'
+    ).reset_index(drop=True)
+    return df_deduplicated
+
+
+def split_counts_by_velocity(df_counts):
+    dfs = {}
+    for velocity, df_part in df_counts.groupby('velocity'):
+        dfs[velocity] = df_part.reset_index(drop=True)
+    logger.debug(f'Found the following velocity assignments: {", ".join(dfs.keys())}')
+    return dfs
 
 
 def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
@@ -101,15 +144,78 @@ def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
     return adata
 
 
+def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
+    """Counts are assumed to be appropriately deduplicated.
+    """
+    # Transform to index for fast lookup
+    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
+    feature_indices = {feature: i for i, feature in enumerate(features)}
+
+    matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.uint32)
+    for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column]).size().items():
+        matrix[barcode_indices[barcode], feature_indices[feature]] = count
+
+    return matrix.tocsr()
+
+
+def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversion='TC'):
+    matrix = counts_to_matrix(
+        df_counts, barcodes, features, barcode_column=barcode_column, feature_column=feature_column
+    )
+    matrix_unlabeled = counts_to_matrix(
+        df_counts[df_counts[conversion] == 0],
+        barcodes,
+        features,
+        barcode_column=barcode_column,
+        feature_column=feature_column
+    )
+    matrix_labeled = counts_to_matrix(
+        df_counts[df_counts[conversion] > 0],
+        barcodes,
+        features,
+        barcode_column=barcode_column,
+        feature_column=feature_column
+    )
+    return matrix, matrix_unlabeled, matrix_labeled
+
+
+def count_no_conversions_part(
+    no_conversions_path,
+    counter,
+    lock,
+    pos,
+    n_lines,
+    temp_dir=None,
+    update_every=10000,
+):
+    count_path = utils.mkstemp(dir=temp_dir)
+    with open(no_conversions_path, 'r') as f, open(count_path, 'w') as out:
+        f.seek(pos)
+        for i in range(n_lines):
+            line = f.readline()
+            groups = NO_CONVERSIONS_PARSER.match(line).groupdict()
+            out.write(
+                f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
+                f'{",".join(groups.get(key, "0") for key in COLUMNS)},{groups["velocity"]},{groups["transcriptome"]}\n'
+            )
+            if (i + 1) % update_every == 0:
+                lock.acquire()
+                counter.value += update_every
+                lock.release()
+    lock.acquire()
+    counter.value += n_lines % update_every
+    lock.release()
+
+    return count_path
+
+
 def count_conversions_part(
     conversions_path,
     counter,
     lock,
     pos,
     n_lines,
-    no_umi=False,
     snps=None,
-    group_by=None,
     quality=20,
     temp_dir=None,
     update_every=10000,
@@ -145,12 +251,7 @@ def count_conversions_part(
     def is_snp(g):
         if not snps:
             return False
-
-        if group_by is None:
-            return int(g['genome_i']) in snps.get(g['contig'], set())
-        else:
-            # TODO
-            raise Exception()
+        return int(g['genome_i']) in snps.get(g['contig'], set())
 
     count_path = utils.mkstemp(dir=temp_dir)
 
@@ -170,8 +271,8 @@ def count_conversions_part(
             if read_id != groups['read_id']:
                 if read_id is not None:
                     out.write(
-                        f'{prev_groups["barcode"]},{"" if no_umi else prev_groups["umi"] + ","}{prev_groups["GX"]},'
-                        f'{",".join(str(c) for c in counts)}\n'
+                        f'{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
+                        f'{",".join(str(c) for c in counts)},{prev_groups["velocity"]},{prev_groups["transcriptome"]}\n'
                     )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
                 read_id = groups['read_id']
@@ -191,8 +292,8 @@ def count_conversions_part(
         # Add last record
         if read_id is not None:
             out.write(
-                f'{groups["barcode"]},{"" if no_umi else groups["umi"] + ","}{groups["GX"]},'
-                f'{",".join(str(c) for c in counts)}\n'
+                f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
+                f'{",".join(str(c) for c in counts)},{groups["velocity"]},{groups["transcriptome"]}\n'
             )
 
     lock.acquire()
@@ -206,10 +307,10 @@ def count_conversions(
     conversions_path,
     index_path,
     no_conversions_path,
+    no_index_path,
     counts_path,
-    no_umi=False,
+    deduplicate=True,
     snps=None,
-    group_by=None,
     quality=20,
     n_threads=8,
     temp_dir=None
@@ -242,15 +343,19 @@ def count_conversions(
     """
     # Load index
     logger.debug(f'Loading index {index_path} for {conversions_path}')
-    index = utils.read_pickle(index_path)
+    idx = utils.read_pickle(index_path)
+    no_idx = utils.read_pickle(no_index_path)
 
     # Split index into n contiguous pieces
     logger.debug(f'Splitting index into {n_threads} parts')
-    parts = split_index(index, n=n_threads)
+    parts = index.split_index(idx, n=n_threads)
+    no_parts = []
+    for i in range(0, len(no_idx), (len(no_idx) // n_threads) + 1):
+        no_parts.append((no_idx[i], min((len(no_idx) // n_threads) + 1, len(no_idx[i:]))))
 
     # Parse each part in a different process
     logger.debug(f'Spawning {n_threads} processes')
-    n_lines = sum(idx[1] for idx in index)
+    n_lines = sum(i[1] for i in idx) + len(no_idx)
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
     async_result = pool.starmap_async(
         partial(
@@ -258,66 +363,35 @@ def count_conversions(
             conversions_path,
             counter,
             lock,
-            no_umi=no_umi,
             snps=snps,
-            group_by=group_by,
             quality=quality,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), parts
     )
+    no_async_result = pool.starmap_async(
+        partial(count_no_conversions_part, no_conversions_path, counter, lock, temp_dir=tempfile.mkdtemp(dir=temp_dir)),
+        no_parts
+    )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(async_result, counter, n_lines)
+    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result)
     pool.join()
 
     # Combine csvs
-    combined_path = counts_path if no_umi else utils.mkstemp(dir=temp_dir)
+    combined_path = utils.mkstemp(dir=temp_dir) if deduplicate else counts_path
     logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
-        if no_umi:
-            out.write(f'barcode,GX,{",".join(COLUMNS)}\n'.encode())
-        else:
-            out.write(f'barcode,umi,GX,{",".join(COLUMNS)}\n'.encode())
+        out.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
         for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
+        for counts_part_path in no_async_result.get():
+            with open(counts_part_path, 'rb') as f:
+                shutil.copyfileobj(f, out)
 
-        # Write reads without any conversions
-        logger.debug(f'Writing reads with no conversions to {combined_path}')
-        df = read_no_conversions(no_conversions_path)
-        if not no_umi:
-            df = df.iloc[df[BASE_COLUMNS].sum(axis=1).argsort()]
-            df = df[~df.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
-                columns=['read_id']
-            ).sort_values('barcode').reset_index(drop=True)
-        df[CONVERSION_COLUMNS] = 0
-        columns = ['barcode', 'GX'] + COLUMNS if no_umi else ['barcode', 'umi', 'GX'] + COLUMNS
-        out.write(df[columns].to_csv(header=None, index=False).encode())
-
-    if not no_umi:
-        # Read in as dataframe and deduplicate based on CR and UB
-        # If there are duplicates, select the row with the most conversions
+    if deduplicate:
         logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
-        df = pd.read_csv(
-            combined_path,
-            dtype={
-                'barcode': 'string',
-                'umi': 'string',
-                'GX': 'string',
-                **{column: np.uint8
-                   for column in COLUMNS}
-            }
-        )
-
-        # Add columns for conversion and base sums, which are used to prioritize
-        # duplicates.
-        df['conversion_sum'] = df[CONVERSION_COLUMNS].sum(axis=1)
-        df['base_sum'] = df[BASE_COLUMNS].sum(axis=1)
-        df_sorted = df.sort_values(['base_sum', 'conversion_sum']).drop(columns=['conversion_sum', 'base_sum'])
-        df_filtered = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi'], keep='last')].drop(
-            columns='umi'
-        ).sort_values('barcode').reset_index(drop=True)
-        df_filtered.to_csv(counts_path, index=False)
+        deduplicate_counts(read_counts(combined_path)).to_csv(counts_path, index=False)
 
     return counts_path

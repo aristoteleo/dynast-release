@@ -30,8 +30,16 @@ def read_aggregates(aggregates_path):
     :return: aggregates dataframe
     :rtype: pandas.DataFrame
     """
-    dtypes = {'barcode': 'string', 'GX': 'string', **{column: np.uint16 for column in COLUMNS}}
+    dtypes = {'barcode': 'string', 'GX': 'string', 'count': np.uint16, **{column: np.uint8 for column in COLUMNS}}
     df = pd.read_csv(aggregates_path, dtype=dtypes)
+    return df
+
+
+def merge_aggregates(*dfs, conversion='TC'):
+    df = pd.concat(dfs).groupby(['barcode', 'GX', conversion, conversion[0]]).sum().reset_index()
+    df[conversion] = df[conversion].astype(np.uint8)
+    df[conversion[0]] = df[conversion[0]].astype(np.uint8)
+    df['count'] = df['count'].astype(np.uint16)
     return df
 
 

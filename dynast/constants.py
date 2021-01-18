@@ -1,9 +1,7 @@
-STATS_FILENAME = 'run_info.json'
+STATS_PREFIX = 'run_info'
 
-STAR_OUTPUT_DIR = 'STAR'
-STAR_CONTROL_OUTPUT_DIR = 'STAR_control'
 STAR_SOLO_DIR = 'Solo.out'
-STAR_GENE_DIR = 'Gene'
+STAR_GENE_DIR = 'GeneFull'
 STAR_RAW_DIR = 'raw'
 STAR_FILTERED_DIR = 'filtered'
 STAR_VELOCYTO_DIR = 'Velocyto'
@@ -13,26 +11,34 @@ STAR_BARCODES_FILENAME = 'barcodes.tsv'
 STAR_FEATURES_FILENAME = 'features.tsv'
 STAR_MATRIX_FILENAME = 'matrix.mtx'
 
+PARSE_DIR = '0_parse'
+GENES_FILENAME = 'genes.pkl.gz'
+TRANSCRIPTS_FILENAME = 'transcripts.pkl.gz'
 CONVERSIONS_FILENAME = 'conversions.csv'
 CONVERSIONS_INDEX_FILENAME = 'conversions.idx'
 NO_CONVERSIONS_FILENAME = 'no_conversions.csv'
+NO_CONVERSIONS_INDEX_FILENAME = 'no_conversions.idx'
 
-SNP_DIR = 'snp'
+SNP_DIR = '0_snp'
 COVERAGE_FILENAME = 'coverage.csv'
 COVERAGE_INDEX_FILENAME = 'coverage.idx'
 SNPS_FILENAME = 'snps.csv'
 
-COUNT_FILENAME = 'counts.csv'
+COUNT_DIR = '1_count'
+COUNTS_FILENAME = 'counts.csv'
+
 BARCODES_FILENAME = 'barcodes.csv'
-GENES_FILENAME = 'genes.csv'
+
+AGGREGATES_DIR = '2_aggregate'
+TRANSCRIPTOME_DIR = 'transcriptome'
+SPLICED_DIR = 'spliced'
+UNSPLICED_DIR = 'unspliced'
+AMBIGUOUS_DIR = 'ambiguous'
 RATES_FILENAME = 'rates.csv'
 
-AGGREGATES_DIR = 'aggregates'
-
-ESTIMATES_DIR = 'estimates'
+ESTIMATES_DIR = '3_estimate'
 P_E_FILENAME = 'p_e.csv'
 P_C_FILENAME = 'p_c.csv'
 AGGREGATE_FILENAME = 'aggregate.csv'
-PI_FILENAME = 'pi.csv'
 
 ADATA_FILENAME = 'adata.h5ad'
