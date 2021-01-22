@@ -108,10 +108,14 @@ def complement_counts(df_counts, gene_infos):
 
 
 def deduplicate_counts(df_counts):
-    # Add columns for conversion and base sums, which are used to prioritize
-    # duplicates.
     df_counts['base_sum'] = df_counts[BASE_COLUMNS].sum(axis=1)
-    df_sorted = df_counts.sort_values(['base_sum', 'transcriptome']).drop(columns='base_sum')
+    df_counts['conversion_sum'] = -df_counts[CONVERSION_COLUMNS].sum(axis=1)
+
+    # Sort by transcriptome last, longest alignment last, least conversion first
+    df_sorted = df_counts.sort_values(['transcriptome', 'base_sum',
+                                       'conversion_sum']).drop(columns=['base_sum', 'conversion_sum'])
+
+    # Always select transcriptome read if there are duplicates
     df_deduplicated = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi', 'GX'], keep='last')].sort_values(
         'barcode'
     ).reset_index(drop=True)
