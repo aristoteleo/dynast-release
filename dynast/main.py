@@ -240,7 +240,7 @@ def setup_count_args(parser, parent):
         metavar='CSV',
         help=(
             'CSV file of two columns: contig (i.e. chromosome) and genome position '
-            'of known SNPs. No header should be provided. (default: None)'
+            'of known SNPs. (default: None)'
         ),
         type=str,
         default=None,
@@ -269,15 +269,22 @@ def setup_count_args(parser, parent):
         help=argparse.SUPPRESS,
         action='store_true',
     )
+    parser_count.add_argument('--seed', help=argparse.SUPPRESS, type=int, default=None)
     parser_count.add_argument(
         '--control',
         help=(
-            'Indicate this is a control sample for the purposes of SNP detection. '
-            'The sample will be aligned, and SNPs will be called. No further processing '
-            'is done. After using this option, the called SNPs are intended to be used as '
-            'input to the `--snp-csv` option when running the test sample.'
+            'Indicate this is a control sample, which is used to estimate the background mutation rate '
+            'and/or detect SNPs. After using this option, the estimated background mutation rate and/or '
+            'detected SNPs can be input to the `--p-e` and `--snp-csv` options, respectively, when '
+            'running the test sample(s).'
         ),
         action='store_true',
+    )
+    parser_count.add_argument(
+        '--p-e',
+        help='Textfile containing a single number, indicating the estimated background mutation rate',
+        type=str,
+        default=None,
     )
     parser_count.add_argument('--subset-threshold', help=argparse.SUPPRESS, type=int, default=8000)
     parser_count.add_argument(
@@ -385,19 +392,24 @@ def parse_count(parser, args, temp_dir=None):
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
+    # Check control constraints
+    if args.control and args.p_e:
+        parser.error('`--control` and `--p-e` can not be used together')
+
+    # Check p_e is in correct format (only a single number)
+    control_p_e = None
+    if args.p_e:
+        with open(args.p_e, 'r') as f:
+            try:
+                control_p_e = float(f.read().strip())
+            except ValueError:
+                parser.error('`--p-e` must be a textfile containing a single decimal number')
+
     # Check group by
     if args.p_group_by.lower() == 'none':
         args.p_group_by = None
     else:
         args.p_group_by = args.p_group_by.split(',')
-
-    # Check requirements for controls
-    if args.control:
-        # snp_threshold needs to be provided
-        if not args.snp_threshold:
-            parser.error('`--snp-threshold` must be provided for controls')
-        if args.snp_csv:
-            parser.error('`--snp-csv` can not be used for controls')
 
     # Read barcodes
     barcodes = None
@@ -429,13 +441,15 @@ def parse_count(parser, args, temp_dir=None):
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
         read_threshold=args.read_threshold,
+        control_p_e=control_p_e,
         p_group_by=args.p_group_by,
         n_threads=args.t,
         re=args.re,
         temp_dir=temp_dir,
         nasc=args.nasc,
         subset_threshold=args.subset_threshold,
-        velocity=not args.no_velocity
+        velocity=not args.no_velocity,
+        seed=args.seed,
     )
 
 

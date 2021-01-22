@@ -15,10 +15,10 @@ RECOMMENDED_MEMORY = 16 * (1024**3)  # 16 GB
 
 # Common arguments for all STAR runs
 STAR_ARGUMENTS = {
-    '--outSAMmultNmax': 1,
     '--outSAMtype': ['BAM', 'SortedByCoordinate'],
     '--outSAMattributes': ['NH', 'HI', 'AS', 'NM', 'nM', 'MD', 'GX', 'GN'],
-    '--bamRemoveDuplicatesType': 'UniqueIdentical',
+    # Defaults are 0.6, but we set a looser cutoff because we expect the
+    # reads to have conversions.
     '--outFilterScoreMinOverLread': 0.3,
     '--outFilterMatchNminOverLread': 0.3,
 }
@@ -31,6 +31,7 @@ STAR_SOLO_ARGUMENTS = {
 }
 
 NASC_ARGUMENTS = {
+    '--outSAMmultNmax': 1,
     '--soloStrand': 'Forward',
     '--alignSJoverhangMin': 1000,
     '--alignSJDBoverhangMin': 1,

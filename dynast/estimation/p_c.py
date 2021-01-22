@@ -145,6 +145,5 @@ def estimate_p_c(
                 sp, p_c = em[key]
                 formatted_key = key if isinstance(key, str) else ",".join(key)
                 p_c_out.write(f'{formatted_key},{p_c}\n')
-    p_c = {key: pair[1] for key, pair in em.items()} if group_by is not None else em[1]
 
-    return p_c, p_c_path
+    return p_c_path

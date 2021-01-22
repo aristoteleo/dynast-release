@@ -17,8 +17,14 @@ def read_p_e(p_e_path, group_by=None):
     return dict(df.set_index(group_by)['p_e'])
 
 
+def estimate_p_e_control(df_counts, p_e_path, conversion='TC'):
+    p_e = df_counts[conversion].sum() / df_counts[conversion[0]].sum()
+    with open(p_e_path, 'w') as f:
+        f.write(str(p_e))
+    return p_e_path
+
+
 def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
-    logger.debug(f'p_e estimation will be grouped by {group_by} to {p_e_path}')
     if group_by is not None:
         df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
     else:
@@ -31,17 +37,15 @@ def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
     p_e = df_sum[conversion_columns].sum(axis=1) / df_sum[base_columns].sum(axis=1)
     if group_by is not None:
         p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
-        p_e = dict(p_e)
     else:
         p_e = p_e[0]
         with open(p_e_path, 'w') as f:
             f.write(str(p_e))
 
-    return p_e, p_e_path
+    return p_e_path
 
 
 def estimate_p_e_nasc(df_rates, p_e_path, conversion='TC', group_by=None):
-    logger.debug(f'p_e estimation will be grouped by {group_by} to {p_e_path}')
     if group_by is not None:
         df_rates = df_rates.set_index(group_by)
     p_e = (df_rates['CT'] + df_rates['GA']) / 2
@@ -53,4 +57,4 @@ def estimate_p_e_nasc(df_rates, p_e_path, conversion='TC', group_by=None):
         with open(p_e_path, 'w') as f:
             f.write(str(p_e))
 
-    return p_e, p_e_path
+    return p_e_path

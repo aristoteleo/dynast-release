@@ -27,6 +27,7 @@ def count(
     snp_threshold=0.5,
     snp_csv=None,
     read_threshold=16,
+    control_p_e=None,
     p_group_by=None,
     whitelist_path=None,
     n_threads=8,
@@ -35,6 +36,7 @@ def count(
     nasc=False,
     subset_threshold=8000,
     velocity=True,
+    seed=None,
 ):
     """
     """
@@ -161,12 +163,6 @@ def count(
             else:
                 logger.info('Skipped coverage calculation and SNP detection')
 
-    if control:
-        logger.info('Downstream processing skipped for controls')
-        STATS.end()
-        STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
-        return
-
     # Count conversions and calculate mutation rates
     count_dir = os.path.join(out_dir, constants.COUNT_DIR)
     counts_path = os.path.join(count_dir, constants.COUNTS_FILENAME)
@@ -195,7 +191,7 @@ def count(
                 temp_dir=temp_dir
             )
         else:
-            logger.info('Skipped conversion counting and mutation rate calculation')
+            logger.info('Skipped conversion counting')
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
@@ -249,39 +245,78 @@ def count(
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
 
-            logger.info('Estimating average mismatch rate in unlabeled RNA')
-            p_e, p_e_path = estimation.estimate_p_e(
-                df_counts_complemented if df_counts_complemented is not None else preprocessing.
-                complement_counts(preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)),
-                p_e_path,
-                conversion=conversion,
-                group_by=p_group_by,
-            ) if not nasc else estimation.estimate_p_e_nasc(
-                preprocessing.read_rates(rates_path),
-                p_e_path,
-                conversion=conversion,
-                group_by=p_group_by,
-            )
+            if control_p_e:
+                logger.info('`--p-e` provided. No background mutation rate estimation will be done.')
+                if p_group_by is not None:
+                    df_barcodes = preprocessing.read_counts(
+                        counts_path, usecols=p_group_by
+                    ).drop_duplicates().reset_index(drop=True)
+                    df_barcodes['p_e'] = control_p_e
+                    df_barcodes.to_csv(p_e_path, header=p_group_by + ['p_e'], index=False)
+                else:
+                    with open(p_e_path, 'w') as f:
+                        f.write(str(control_p_e))
 
-            logger.info('Estimating average mismatch rate in labeled RNA')
-            df_aggregates = preprocessing.merge_aggregates(
-                *[
-                    preprocessing.read_aggregates(paths[conversion])
-                    for key, paths in aggregates_paths.items()
-                    if key != 'transcriptome'
-                ],
-                conversion=conversion
-            ) if velocity else preprocessing.read_aggregates(aggregates_paths['transcriptome'][conversion])
-            p_c, p_c_path = estimation.estimate_p_c(
-                df_aggregates,
-                p_e,
-                p_c_path,
-                group_by=p_group_by,
-                value_columns=value_columns,
-                n_threads=n_threads,
-            )
+            else:
+                logger.info('Estimating average mismatch rate in unlabeled RNA')
+                if control:
+                    p_e_path = estimation.estimate_p_e_control(
+                        df_counts_complemented
+                        if df_counts_complemented is not None else preprocessing.complement_counts(
+                            preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
+                        ),
+                        p_e_path,
+                        conversion=conversion,
+                    )
+                elif nasc:
+                    p_e_path = estimation.estimate_p_e_nasc(
+                        preprocessing.read_rates(rates_path),
+                        p_e_path,
+                        conversion=conversion,
+                        group_by=p_group_by,
+                    )
+                else:
+                    p_e_path = estimation.estimate_p_e(
+                        df_counts_complemented
+                        if df_counts_complemented is not None else preprocessing.complement_counts(
+                            preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
+                        ),
+                        p_e_path,
+                        conversion=conversion,
+                        group_by=p_group_by,
+                    )
+
+            if not control:
+                logger.info('Estimating average mismatch rate in labeled RNA')
+                df_aggregates = preprocessing.merge_aggregates(
+                    *[
+                        preprocessing.read_aggregates(paths[conversion])
+                        for key, paths in aggregates_paths.items()
+                        if key != 'transcriptome'
+                    ],
+                    conversion=conversion
+                ) if velocity else preprocessing.read_aggregates(aggregates_paths['transcriptome'][conversion])
+                p_c_path = estimation.estimate_p_c(
+                    df_aggregates,
+                    estimation.read_p_e(p_e_path, group_by=p_group_by),
+                    p_c_path,
+                    group_by=p_group_by,
+                    value_columns=value_columns,
+                    n_threads=n_threads,
+                )
+            else:
+                logger.info('Average mismatch rate in labeled RNA was not calculated because `--control` was provided')
         else:
             logger.info('Skipped rate estimation')
+
+    if control:
+        logger.info('Downstream processing skipped for controls')
+        if snp_threshold:
+            logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
+        logger.info(f'Use `--p-e {p_e_path}` for test samples')
+        STATS.end()
+        STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
+        return
 
     velocity_blacklist = ['unassigned', 'ambiguous']
     pi_paths = {
@@ -292,22 +327,21 @@ def count(
     skip = utils.all_exists(list(pi_paths.values())) and not redo('pi')
     with STATS.step('pi', skipped=skip):
         if not skip:
-            p_e = estimation.read_p_e(p_e_path, group_by=p_group_by)
-            p_c = estimation.read_p_c(p_c_path, group_by=p_group_by)
             for key, paths in aggregates_paths.items():
                 if key in velocity_blacklist:
                     continue
                 logger.info(f'Estimating fraction of labeled RNA for `{key}` reads')
                 pi_paths[key] = estimation.estimate_pi(
                     preprocessing.read_aggregates(paths[conversion]),
-                    p_e,
-                    p_c,
+                    estimation.read_p_e(p_e_path, group_by=p_group_by),
+                    estimation.read_p_c(p_c_path, group_by=p_group_by),
                     pi_paths[key],
                     p_group_by=p_group_by,
                     value_columns=value_columns,
                     n_threads=n_threads,
                     threshold=read_threshold,
                     subset_threshold=subset_threshold,
+                    seed=seed,
                 )
         else:
             logger.info('Skipped estimation of labeled RNA')

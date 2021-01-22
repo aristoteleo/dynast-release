@@ -41,7 +41,8 @@ PLATE_TECHNOLOGIES = [
             '--soloType': 'SmartSeq',
             '--soloUMIdedup': 'Exact',
             '--soloStrand': 'Unstranded',
-            '--outSAMattributes': ['RG']
+            '--outSAMattributes': ['RG'],
+            '--bamRemoveDuplicatesType': 'UniqueIdentical',
         }, None
     ),
 ]

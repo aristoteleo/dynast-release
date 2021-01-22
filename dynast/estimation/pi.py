@@ -125,6 +125,7 @@ def estimate_pi(
     n_threads=8,
     threshold=16,
     subset_threshold=8000,
+    seed=None,
 ):
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
 
@@ -176,7 +177,15 @@ def estimate_pi(
             guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
 
             futures[executor.submit(
-                fit_stan_mcmc, values[idx], p_e, p_c, guess=guess, pi_func=beta_mode, subset_threshold=subset_threshold
+                fit_stan_mcmc,
+                values[idx],
+                p_e,
+                p_c,
+                guess=guess,
+                pi_func=beta_mode,
+                subset_threshold=subset_threshold,
+                seed=seed,
+                subset_seed=seed,
             )] = key
 
         for future in utils.as_completed_with_progress(futures):
