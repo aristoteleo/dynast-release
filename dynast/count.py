@@ -45,6 +45,9 @@ def count(
         return re in config.RE_CHOICES[:config.RE_CHOICES.index(key) + 1]
 
     STATS.start()
+    stats_path = os.path.join(
+        out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(STATS.start_time, "%Y%m%d_%H%M%S_%f")}.json'
+    )
     os.makedirs(out_dir, exist_ok=True)
 
     # Check memory.
@@ -315,7 +318,7 @@ def count(
             logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
         logger.info(f'Use `--p-e {p_e_path}` for test samples')
         STATS.end()
-        STATS.save(os.path.join(out_dir, constants.STATS_FILENAME))
+        STATS.save(stats_path)
         return
 
     velocity_blacklist = ['unassigned', 'ambiguous']
@@ -402,8 +405,4 @@ def count(
         else:
             logger.info('Skipped splitting of new and old RNA')
     STATS.end()
-    STATS.save(
-        os.path.join(
-            out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(STATS.start_time, "%Y%m%d_%H%M%S_%f")}.json'
-        )
-    )
+    STATS.save(stats_path)

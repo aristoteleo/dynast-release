@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 def read_pi(pi_path):
+    """Read pi CSV as a dictionary.
+
+    :param pi_path: path to CSV containing pi values
+    :type pi_path: str
+
+    :return: dictionary with barcodes and genes as keys
+    :rtype: dictionary
+    """
     df = pd.read_csv(pi_path, usecols=['barcode', 'GX', 'pi'])
     return dict(df.set_index(['barcode', 'GX'])['pi'])
 
@@ -25,15 +33,46 @@ _model = None
 
 
 def initializer(model):
+    """Multiprocessing initializer.
+    https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
+
+    This initializer performs a one-time expensive initialization for each
+    process.
+    """
     global _model
     _model = model
 
 
 def beta_mean(alpha, beta):
+    """Calculate the mean of a beta distribution.
+    https://en.wikipedia.org/wiki/Beta_distribution
+
+    :param alpha: first parameter of the beta distribution
+    :type alpha: float
+    :param beta: second parameter of the beta distribution
+    :type beta: float
+
+    :return: mean of the beta distribution
+    :rtype: float
+    """
     return alpha / (alpha + beta)
 
 
 def beta_mode(alpha, beta):
+    """Calculate the mode of a beta distribution.
+    https://en.wikipedia.org/wiki/Beta_distribution
+
+    When the distribution is bimodal (alpha, beta < 1), this function returns
+    `nan`.
+
+    :param alpha: first parameter of the beta distribution
+    :type alpha: float
+    :param beta: second parameter of the beta distribution
+    :type beta: float
+
+    :return: mode of the beta distribution
+    :rtype: float
+    """
     pi = float('nan')
 
     # We ignore the following two cases:
@@ -50,6 +89,18 @@ def beta_mode(alpha, beta):
 
 
 def guess_beta_parameters(guess, strength=5):
+    """Given a `guess` of the mean of a beta distribution, calculate beta
+    distribution parameters such that the distribution is skewed by some
+    `strength` toward the `guess`.
+
+    :param guess: guess of the mean of the beta distribution
+    :type guess: float
+    :param strength: strength of the skew, defaults to `5`
+    :type strength: int
+
+    :return: beta distribution parameters (alpha, beta)
+    :rtype: (float, float)
+    """
     alpha = max(strength * guess, 0.1)
     beta = max(strength - alpha, 0.1)
     return alpha, beta
@@ -69,6 +120,44 @@ def fit_stan_mcmc(
     subset_threshold=8000,
     subset_seed=None,
 ):
+    """Run MCMC to estimate the fraction of labeled RNA.
+
+    :param values: array of three columns encoding a sparse array in
+                   (row, column, value) format, zero-indexed, where
+                       row:    number of conversions
+                       column: nucleotide content
+                       value:  number of reads
+    :type values: numpy.ndarray
+    :param p_e: average mutation rate in unlabeled RNA
+    :type p_e: float
+    :param p_c: average mutation rate in labeled RNA
+    :type p_c: float
+    :param guess: guess for the fraction of labeled RNA, defaults to `0.5`
+    :type guess: float, optional
+    :param model: pyStan model to run MCMC with, defaults to `None`
+                  if not provided, will try to use the `_model` global variable
+    :type model: pystan.StanModel, optional
+    :param pi_func: a function that produces the estimation of pi given the
+                    beta distribution parameters (alpha, beta), defaults to
+                    a function that always returns `None`
+    :type pi_func: callable, optional
+    :param n_chains: number of MCMC chains, defaults to `1`
+    :type n_chains: int, optional
+    :param n_warmup: number of warmup iterations, defaults to `500`
+    :type n_warmup: int, optional
+    :param n_iters: number of MCMC iterations, excluding any warmups, defaults to `1000`
+    :type n_iters: int, optional
+    :param seed: random seed used for MCMC, defaults to `None`
+    :type seed: int, optional
+    :param subset_threshold: any conversion-content pairs that have greater than
+                             this many reads will be subset randomly, defaults to `8000`
+    :type subset_threshold: int, optional
+    :param subset_seed: random seed used for subsetting reads, defaults to `None`
+    :type subset_seed: int, optional
+
+    :return: (guess, alpha, beta, pi)
+    :rtype: (float, float, float, float)
+    """
     model = model or _model
     conversions = []
     contents = []
@@ -127,6 +216,32 @@ def estimate_pi(
     subset_threshold=8000,
     seed=None,
 ):
+    """Estimate the fraction of labeled RNA.
+
+    :param df_aggregates: Pandas dataframe containing aggregate values
+    :type df_aggregates: pandas.DataFrame
+    :param p_e: average mutation rate in unlabeled RNA
+    :type p_e: float
+    :param p_c: average mutation rate in labeled RNA
+    :type p_c: float
+    :param pi_path: path to write pi estimates
+    :type pi_path: str
+    :param p_group_by: columns that p_e/p_c estimation was grouped by, defaults to `None`
+    :type p_group_by: list, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param threshold: any conversion-content pairs with fewer than this many reads
+                      will not be processed, defaults to `16`
+    :type threshold: int, optional
+    :param subset_threshold: any conversion-content pairs that have greater than
+                             this many reads will be subset randomly, defaults to `8000`
+    :type subset_threshold: int, optional
+    :param seed: random seed, defaults to `None`
+    :type seed: int, optional
+
+    :return: path to pi output
+    :rtype: str
+    """
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
 
     logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')
@@ -208,6 +323,20 @@ def estimate_pi(
 
 
 def split_matrix(matrix, pis, barcodes, features):
+    """Split the given matrix based on provided fraction of new RNA.
+
+    :param matrix: matrix to split
+    :type matrix: numpy.ndarray or scipy.sparse.spmatrix
+    :param pis: dictionary containing pi estimates
+    :type pis: dictionary
+    :param barcodes: all barcodes
+    :type barcodes: list
+    :param features: all features (i.e. genes)
+    :type features: list
+
+    :return: (pis as a matrix, matrix of unlabeled RNA, matrix of labeled RNA)
+    :rtype: (numpy.ndarray, numpy.ndarray, numpy.ndarray)
+    """
     pi_matrix = np.full((len(barcodes), len(features)), np.nan)
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
     feature_indices = {feature: i for i, feature in enumerate(features)}
