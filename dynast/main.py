@@ -507,9 +507,10 @@ def main():
 
     # Silence logging from other packages
     silence_logger('anndata')
-    silence_logger('numba')
-    silence_logger('pystan')
     silence_logger('h5py')
+    silence_logger('numba')
+    silence_logger('pysam')
+    silence_logger('pystan')
 
     logger.debug('Printing verbose output')
     logger.debug(f'Input args: {args}')

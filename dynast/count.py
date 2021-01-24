@@ -199,13 +199,13 @@ def count(
     aggregates_paths = {
         key: {
             conversion: os.path.join(aggregates_dir, key, f'{conversion}.csv')
-            for conversion in preprocessing.CONVERSION_COLUMNS
+            for conversion in preprocessing.conversion.CONVERSION_COLUMNS
         }
         for key in preprocessing.read_counts(counts_path, usecols=['velocity'])['velocity'].unique()
     } if velocity else {}
     aggregates_paths['transcriptome'] = {
         conversion: os.path.join(aggregates_dir, constants.TRANSCRIPTOME_DIR, f'{conversion}.csv')
-        for conversion in preprocessing.CONVERSION_COLUMNS
+        for conversion in preprocessing.conversion.CONVERSION_COLUMNS
     }
     aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
     df_counts_uncomplemented = None
