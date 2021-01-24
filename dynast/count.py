@@ -38,8 +38,6 @@ def count(
     velocity=True,
     seed=None,
 ):
-    """
-    """
 
     def redo(key):
         return re in config.RE_CHOICES[:config.RE_CHOICES.index(key) + 1]

@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import psutil
 import scipy.io
-from scipy import sparse
 from tqdm import tqdm
 
 from . import config
@@ -174,6 +173,14 @@ def combine_arguments(args, additional):
     Any duplicate keys will be merged according to the following procedure:
     1. If the value in both dictionaries are lists, the two lists are combined.
     2. Otherwise, the value in the first dictionary is OVERWRITTEN.
+
+    :param args: original command-line arguments
+    :type args: dictionary
+    :param additional: additional command-line arguments
+    :type additional: dictionary
+
+    :return: combined command-line arguments
+    :rtype: dictionary
     """
     new_args = args.copy()
 
@@ -191,6 +198,12 @@ def combine_arguments(args, additional):
 
 def arguments_to_list(args):
     """Convert a dictionary of command-line arguments to a list.
+
+    :param args: command-line arguments
+    :type args: dictionary
+
+    :return: list of command-line arguments
+    :rtype: list
     """
     arguments = []
     for key, value in args.items():
@@ -384,29 +397,15 @@ def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
     return adata
 
 
-def overlay_STAR_velocity_matrix(adata, barcodes_path, features_path, matrix_path):
-    barcodes = pd.read_csv(barcodes_path, names=['barcode'], index_col=0).index
-    features = pd.read_csv(features_path, names=['gene_id'], sep='\t', usecols=[0], index_col=0).index
-
-    # Mask barcodes and features to those in the filtered matrix
-    # IMPORTANT: barcodes and features must appear in the same order
-    barcodes_mask = barcodes.isin(adata.obs.index)
-    features_mask = features.isin(adata.var.index)
-
-    mtx = np.loadtxt(matrix_path, skiprows=3, delimiter=' ', dtype=np.uint32)
-    shape = (len(features), len(barcodes))
-    spliced = sparse.coo_matrix((mtx[:, 2], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
-    unspliced = sparse.coo_matrix((mtx[:, 3], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
-    ambiguous = sparse.coo_matrix((mtx[:, 4], (mtx[:, 0] - 1, mtx[:, 1] - 1)), shape=shape, dtype=np.uint32).T.tocsr()
-
-    adata.layers['spliced'] = spliced[barcodes_mask][:, features_mask]
-    adata.layers['unspliced'] = unspliced[barcodes_mask][:, features_mask]
-    adata.layers['ambiguous'] = ambiguous[barcodes_mask][:, features_mask]
-
-    return adata
-
-
 def make_pool_with_counter(n_threads):
+    """Create a new Process pool with a shared progress counter.
+
+    :param n_threads: number of processes
+    :type n_threads: int
+
+    :return: (Process pool, progress counter, lock)
+    :rtype: (multiprocessing.Pool, multiprocessing.Value, multiprocessing.Lock)
+    """
     manager = multiprocessing.Manager()
     counter = manager.Value('I', 0)
     lock = manager.Lock()
@@ -415,6 +414,16 @@ def make_pool_with_counter(n_threads):
 
 
 def display_progress_with_counter(counter, total, *async_results):
+    """Display TQDM progress bar for displaying multiprocessing progress.
+
+    :param counter: progress counter
+    :type counter: multiprocessing.Value
+    :param total: maximum number of units of processing
+    :type total: int
+    :param *async_results: multiprocessing results to monitor. These are used to
+                           determine when all processes are done.
+    :type *async_results: multiprocessing.pool.AsyncResult
+    """
     with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
@@ -424,7 +433,36 @@ def display_progress_with_counter(counter, total, *async_results):
             previous_progress = progress
 
 
+def as_completed_with_progress(futures):
+    """Wrapper around `concurrent.futures.as_completed` that displays a progress bar.
+
+    :param futures: iterator of `concurrent.futures.Future` objects
+    :type futures: iterable
+    """
+    with tqdm(total=len(futures), ascii=True, smoothing=0.1) as pbar:
+        for future in as_completed(futures):
+            yield future
+            pbar.update(1)
+
+
 def merge_dictionaries(d1, d2, f=add, default=0):
+    """Merge two dictionaries, applying an arbitrary function `f` to duplicate keys.
+    Dictionaries may be nested.
+
+    :param d1: first dictionary
+    :type d1: dictionary
+    :param d2: second dictionary
+    :type d2: dictionary
+    :param f: merge function to use for keys present in both dictionaries. This
+              function should take two arguments and return one.
+    :type f: callable
+    :param default: default value to use for keys not present in the first dictionary
+                    but present in the second
+    :type default: object
+
+    :return: merged dictionary
+    :rtype: dictionary
+    """
     merged = d1.copy()
     for key, value2 in d2.items():
         if key in d1 and isinstance(d1[key], dict) != isinstance(value2, dict):
@@ -439,6 +477,18 @@ def merge_dictionaries(d1, d2, f=add, default=0):
 
 
 def flatten_dictionary(d, keys=None):
+    """Generator that flattens the given dictionary into 2-element tuples
+    containing keys and values. For nested dictionaries, the keys are
+    appended into a list.
+
+    :param d: dictionary to flatten
+    :type d: dictionary
+    :param keys: previous keys, defaults to `None`
+    :type keys: list, optional
+
+    :return: flattened dictionary
+    :rtype: (object, object)
+    """
     keys = keys or []
     for k, v in d.items():
         new_keys = keys + [k]
@@ -449,18 +499,31 @@ def flatten_dictionary(d, keys=None):
 
 
 def write_pickle(obj, path, *args, **kwargs):
+    """Pickle a Python object and compress with Gzip.
+
+    Any additional arguments and keyword arguments are passed to `pickle.dump`.
+
+    :param obj: object to pickle
+    :type obj: object
+    :param path: path to save pickle
+    :type path: str
+
+    :return: saved pickle path
+    :rtype: str
+    """
     with gzip.open(path, 'wb') as f:
         pickle.dump(obj, f, *args, **kwargs)
     return path
 
 
 def read_pickle(path):
+    """Load a Python pickle that was compressed with Gzip.
+
+    :param path: path to pickle
+    :type path: str
+
+    :return: unpickled object
+    :rtype: object
+    """
     with gzip.open(path, 'rb') as f:
         return pickle.load(f)
-
-
-def as_completed_with_progress(futures):
-    with tqdm(total=len(futures), ascii=True, smoothing=0.1) as pbar:
-        for future in as_completed(futures):
-            yield future
-            pbar.update(1)

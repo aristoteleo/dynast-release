@@ -35,11 +35,14 @@ def STAR_solo(
     :type whitelist_path: str, optional
     :param n_threads: number of threads to use, defaults to `8`
     :type n_threads: int, optional
-    :param n_bins: number of bins to use when sorting BAM, defaults to `50`
-    :type n_bins: int, optional
     :param temp_dir: STAR temporary directory, defaults to `None`, which
                      uses the system temporary directory
     :type temp_dir: str, optional
+    :param nasc: whether or not to use STAR configuration used in NASC-seq pipeline,
+                 defaults to `False`
+    :type nasc: bool, optional
+    :param overrides: STAR command-line argument overrides, defaults to `None`
+    :type overrides: dictionary, optional
 
     :return: dictionary containing output files
     :rtype: dict
@@ -176,7 +179,6 @@ def align(
     nasc=False,
     overrides=None,
 ):
-    STATS.start()
     os.makedirs(out_dir, exist_ok=True)
 
     # Check memory.
@@ -224,19 +226,18 @@ def align(
 
     STAR_required = utils.flatten_dict_values(STAR_result)
     skip = utils.all_exists(STAR_required)
-    with STATS.step('align', skipped=skip):
-        if not skip:
-            logger.info(f'STAR binary found at {utils.get_STAR_binary_path()}')
-            STAR_result = STAR_solo(
-                fastqs,
-                index_dir,
-                out_dir,
-                technology,
-                whitelist_path=whitelist_path,
-                n_threads=n_threads,
-                temp_dir=temp_dir,
-                nasc=nasc,
-                overrides=overrides,
-            )
-        else:
-            logger.info('Alignment files already exist. Provide `--overwrite` to overwrite.')
+    if not skip:
+        logger.info(f'STAR binary found at {utils.get_STAR_binary_path()}')
+        STAR_result = STAR_solo(
+            fastqs,
+            index_dir,
+            out_dir,
+            technology,
+            whitelist_path=whitelist_path,
+            n_threads=n_threads,
+            temp_dir=temp_dir,
+            nasc=nasc,
+            overrides=overrides,
+        )
+    else:
+        logger.info('Alignment files already exist. Provide `--overwrite` to overwrite.')

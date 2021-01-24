@@ -7,6 +7,8 @@ from . import __version__
 
 
 class Step:
+    """Class that represents a processing step.
+    """
 
     def __init__(self, skipped=False, **kwargs):
         self.start_time = None
@@ -16,13 +18,22 @@ class Step:
         self.extra = kwargs
 
     def start(self):
+        """Signal the step has started.
+        """
         self.start_time = dt.datetime.now()
 
     def end(self):
+        """Signal the step has ended.
+        """
         self.end_time = dt.datetime.now()
         self.elapsed = (self.end_time - self.start_time).total_seconds()
 
     def to_dict(self):
+        """Convert this step to a dictionary.
+
+        :return: dictionary of class variables
+        :rtype: dictionary
+        """
         return {
             'start_time': None if self.skipped else self.start_time.isoformat(),
             'end_time': None if self.skipped else self.end_time.isoformat(),
@@ -64,6 +75,15 @@ class Stats:
 
     @contextmanager
     def step(self, key, skipped=False, **kwargs):
+        """Register a processing step.
+
+        Any additional keyword arguments are passed to the constructor of `Step`.
+
+        :param key: processing key
+        :type key: str
+        :param skipped: whether or not this step is skipped, defaults to `False`
+        :type skipped: bool, optional
+        """
         step = Step(skipped=skipped, **kwargs)
         self.steps[key] = step
         self.step_order.append(key)
