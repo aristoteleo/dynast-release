@@ -6,11 +6,8 @@ import sys
 import warnings
 
 from . import __version__
-from .align import align
 from .config import RE_CHOICES
-from .count import count
 from .preprocessing.conversion import CONVERSION_COLUMNS
-from .ref import ref
 from .technology import TECHNOLOGIES_MAP
 
 logger = logging.getLogger(__name__)
@@ -309,6 +306,8 @@ def parse_ref(parser, args, temp_dir=None):
             f'STAR index directory {args.i} already exists. '
             'Please provide a different directory or remove the existing one.'
         )
+
+    from .ref import ref
     ref(
         args.fasta,
         args.gtf,
@@ -370,6 +369,7 @@ def parse_align(parser, args, temp_dir=None):
         # Clean
         overrides = {arg: parts[0] if len(parts) == 1 else parts for arg, parts in overrides.items()}
 
+    from .align import align
     align(
         args.fastqs,
         args.i,
@@ -427,6 +427,7 @@ def parse_count(parser, args, temp_dir=None):
         else:
             args.strand = 'unstranded'
 
+    from .count import count
     count(
         args.bam,
         args.g,
