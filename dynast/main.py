@@ -9,7 +9,7 @@ from . import __version__
 from .align import align
 from .config import RE_CHOICES
 from .count import count
-from .preprocessing import CONVERSION_COLUMNS
+from .preprocessing.conversion import CONVERSION_COLUMNS
 from .ref import ref
 from .technology import TECHNOLOGIES_MAP
 

@@ -70,6 +70,13 @@ class GTF:
 
 
 class Segment:
+    """Class to represent an integer interval segment, zero-indexed.
+
+    :param start: start position
+    :type start: int
+    :param end: end position
+    :type end: int
+    """
 
     def __init__(self, start, end):
         assert end > start
@@ -123,6 +130,11 @@ class Segment:
 
 
 class SegmentCollection:
+    """Class to represent a collection of integer interval segments, zero-indexed.
+
+    :param segments: list of initial segments, defaults to `None`
+    :type segments: list, optional
+    """
 
     def __init__(self, segments=None):
         self.segments = sorted(segments) if segments else []
@@ -260,6 +272,14 @@ class SegmentCollection:
 
 
 def parse_gtf(gtf_path):
+    """Parse GTF for gene and transcript informations.
+
+    :param gtf_path: path to GTF
+    :type gtf_path: str
+
+    :return: (gene information, transcript information)
+    :rtype: (dictionary, dictionary)
+    """
     gtf = GTF(gtf_path)
 
     gene_infos = {}

@@ -36,6 +36,16 @@ def read_aggregates(aggregates_path):
 
 
 def merge_aggregates(*dfs, conversion='TC'):
+    """Merge multiple aggregate dataframes into one.
+
+    :param *dfs: dataframes to merge
+    :type *dfs: pandas.DataFrame
+    :param conversion: the conversion in question, defaults to `TC`
+    :type conversion: str, optional
+
+    :return: merged dataframe
+    :rtype: pandas.DataFrame
+    """
     df = pd.concat(dfs).groupby(['barcode', 'GX', conversion, conversion[0]]).sum().reset_index()
     df[conversion] = df[conversion].astype(np.uint8)
     df[conversion[0]] = df[conversion[0]].astype(np.uint8)

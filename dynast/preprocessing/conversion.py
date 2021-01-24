@@ -76,6 +76,8 @@ COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 def read_counts(counts_path, *args, **kwargs):
     """Read counts CSV as a pandas dataframe.
 
+    Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
+
     :param counts_path: path to CSV
     :type counts_path: str
 
@@ -95,6 +97,17 @@ def read_counts(counts_path, *args, **kwargs):
 
 
 def complement_counts(df_counts, gene_infos):
+    """Complement the counts in the counts dataframe according to gene strand.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param gene_infos: dictionary containing gene information, as returned by
+                       `preprocessing.gtf.parse_gtf`
+    :type gene_infos: dictionary
+
+    :return: counts dataframe with counts complemented for reads mapping to genes on the reverse strand
+    :rtype: pandas.DataFrame
+    """
     df_counts['strand'] = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand'])
 
     columns = ['barcode', 'GX', 'velocity', 'transcriptome'] + COLUMNS
@@ -108,6 +121,19 @@ def complement_counts(df_counts, gene_infos):
 
 
 def deduplicate_counts(df_counts):
+    """Deduplicate counts based on barcode, UMI, and gene.
+
+    The order of priority is the following.
+    1. Reads that align to the transcriptome (exon only)
+    2. Reads with the longest alignment (largest sum of nucleotide columns)
+    3. Reads with least number of conversions (smallest sum of conversion columns)
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+
+    :return: deduplicated counts dataframe
+    :rtype: pandas.DataFrame
+    """
     df_counts['base_sum'] = df_counts[BASE_COLUMNS].sum(axis=1)
     df_counts['conversion_sum'] = -df_counts[CONVERSION_COLUMNS].sum(axis=1)
 
@@ -123,6 +149,15 @@ def deduplicate_counts(df_counts):
 
 
 def split_counts_by_velocity(df_counts):
+    """Split the given counts dataframe by the `velocity` column.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+
+    :return: dictionary containing `velocity` column values as keys and the
+             subset dataframe as values
+    :rtype: dictionary
+    """
     dfs = {}
     for velocity, df_part in df_counts.groupby('velocity'):
         dfs[velocity] = df_part.reset_index(drop=True)
@@ -130,26 +165,24 @@ def split_counts_by_velocity(df_counts):
     return dfs
 
 
-def split_counts_by_umi(adata, df_counts, conversion='TC', filter_dict=None):
-    filter_dict = filter_dict or {}
-    for column, values in filter_dict.items():
-        df_counts = df_counts[df_counts[column].isin(values)]
-
-    new = sparse.lil_matrix(adata.shape, dtype=np.uint32)
-    counts = df_counts[df_counts[conversion] > 0].groupby(['barcode', 'GX']).size()
-    for (barcode, gene_id), count in counts.items():
-        i = adata.obs.index.get_loc(barcode)
-        j = adata.var.index.get_loc(gene_id)
-        new[i, j] = count
-    new = new.tocsr()
-    adata.layers['new_umi'] = new
-    adata.layers['old_umi'] = adata.X - new
-
-    return adata
-
-
 def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
-    """Counts are assumed to be appropriately deduplicated.
+    """Convert a counts dataframe to a sparse counts matrix.
+
+    Counts are assumed to be appropriately deduplicated.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param barcodes: list of barcodes that will map to the rows
+    :type barcodes: list
+    :param features: list of features (i.e. genes) that will map to the columns
+    :type features: list
+    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
+    :type barcode_column: str
+    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
+    :type feature_column: str
+
+    :return: sparse counts matrix
+    :rtype: scipy.sparse.csrmatrix
     """
     # Transform to index for fast lookup
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
@@ -163,6 +196,24 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
 
 
 def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversion='TC'):
+    """Split counts dataframe into two count matrices by a column.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param barcodes: list of barcodes that will map to the rows
+    :type barcodes: list
+    :param features: list of features (i.e. genes) that will map to the columns
+    :type features: list
+    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
+    :type barcode_column: str, optional
+    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
+    :type feature_column: str, optional
+    :param conversion: conversion in question, defaults to `TC`
+    :type conversion: str, optional
+
+    :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
+    :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
+    """
     matrix = counts_to_matrix(
         df_counts, barcodes, features, barcode_column=barcode_column, feature_column=feature_column
     )
@@ -192,6 +243,28 @@ def count_no_conversions_part(
     temp_dir=None,
     update_every=10000,
 ):
+    """Count reads that have no conversion.
+
+    :param no_conversions_path: no conversions CSV path
+    :type no_conversions_path: str
+    :param counter: counter that keeps track of how many reads have been processed
+    :type counter: multiprocessing.Value
+    :param lock: semaphore for the `counter` so that multiple processes do not
+                 modify it at the same time
+    :type lock: multiprocessing.Lock
+    :param pos: file handle position at which to start reading the conversions CSV
+    :type pos: int
+    :param n_lines: number of lines to parse from the conversions CSV, starting
+                    from position `pos`
+    :type n_lines: int
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+    :param update_every: update the counter every this many reads, defaults to `5000`
+    :type update_every: int, optional
+
+    :return: path to temporary counts CSV
+    :rtype: str
+    """
     count_path = utils.mkstemp(dir=temp_dir)
     with open(no_conversions_path, 'r') as f, open(count_path, 'w') as out:
         f.seek(pos)
@@ -240,6 +313,9 @@ def count_conversions_part(
     :param n_lines: number of lines to parse from the conversions CSV, starting
                     from position `pos`
     :type n_lines: int
+    :param snps: dictionary of contig as keys and list of genomic positions as
+                 values that indicate SNP locations, defaults to `None`
+    :type snps: dictionary, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -328,22 +404,27 @@ def count_conversions(
     :type conversions_path: str
     :param index_path: path to conversions index
     :type index_path: str
-    :param barcodes_path: path to write barcodes CSV
-    :type barcodes_path: str
-    :param genes_path: path to write genes CSV
-    :type genes_path: str
+    :param no_conversions_path: path to output information about reads that do not have any conversions
+    :type no_conversions_path: str
+    :param no_index_path: path to no conversions index
+    :type no_index_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
+    :param deduplicate: whether to deduplicate reads based on UMI, defaults to `True`
+    :type deduplicate: bool, optional
+    :param snps: dictionary of contig as keys and list of genomic positions as
+                 values that indicate SNP locations, defaults to `None`
+    :type snps: dictionary, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
     :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int
+    :type n_threads: int, optional
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
 
-    :return: (`barcodes_path`, `genes_path`, `counts_path`)
-    :rtype: tuple
+    :return: path to counts CSV
+    :rtype: str
     """
     # Load index
     logger.debug(f'Loading index {index_path} for {conversions_path}')

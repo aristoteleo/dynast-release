@@ -24,9 +24,39 @@ def calculate_coverage_contig(
     barcodes=None,
     temp_dir=None,
     update_every=50000,
-    flush_every=10000,
     velocity=True
 ):
+    """Calculate converage for a specific contig. This function is designed to
+    be called as a separate process.
+
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
+    :param counter: counter that keeps track of how many reads have been processed
+    :type counter: multiprocessing.Value
+    :param lock: semaphore for the `counter` so that multiple processes do not
+                 modify it at the same time
+    :type lock: multiprocessing.Lock
+    :param contig: only reads that map to this contig will be processed
+    :type contig: str
+    :param indices: genomic positions to consider
+    :type indices: list
+    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+                    `umi` column, defaults to `None`
+    :type umi_tag: str, optional
+    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+                        is output in the `barcode` column, defaults to `None`
+    :type barcode_tag: str, optional
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
+    :param update_every: update the counter every this many reads, defaults to `50000`
+    :type update_every: int, optional
+    :param velocity: whether or not velocities were assigned
+    :type velocity: bool, optional
+
+    :return: (coverage CSV path, index path)
+    :rtype: (str, str)
+    """
     coverage_path = utils.mkstemp(dir=temp_dir)
     index_path = utils.mkstemp(dir=temp_dir)
 
@@ -52,6 +82,13 @@ def calculate_coverage_contig(
             pos = coverage_out.tell()
             n += 1
             if n % update_every == 0:
+                # Flush
+                for key in sorted(list(coverage.keys())):
+                    if key[1] < read.reference_start:
+                        n_lines += 1
+                        coverage_out.write(f'{key[0]},{contig},{key[1]},{coverage[key]}\n')
+                        del coverage[key]
+
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
@@ -80,13 +117,6 @@ def calculate_coverage_contig(
                     key = (barcode, genome_i)
                     coverage.setdefault(key, 0)
                     coverage[key] += 1
-
-            if n % flush_every == 0:
-                for key in sorted(list(coverage.keys())):
-                    if key[1] < read.reference_start:
-                        n_lines += 1
-                        coverage_out.write(f'{key[0]},{contig},{key[1]},{coverage[key]}\n')
-                        del coverage[key]
 
             if n_lines > 0:
                 index.append((pos, n_lines))
@@ -118,6 +148,36 @@ def calculate_coverage(
     temp_dir=None,
     velocity=True,
 ):
+    """Calculate coverage of each genomic position per barcode.
+
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
+    :param conversions: dictionary of contigs as keys and sets of genomic positions
+                        as values that indicates positions where conversions were observed
+    :type conversions: dictionary
+    :param coverage_path: path to write coverage CSV
+    :type coverage_path: str
+    :param index_path: path to write index
+    :type index_path: str
+    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+                    `umi` column, defaults to `None`
+    :type umi_tag: str, optional
+    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+                        is output in the `barcode` column, defaults to `None`
+    :type barcode_tag: str, optional
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+    :param velocity: whether or not velocities were assigned
+    :type velocity: bool, optional
+
+    :return: (coverage CSV path, index path)
+    :rtype: (str, str)
+    """
     logger.debug(f'Extracting contigs from BAM {bam_path}')
     contigs = []
     n_reads = 0

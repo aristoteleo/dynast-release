@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 def read_conversions(conversions_path, *args, **kwargs):
+    """Read conversions CSV as a pandas DataFrame.
+
+    Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
+
+    :param conversions_path: path to conversions CSV
+    :type conversions_path: str
+
+    :return: conversions dataframe
+    :rtype: pandas.DataFrame
+    """
     df = pd.read_csv(
         conversions_path,
         dtype={
@@ -39,33 +49,13 @@ def read_conversions(conversions_path, *args, **kwargs):
     return df
 
 
-def read_no_conversions(no_conversions_path, *args, **kwargs):
-    df = pd.read_csv(
-        no_conversions_path,
-        dtype={
-            'read_id': 'string',
-            'barcode': 'string',
-            'umi': 'string',
-            'A': np.uint8,
-            'C': np.uint8,
-            'G': np.uint8,
-            'T': np.uint8,
-            'velocity': 'category',
-            'transcriptome': bool,
-        },
-        *args,
-        **kwargs
-    )
-    return df
-
-
 def parse_read_contig(
     bam_path,
     counter,
     lock,
     contig,
-    gene_infos,
-    transcript_infos,
+    gene_infos=None,
+    transcript_infos=None,
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
@@ -88,19 +78,39 @@ def parse_read_contig(
     :type lock: multiprocessing.Lock
     :param contig: only reads that map to this contig will be processed
     :type contig: str
-    :param use_corrected: whether or not to require the corrected barcode (CB)
-                          tag to be present. If `False`, reads without this tag
-                          will be skipped, defaults to `False`
-    :type use_corrected: bool, optional
+    :param gene_infos: dictionary containing gene information, as returned by
+                       `preprocessing.gtf.parse_gtf`, required if `velocity=True`,
+                       defaults to `None`
+    :type gene_infos: dictionary
+    :param transcript_infos: dictionary containing transcript information,
+                             as returned by `preprocessing.gtf.parse_gtf`,
+                             required if `velocity=True`, defaults to `None`
+    :type transcript_infos: dictionary
+    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
+                   may be one of the following: `forward`, `reverse`, `None` (unstranded)
+    :type strand: str, optional
+    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+                    `umi` column, defaults to `None`
+    :type umi_tag: str, optional
+    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+                        is output in the `barcode` column, defaults to `None`
+    :type barcode_tag: str, optional
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
     :param update_every: update the counter every this many reads, defaults to `5000`
     :type update_every: int, optional
+    :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
+    :type nasc: bool, optional
+    :param velocity: whether or not to assign a velocity type to each read,
+                     defaults to `True`
+    :type velocity: bool, optional
 
-    :return: (`conversions_path`, `index_path`)
-             `conversions_path`: path to temporary conversions CSV
-             `index_path`: path to temporary index pickle
-    :rtype: tuple
+    :return: (path to conversions, path to conversions index,
+              path to no conversions, path to no conversions index)
+    :rtype: (str, str, str, str)
     """
     # Sort genes by segment positions
     if velocity:
@@ -374,7 +384,22 @@ def parse_read_contig(
     return conversions_path, index_path, no_conversions_path, no_index_path
 
 
-def check_bam_tags_exist(bam_path, tags, n_reads=1000, n_threads=8):
+def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
+    """Utility function to check if BAM tags exists in a BAM within the first
+    `n_reads` reads.
+
+    :param bam_path: path to BAM
+    :type bam_path: str
+    :param tags: tags to check for
+    :type tags: list
+    :param n_reads: number of reads to consider, defaults to `100000`
+    :type n_reads: int, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+
+    :return: `True` if all tags were found, `False` otherwise
+    :rtype: bool
+    """
     tags_found = {tag: False for tag in tags}
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
         for i, read in enumerate(bam.fetch()):
@@ -406,6 +431,51 @@ def parse_all_reads(
     nasc=False,
     velocity=True
 ):
+    """Parse all reads in a BAM and extract conversion, content and alignment
+    information as CSVs.
+
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
+    :param conversions_path: path to output information about reads that have conversions
+    :type conversions_path: str
+    :param index_path: path to conversions index
+    :type index_path: str
+    :param no_conversions_path: path to output information about reads that do not have any conversions
+    :type no_conversions_path: str
+    :param no_index_path: path to no conversions index
+    :type no_index_path: str
+    :param gene_infos: dictionary containing gene information, as returned by
+                       `preprocessing.gtf.parse_gtf`
+    :type gene_infos: dictionary
+    :param transcript_infos: dictionary containing transcript information,
+                             as returned by `preprocessing.gtf.parse_gtf`
+    :type transcript_infos: dictionary
+    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
+                   may be one of the following: `forward`, `reverse`, `None` (unstranded)
+    :type strand: str, optional
+    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+                    `umi` column, defaults to `None`
+    :type umi_tag: str, optional
+    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+                        is output in the `barcode` column, defaults to `None`
+    :type barcode_tag: str, optional
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+    :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
+    :type nasc: bool, optional
+    :param velocity: whether or not to assign a velocity type to each read,
+                     defaults to `True`
+    :type velocity: bool, optional
+
+    :return: (path to conversions, path to conversions index,
+              path to no conversions, path to no conversions index)
+    :rtype: (str, str, str, str)
+    """
     logger.debug('Checking if BAM has required tags')
     if not check_bam_tags_exist(bam_path, config.BAM_REQUIRED_TAGS, config.BAM_PEEK_READS, n_threads=n_threads):
         raise Exception(
