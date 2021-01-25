@@ -9,7 +9,6 @@ import tempfile
 import time
 from concurrent.futures import as_completed
 from contextlib import contextmanager
-from functools import lru_cache
 from operator import add
 
 import psutil
@@ -136,7 +135,6 @@ def run_executable(
     return p
 
 
-@lru_cache
 def get_STAR_binary_path():
     """Get the path to the platform-dependent STAR binary included with
     the installation.
@@ -151,7 +149,6 @@ def get_STAR_binary_path():
     return path
 
 
-@lru_cache
 def get_STAR_version():
     """Get the provided STAR version.
 
