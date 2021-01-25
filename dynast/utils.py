@@ -12,11 +12,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 from operator import add
 
-import anndata
-import numpy as np
-import pandas as pd
 import psutil
-import scipy.io
 from tqdm import tqdm
 
 from . import config
@@ -372,29 +368,6 @@ def all_exists(paths):
     :rtype: bool
     """
     return all(os.path.exists(path) for path in paths)
-
-
-def read_STAR_count_matrix(barcodes_path, features_path, matrix_path):
-    """Given the barcodes, features, and matrix paths of a STAR count matrix,
-    read it as an AnnData object.
-
-    :param barcodes_path: path to barcodes.tsv
-    :type barcodes_path: str
-    :param features_path: path to features.tsv
-    :type features_path: str
-    :param matrix_path: path to matrix.mtx
-    :type matrix_path: str
-
-    :return: cells x genes AnnData matrix
-    :rtype: AnnData
-    """
-    df_barcodes = pd.read_csv(barcodes_path, names=['barcode'], index_col=0)
-    df_features = pd.read_csv(features_path, names=['gene_id', 'gene_name'], sep='\t', usecols=[0, 1], index_col=0)
-    matrix = scipy.io.mmread(matrix_path).T.tocsr()
-
-    adata = anndata.AnnData(X=matrix, obs=df_barcodes, var=df_features)
-    adata.X = adata.X.astype(np.uint32)
-    return adata
 
 
 def make_pool_with_counter(n_threads):

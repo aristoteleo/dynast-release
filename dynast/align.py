@@ -3,7 +3,6 @@ import os
 import tempfile
 
 from . import config, constants, utils
-from .stats import STATS
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,6 @@ def STAR_solo(
     :return: dictionary containing output files
     :rtype: dict
     """
-    STATS.steps['align'].extra.update({'version': utils.get_STAR_version()})
     logger.info('Aligning the following FASTQs with STAR')
     for fastq in fastqs:
         logger.info((' ' * 8) + fastq)
@@ -58,9 +56,9 @@ def STAR_solo(
 
     command = [utils.get_STAR_binary_path()]
     arguments = config.STAR_ARGUMENTS
+    arguments = utils.combine_arguments(arguments, technology.arguments)
     if technology.name != 'smartseq':
         arguments = utils.combine_arguments(arguments, config.STAR_SOLO_ARGUMENTS)
-        arguments = utils.combine_arguments(arguments, technology.arguments)
         if whitelist_path:
             arguments = utils.combine_arguments(arguments, {'--soloCBwhitelist': whitelist_path})
 
@@ -74,7 +72,7 @@ def STAR_solo(
             else:
                 plaintext_path = fastq
             plaintext_fastqs.append(plaintext_path)
-        command += ['--readFilesIn'] + plaintext_fastqs
+        arguments['--readFilesIn'] = plaintext_fastqs
     else:
         # STAR requires FIFO file support when running in smartseq mode
         fifo_path = utils.mkstemp(dir=temp_dir, delete=True)
@@ -86,7 +84,6 @@ def STAR_solo(
                 'STAR uses FIFO files to run alignment of Smart-seq files.'
             )
 
-        arguments = utils.combine_arguments(arguments, technology.arguments)
         if nasc:
             arguments = utils.combine_arguments(arguments, config.NASC_ARGUMENTS)
 
@@ -113,7 +110,7 @@ def STAR_solo(
                     fastq_2 = plaintext_path
 
                 out.write(f'{fastq_1}\t{fastq_2}\t{cell_id}\n')
-        command += ['--readFilesManifest', manifest_path]
+        arguments['--readFilesManifest'] = manifest_path
 
     # Attempt to increase NOFILE limit to maximum possible, and use this to
     # set n_bins to the maximum possible, as higher n_bin requires less
@@ -134,14 +131,12 @@ def STAR_solo(
     logger.info(f'Increasing maximum number of open file descriptors from {current} to {maximum}')
     with utils.increase_file_descriptor_limit(maximum):
         command += utils.arguments_to_list(arguments)
-        STATS.steps['align'].extra.update({'command': ' '.join(str(c) for c in command)})
         utils.run_executable(command)
 
     solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
     gene_dir = os.path.join(solo_dir, constants.STAR_GENE_DIR)
     raw_gene_dir = os.path.join(gene_dir, constants.STAR_RAW_DIR)
     filtered_gene_dir = os.path.join(gene_dir, constants.STAR_FILTERED_DIR)
-    velocyto_dir = os.path.join(solo_dir, constants.STAR_VELOCYTO_DIR, constants.STAR_RAW_DIR)
 
     result = {
         'bam': os.path.join(out_dir, constants.STAR_BAM_FILENAME),
@@ -157,14 +152,7 @@ def STAR_solo(
                 'matrix': os.path.join(filtered_gene_dir, constants.STAR_MATRIX_FILENAME),
             },
         },
-        'velocyto': {
-            'barcodes': os.path.join(velocyto_dir, constants.STAR_BARCODES_FILENAME),
-            'features': os.path.join(velocyto_dir, constants.STAR_FEATURES_FILENAME),
-            'matrix': os.path.join(velocyto_dir, constants.STAR_MATRIX_FILENAME),
-        },
     }
-    if technology.name == 'smartseq':
-        del result['velocyto']
     return result
 
 

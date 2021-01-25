@@ -1,11 +1,10 @@
 import gzip
 import os
+import pickle
 import subprocess as sp
 import tempfile
 import uuid
 from unittest import mock, TestCase
-
-import numpy as np
 
 import dynast.utils as utils
 from tests import mixins
@@ -34,6 +33,27 @@ class TestUtils(mixins.TestMixin, TestCase):
         with mock.patch('dynast.utils.logger.debug') as debug_mock:
             utils.run_executable(['echo', 'TEST'], stream=True)
             debug_mock.assert_has_calls([mock.call('TEST')])
+
+    def test_get_STAR_binary_path(self):
+        self.assertTrue(utils.get_STAR_binary_path().endswith('STAR'))
+
+    def test_get_STAR_version(self):
+        self.assertTrue('.' in utils.get_STAR_version())
+
+    def test_combine_arguments(self):
+        args = {'--arg1': 'value1', '--arg2': ['value2', 'value3'], '--arg3': ['value4'], '--arg4': 'value5'}
+        additional = {'--arg1': 'value6', '--arg2': ['value7'], '--arg3': 'value8', '--arg5': 'value9'}
+        self.assertEqual({
+            '--arg1': 'value6',
+            '--arg2': ['value2', 'value3', 'value7'],
+            '--arg3': 'value8',
+            '--arg4': 'value5',
+            '--arg5': 'value9'
+        }, utils.combine_arguments(args, additional))
+
+    def test_arguments_to_list(self):
+        args = {'--arg1': 'value1', '--arg2': ['value2', 'value3']}
+        self.assertEqual(['--arg1', 'value1', '--arg2', 'value2', 'value3'], utils.arguments_to_list(args))
 
     def test_open_as_text_textfile(self):
         path = os.path.join(tempfile.gettempdir(), f'{uuid.uuid4()}.txt')
@@ -116,11 +136,63 @@ class TestUtils(mixins.TestMixin, TestCase):
         with mock.patch('dynast.utils.psutil.virtual_memory') as vm:
             self.assertEqual(vm.return_value.available, utils.get_available_memory())
 
-    def test_read_STAR_count_matrix(self):
-        adata = utils.read_STAR_count_matrix(self.STAR_barcodes_path, self.STAR_features_path, self.STAR_matrix_path)
-        self.assertEqual(2, np.count_nonzero(adata.X))
-        self.assertEqual(3, adata.X[0, 0])
-        self.assertEqual(5, adata.X[3, 2])
-        self.assertEqual(['AA', 'AC', 'AG', 'AT', 'CA'], list(adata.obs.barcode))
-        self.assertEqual(['G1', 'G2', 'G3', 'G4', 'G5'], list(adata.var.gene_id))
-        self.assertEqual(['N1', 'N2', 'N3', 'N4', 'N5'], list(adata.var.gene_name))
+    def test_all_exists(self):
+        file1 = os.path.join(self.temp_dir, 'file1')
+        file2 = os.path.join(self.temp_dir, 'file2')
+        file3 = os.path.join(self.temp_dir, 'file3')
+        with open(file1, 'w') as f:
+            f.write('')
+        with open(file2, 'w') as f:
+            f.write('')
+        self.assertTrue(utils.all_exists([file1, file2]))
+        self.assertFalse(utils.all_exists([file1, file2, file3]))
+
+    def test_make_pool_with_counter(self):
+        with mock.patch('dynast.utils.multiprocessing.Manager') as Manager, \
+            mock.patch('dynast.utils.multiprocessing.Pool') as Pool:
+            self.assertEqual(
+                (Pool.return_value, Manager.return_value.Value.return_value, Manager.return_value.Lock.return_value),
+                utils.make_pool_with_counter(8)
+            )
+            Manager.return_value.Value.assert_called_once_with('I', 0)
+            Pool.assert_called_once_with(8)
+
+    def test_display_progress_with_counter(self):
+        counter = mock.MagicMock()
+        total = mock.MagicMock()
+        async_result = mock.MagicMock()
+        async_result.ready.return_value = True
+        with mock.patch('dynast.utils.tqdm'):
+            utils.display_progress_with_counter(counter, total, async_result)
+
+    def test_as_completed_with_progress(self):
+        futures = [mock.MagicMock(), mock.MagicMock()]
+        with mock.patch('dynast.utils.tqdm'), \
+            mock.patch('dynast.utils.as_completed') as as_completed:
+            as_completed.return_value = ['future1', 'future2']
+            self.assertEqual(['future1', 'future2'], list(utils.as_completed(futures)))
+            as_completed.assert_called_once_with(futures)
+
+    def test_merge_dictionaries(self):
+        d1 = {'a': 'b', 'c': {'d': 'e'}, 'f': 'g'}
+        d2 = {'a': 'h', 'c': {'i': 'j'}}
+        self.assertEqual({
+            'a': 'bh',
+            'c': {
+                'd': 'e',
+                'i': 'Xj'
+            },
+            'f': 'g'
+        }, utils.merge_dictionaries(d1, d2, default='X'))
+
+    def test_write_pickle(self):
+        path = os.path.join(self.temp_dir, 'pkl')
+        utils.write_pickle('test', path)
+        with gzip.open(path, 'rb') as f:
+            self.assertEqual('test', pickle.load(f))
+
+    def test_read_pickle(self):
+        path = os.path.join(self.temp_dir, 'pkl')
+        with gzip.open(path, 'wb') as f:
+            pickle.dump('test', f)
+        self.assertEqual('test', utils.read_pickle(path))

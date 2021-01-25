@@ -1,0 +1,9 @@
+Number of Reads,1000
+Reads With Valid Barcodes,1
+Sequencing Saturation,-inf
+Q30 Bases in CB+UMI,0.91685
+Q30 Bases in RNA read,0.665607
+Reads Mapped to Genome: Unique+Multiple,0.915
+Reads Mapped to Genome: Unique,0.556
+Reads Mapped to Velocyto: Unique+Multipe Velocytos,0
+Reads Mapped to Velocyto: Unique Velocytos,0

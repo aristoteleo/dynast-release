@@ -26,7 +26,7 @@ STAR_ARGUMENTS = {
 # Additional arguments for STARsolo runs
 STAR_SOLO_ARGUMENTS = {
     '--outSAMattributes': ['CR', 'CY', 'UR', 'UY', 'CB', 'UB', 'sS', 'sQ', 'sM'],
-    '--soloFeatures': ['Gene', 'Velocyto'],
+    '--soloFeatures': 'Gene',
     '--soloCBwhitelist': 'None',
 }
 

@@ -4,6 +4,8 @@ import shutil
 import tempfile
 from unittest import TestCase
 
+from dynast.technology import Technology
+
 
 def tqdm_mock(iterable, *args, **kwargs):
     return iterable
@@ -29,72 +31,51 @@ class TestMixin(TestCase):
     def setUpClass(cls):
         cls.conversions = ['AC', 'AG', 'AT', 'CA', 'CG', 'CT', 'GA', 'GC', 'GT', 'TA', 'TC', 'TG']
         cls.bases = ['A', 'C', 'G', 'T']
+        cls.types = ['transcriptome', 'spliced', 'unspliced', 'ambiguous']
+        cls.umi_technology = Technology('umi_technology', {'--arg1': 'value1', '--arg2': 2}, None)
+        cls.smartseq_technology = Technology('smartseq', {'--arg1': 'value1', '--arg2': 2}, None)
 
         # Paths
         cls.temp_dir = None
         cls.base_dir = os.path.dirname(os.path.abspath(__file__))
         cls.fixtures_dir = os.path.join(cls.base_dir, 'fixtures')
-        cls.STAR_dir = os.path.join(cls.fixtures_dir, 'STAR')
-        cls.STAR_barcodes_path = os.path.join(cls.STAR_dir, 'barcodes.tsv')
-        cls.STAR_features_path = os.path.join(cls.STAR_dir, 'features.tsv')
-        cls.STAR_matrix_path = os.path.join(cls.STAR_dir, 'matrix.mtx')
 
-        # BAM
-        cls.bam_path = os.path.join(cls.STAR_dir, 'small.bam')
-        cls.bam_conversions_paths = [
-            os.path.join(cls.STAR_dir, 'conversions1.csv'),
-            os.path.join(cls.STAR_dir, 'conversions2.csv'),
+        # FASTQS
+        cls.fastqs = [
+            os.path.join(cls.fixtures_dir, 'SRR11683995_1.fastq.gz'),
+            os.path.join(cls.fixtures_dir, 'SRR11683995_2.fastq.gz')
         ]
-        cls.bam_index_paths = [
-            os.path.join(cls.STAR_dir, 'conversions1.idx'),
-            os.path.join(cls.STAR_dir, 'conversions2.idx'),
-        ]
-        cls.bam_coverage_paths = [
-            os.path.join(cls.STAR_dir, 'coverage1.csv'),
-            os.path.join(cls.STAR_dir, 'coverage2.csv'),
-        ]
-        cls.bam_conversions_path = os.path.join(cls.STAR_dir, 'conversions.csv')
-        cls.bam_index_path = os.path.join(cls.STAR_dir, 'conversions.idx')
-        cls.bam_coverage_path = os.path.join(cls.STAR_dir, 'coverage.csv')
 
-        # Conversion
-        cls.conversions_path = os.path.join(cls.fixtures_dir, 'conversions.csv')
-        cls.index_path = os.path.join(cls.fixtures_dir, 'conversions.idx')
-        cls.counts_part_path = os.path.join(cls.fixtures_dir, 'counts_part.csv')
-        cls.counts_part_paths = [
-            os.path.join(cls.fixtures_dir, 'counts_part1.csv'),
-            os.path.join(cls.fixtures_dir, 'counts_part2.csv'),
-        ]
-        cls.barcodes_path = os.path.join(cls.fixtures_dir, 'barcodes.csv')
-        cls.genes_path = os.path.join(cls.fixtures_dir, 'genes.csv')
-        cls.counts_path = os.path.join(cls.fixtures_dir, 'counts.csv')
+        # Align
+        cls.align_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_align')
+        cls.bam_path = os.path.join(cls.align_dir, 'Aligned.sortedByCoord.out.bam')
 
-        # Aggregation
-        cls.aggregates_dir = os.path.join(cls.fixtures_dir, 'aggregates')
-        cls.rates_barcode_path = os.path.join(cls.aggregates_dir, 'rates_barcode.csv')
-        cls.rates_gene_path = os.path.join(cls.aggregates_dir, 'rates_gene.csv')
-        cls.rates_barcode_gene_path = os.path.join(cls.aggregates_dir, 'rates_barcode_gene.csv')
-        cls.rates_none_path = os.path.join(cls.aggregates_dir, 'rates_none.csv')
-        cls.aggregate_paths = {
-            conversion: os.path.join(cls.aggregates_dir, f'{conversion}.csv')
-            for conversion in cls.conversions
+        # Count
+        cls.count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count')
+        cls.count_parse_dir = os.path.join(cls.count_dir, '0_parse')
+        cls.count_count_dir = os.path.join(cls.count_dir, '1_count')
+        cls.count_aggregate_dir = os.path.join(cls.count_dir, '2_aggregate')
+        cls.count_estimate_dir = os.path.join(cls.count_dir, '3_estimate')
+        cls.adata_path = os.path.join(cls.count_dir, 'adata.h5ad')
+
+        cls.conversions_path = os.path.join(cls.count_parse_dir, 'conversions.csv')
+        cls.conversions_index_path = os.path.join(cls.count_parse_dir, 'conversions.idx')
+        cls.no_conversions_path = os.path.join(cls.count_parse_dir, 'no_conversions.csv')
+        cls.no_conversions_index_path = os.path.join(cls.count_parse_dir, 'no_conversions.idx')
+        cls.genes_path = os.path.join(cls.count_parse_dir, 'genes.pkl.gz')
+        cls.transcripts_path = os.path.join(cls.count_parse_dir, 'transcripts.pkl.gz')
+        cls.count_counts_path = os.path.join(cls.count_count_dir, 'counts.csv')
+        cls.rates_path = os.path.join(cls.count_aggregate_dir, 'rates.csv')
+        cls.aggregates_paths = {
+            key: {
+                conversion: os.path.join(cls.count_aggregate_dir, key, f'{conversion}.csv')
+                for conversion in cls.conversions
+            }
+            for key in cls.types
         }
-
-        # Estimation
-        cls.estimates_dir = os.path.join(cls.fixtures_dir, 'estimates')
-        cls.p_e_barcode_path = os.path.join(cls.estimates_dir, 'p_e_barcode.csv')
-        cls.p_e_gene_path = os.path.join(cls.estimates_dir, 'p_e_gene.csv')
-        cls.p_e_barcode_gene_path = os.path.join(cls.estimates_dir, 'p_e_barcode_gene.csv')
-        cls.p_e_none_path = os.path.join(cls.estimates_dir, 'p_e_none.csv')
-        cls.p_c_barcode_path = os.path.join(cls.estimates_dir, 'p_c_barcode.csv')
-        cls.aggregate_barcode_path = os.path.join(cls.estimates_dir, 'aggregate_barcode.csv')
-        cls.p_c_gene_path = os.path.join(cls.estimates_dir, 'p_c_gene.csv')
-        cls.aggregate_gene_path = os.path.join(cls.estimates_dir, 'aggregate_gene.csv')
-        cls.p_c_barcode_gene_path = os.path.join(cls.estimates_dir, 'p_c_barcode_gene.csv')
-        cls.aggregate_barcode_gene_path = os.path.join(cls.estimates_dir, 'aggregate_barcode_gene.csv')
-        cls.p_c_none_path = os.path.join(cls.estimates_dir, 'p_c_none.csv')
-        cls.aggregate_none_path = os.path.join(cls.estimates_dir, 'aggregate_none.csv')
-        cls.pi_barcode_barcode_gene_path = os.path.join(cls.estimates_dir, 'pi_barcode_barcode_gene.csv')
+        cls.p_e_path = os.path.join(cls.count_estimate_dir, 'p_e.csv')
+        cls.p_c_path = os.path.join(cls.count_estimate_dir, 'p_c.csv')
+        cls.pi_paths = {key: os.path.join(cls.count_estimate_dir, f'{key}.csv') for key in cls.types}
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()

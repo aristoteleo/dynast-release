@@ -3,7 +3,7 @@ import math
 import os
 import tempfile
 
-from . import config, utils
+from . import utils
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def STAR_genomeGenerate(
     )
 
     logger.debug(f'Generating STAR index to {index_dir}')
-    command = [config.get_STAR_binary_path(), '--runMode', 'genomeGenerate']
+    command = [utils.get_STAR_binary_path(), '--runMode', 'genomeGenerate']
     command += ['--genomeDir', index_dir]
     command += ['--genomeFastaFiles', fasta_path]
     command += ['--sjdbGTFfile', gtf_path]
