@@ -186,7 +186,7 @@ def setup_count_args(parser, parent):
         metavar='QUALITY',
         help=(
             'Base quality threshold. Only bases with PHRED quality greater than '
-            'this value will be considered when counting conversions. (default: 27)'
+            'this value will be considered when counting conversions. (default: 20)'
         ),
         type=int,
         default=20
@@ -426,6 +426,8 @@ def parse_count(parser, args, temp_dir=None):
             args.strand = 'forward'
         else:
             args.strand = 'unstranded'
+    elif args.no_velocity:
+        parser.error('`--strand` may not be used with `--no-velocity`')
 
     from .count import count
     count(

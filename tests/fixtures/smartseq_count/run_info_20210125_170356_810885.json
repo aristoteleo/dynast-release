@@ -1,0 +1,74 @@
+{
+    "version": "0.0.1",
+    "call": "/home/lioscro/miniconda3/bin/dynast count -g /mnt/e/references/human/ensembl/Homo_sapiens.GRCh38.101.gtf --barcode-tag RG nasc_align/Aligned.sortedByCoord.out.bam -o smartseq_count -t 1 --verbose --read-threshold 2 --no-velocity",
+    "start_time": "2021-01-25T17:03:56.810885",
+    "end_time": "2021-01-25T17:07:00.195337",
+    "elapsed": 183.384452,
+    "step_order": [
+        "sort",
+        "index",
+        "parse",
+        "snp",
+        "count",
+        "aggregate",
+        "p",
+        "pi",
+        "split"
+    ],
+    "steps": {
+        "sort": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "index": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "parse": {
+            "start_time": "2021-01-25T17:03:56.824664",
+            "end_time": "2021-01-25T17:05:43.802514",
+            "elapsed": 106.97785,
+            "skipped": false
+        },
+        "snp": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "count": {
+            "start_time": "2021-01-25T17:05:43.803598",
+            "end_time": "2021-01-25T17:05:43.964234",
+            "elapsed": 0.160636,
+            "skipped": false
+        },
+        "aggregate": {
+            "start_time": "2021-01-25T17:05:43.965128",
+            "end_time": "2021-01-25T17:05:44.153551",
+            "elapsed": 0.188423,
+            "skipped": false
+        },
+        "p": {
+            "start_time": "2021-01-25T17:05:44.154152",
+            "end_time": "2021-01-25T17:05:48.153721",
+            "elapsed": 3.999569,
+            "skipped": false
+        },
+        "pi": {
+            "start_time": "2021-01-25T17:05:48.154633",
+            "end_time": "2021-01-25T17:07:00.149337",
+            "elapsed": 71.994704,
+            "skipped": false
+        },
+        "split": {
+            "start_time": "2021-01-25T17:07:00.150056",
+            "end_time": "2021-01-25T17:07:00.195325",
+            "elapsed": 0.045269,
+            "skipped": false
+        }
+    }
+}

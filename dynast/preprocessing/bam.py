@@ -420,8 +420,8 @@ def parse_all_reads(
     index_path,
     no_conversions_path,
     no_index_path,
-    gene_infos,
-    transcript_infos,
+    gene_infos=None,
+    transcript_infos=None,
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
@@ -445,11 +445,12 @@ def parse_all_reads(
     :param no_index_path: path to no conversions index
     :type no_index_path: str
     :param gene_infos: dictionary containing gene information, as returned by
-                       `preprocessing.gtf.parse_gtf`
-    :type gene_infos: dictionary
+                       `preprocessing.gtf.parse_gtf`, defaults to `None`
+    :type gene_infos: dictionary, optional
     :param transcript_infos: dictionary containing transcript information,
-                             as returned by `preprocessing.gtf.parse_gtf`
-    :type transcript_infos: dictionary
+                             as returned by `preprocessing.gtf.parse_gtf`,
+                             defaults to `None`
+    :type transcript_infos: dictionary, optional
     :param strand: strandedness of the sequencing protocol, defaults to `forward`,
                    may be one of the following: `forward`, `reverse`, `None` (unstranded)
     :type strand: str, optional

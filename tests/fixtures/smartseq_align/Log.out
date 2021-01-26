@@ -1,0 +1,543 @@
+STAR version=2.7.7a
+STAR compilation time,server,dir=Mon Dec 28 13:38:40 EST 2020 vega:/home/dobin/data/STAR/STARcode/STAR.master/source
+##### Command Line:
+/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR --readFilesManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28 --outSAMtype BAM SortedByCoordinate --outSAMattributes NH HI AS NM nM MD GX GN RG --outFilterScoreMinOverLread 0.3 --outFilterMatchNminOverLread 0.3 --soloType SmartSeq --soloUMIdedup Exact --soloStrand Unstranded --bamRemoveDuplicatesType UniqueIdentical --genomeDir /mnt/e/references/human/ensembl/STAR --runThreadN 32 --outFileNamePrefix nasc_align/ --outTmpDir tmp/tmppx0bsfjo --outBAMsortingBinsN 118
+##### Initial USER parameters from Command Line:
+outFileNamePrefix                 nasc_align/
+outTmpDir                         tmp/tmppx0bsfjo
+###### All USER parameters from Command Line:
+readFilesManifest             /mnt/e/scratch/nasc/tmp/tmpku5_ir28        ~RE-DEFINED
+outSAMtype                    BAM   SortedByCoordinate        ~RE-DEFINED
+outSAMattributes              NH   HI   AS   NM   nM   MD   GX   GN   RG        ~RE-DEFINED
+outFilterScoreMinOverLread    0.3     ~RE-DEFINED
+outFilterMatchNminOverLread   0.3     ~RE-DEFINED
+soloType                      SmartSeq     ~RE-DEFINED
+soloUMIdedup                  Exact        ~RE-DEFINED
+soloStrand                    Unstranded     ~RE-DEFINED
+bamRemoveDuplicatesType       UniqueIdentical     ~RE-DEFINED
+genomeDir                     /mnt/e/references/human/ensembl/STAR     ~RE-DEFINED
+runThreadN                    32     ~RE-DEFINED
+outFileNamePrefix             nasc_align/     ~RE-DEFINED
+outTmpDir                     tmp/tmppx0bsfjo     ~RE-DEFINED
+outBAMsortingBinsN            118     ~RE-DEFINED
+##### Finished reading parameters from all sources
+
+##### Final user re-defined parameters-----------------:
+runThreadN                        32
+genomeDir                         /mnt/e/references/human/ensembl/STAR
+readFilesManifest                 /mnt/e/scratch/nasc/tmp/tmpku5_ir28   
+bamRemoveDuplicatesType           UniqueIdentical
+outFileNamePrefix                 nasc_align/
+outTmpDir                         tmp/tmppx0bsfjo
+outSAMtype                        BAM   SortedByCoordinate   
+outSAMattributes                  NH   HI   AS   NM   nM   MD   GX   GN   RG   
+outBAMsortingBinsN                118
+outFilterScoreMinOverLread        0.3
+outFilterMatchNminOverLread       0.3
+soloType                          SmartSeq
+soloStrand                        Unstranded
+soloUMIdedup                      Exact   
+
+-------------------------------
+##### Final effective command line:
+/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR   --runThreadN 32   --genomeDir /mnt/e/references/human/ensembl/STAR   --readFilesManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28      --bamRemoveDuplicatesType UniqueIdentical   --outFileNamePrefix nasc_align/   --outTmpDir tmp/tmppx0bsfjo   --outSAMtype BAM   SortedByCoordinate      --outSAMattributes NH   HI   AS   NM   nM   MD   GX   GN   RG      --outBAMsortingBinsN 118   --outFilterScoreMinOverLread 0.3   --outFilterMatchNminOverLread 0.3   --soloType SmartSeq   --soloStrand Unstranded   --soloUMIdedup Exact   
+----------------------------------------
+
+Reading input file names and read groups from readFileManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28
+/mnt/e/scratch/nasc/tmp/tmputskxkzx	/mnt/e/scratch/nasc/tmp/tmpywjcodh3	ID:P1_A06_S6
+/mnt/e/scratch/nasc/tmp/tmpr0np79pz	/mnt/e/scratch/nasc/tmp/tmpl_etsdpx	ID:P1_A09_S9
+Number of fastq files for each mate = 2
+
+   Input read files for mate 1 :
+-rw------- 1 lioscro lioscro 91105 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmputskxkzx
+-rw------- 1 lioscro lioscro 89996 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpr0np79pz
+
+   readsCommandsFile:
+exec > "tmp/tmppx0bsfjo/tmp.fifo.read1"
+echo FILE 0
+cat      "/mnt/e/scratch/nasc/tmp/tmputskxkzx"
+echo FILE 1
+cat      "/mnt/e/scratch/nasc/tmp/tmpr0np79pz"
+
+
+   Input read files for mate 2 :
+-rw------- 1 lioscro lioscro 90621 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpywjcodh3
+-rw------- 1 lioscro lioscro 90624 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpl_etsdpx
+
+   readsCommandsFile:
+exec > "tmp/tmppx0bsfjo/tmp.fifo.read2"
+echo FILE 0
+cat      "/mnt/e/scratch/nasc/tmp/tmpywjcodh3"
+echo FILE 1
+cat      "/mnt/e/scratch/nasc/tmp/tmpl_etsdpx"
+
+Jan 25 16:53:43Finished reading, sorting and deduplicating CB whitelist sequences.
+WARNING: --limitBAMsortRAM=0, will use genome size as RAM limit for BAM sorting
+Finished loading and checking parameters
+Reading genome generation parameters:
+### /home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR   --runMode genomeGenerate   --runThreadN 32   --genomeDir STAR   --genomeFastaFiles /mnt/e/references/human/ensembl/tmp/tmpva6s5wst      --genomeSAindexNbases 14   --genomeChrBinNbits 18   --genomeSAsparseD 1   --limitGenomeGenerateRAM 34359738368   --outTmpDir tmp/tmpb5s9lm78   --sjdbGTFfile /mnt/e/references/human/ensembl/tmp/tmp3_bj9c11
+### GstrandBit=32
+versionGenome                 2.7.4a     ~RE-DEFINED
+genomeType                    Full     ~RE-DEFINED
+genomeFastaFiles              /mnt/e/references/human/ensembl/tmp/tmpva6s5wst        ~RE-DEFINED
+genomeSAindexNbases           14     ~RE-DEFINED
+genomeChrBinNbits             18     ~RE-DEFINED
+genomeSAsparseD               1     ~RE-DEFINED
+genomeTransformType           None     ~RE-DEFINED
+genomeTransformVCF            -     ~RE-DEFINED
+sjdbOverhang                  100     ~RE-DEFINED
+sjdbFileChrStartEnd           -        ~RE-DEFINED
+sjdbGTFfile                   /mnt/e/references/human/ensembl/tmp/tmp3_bj9c11     ~RE-DEFINED
+sjdbGTFchrPrefix              -     ~RE-DEFINED
+sjdbGTFfeatureExon            exon     ~RE-DEFINED
+sjdbGTFtagExonParentTranscripttranscript_id     ~RE-DEFINED
+sjdbGTFtagExonParentGene      gene_id     ~RE-DEFINED
+sjdbInsertSave                Basic     ~RE-DEFINED
+genomeFileSizes               3215810555   24938805931        ~RE-DEFINED
+Genome version is compatible with current STAR
+Number of real (reference) chromosomes= 194
+1	1	248956422	0
+2	10	133797422	249036800
+3	11	135086622	382992384
+4	12	133275309	518258688
+5	13	114364328	651689984
+6	14	107043718	766246912
+7	15	101991189	873463808
+8	16	90338345	975699968
+9	17	83257441	1066139648
+10	18	80373285	1149501440
+11	19	58617616	1229979648
+12	2	242193529	1288699904
+13	20	64444167	1530920960
+14	21	46709983	1595408384
+15	22	50818468	1642332160
+16	3	198295559	1693188096
+17	4	190214555	1891631104
+18	5	181538259	2081947648
+19	6	170805979	2263613440
+20	7	159345973	2434531328
+21	8	145138636	2593914880
+22	9	138394717	2739142656
+23	MT	16569	2877554688
+24	X	156040895	2877816832
+25	Y	57227415	3034054656
+26	KI270728.1	1872759	3091464192
+27	KI270727.1	448248	3093561344
+28	KI270442.1	392061	3094085632
+29	KI270729.1	280839	3094609920
+30	GL000225.1	211173	3095134208
+31	KI270743.1	210658	3095396352
+32	GL000008.2	209709	3095658496
+33	GL000009.2	201709	3095920640
+34	KI270747.1	198735	3096182784
+35	KI270722.1	194050	3096444928
+36	GL000194.1	191469	3096707072
+37	KI270742.1	186739	3096969216
+38	GL000205.2	185591	3097231360
+39	GL000195.1	182896	3097493504
+40	KI270736.1	181920	3097755648
+41	KI270733.1	179772	3098017792
+42	GL000224.1	179693	3098279936
+43	GL000219.1	179198	3098542080
+44	KI270719.1	176845	3098804224
+45	GL000216.2	176608	3099066368
+46	KI270712.1	176043	3099328512
+47	KI270706.1	175055	3099590656
+48	KI270725.1	172810	3099852800
+49	KI270744.1	168472	3100114944
+50	KI270734.1	165050	3100377088
+51	GL000213.1	164239	3100639232
+52	GL000220.1	161802	3100901376
+53	KI270715.1	161471	3101163520
+54	GL000218.1	161147	3101425664
+55	KI270749.1	158759	3101687808
+56	KI270741.1	157432	3101949952
+57	GL000221.1	155397	3102212096
+58	KI270716.1	153799	3102474240
+59	KI270731.1	150754	3102736384
+60	KI270751.1	150742	3102998528
+61	KI270750.1	148850	3103260672
+62	KI270519.1	138126	3103522816
+63	GL000214.1	137718	3103784960
+64	KI270708.1	127682	3104047104
+65	KI270730.1	112551	3104309248
+66	KI270438.1	112505	3104571392
+67	KI270737.1	103838	3104833536
+68	KI270721.1	100316	3105095680
+69	KI270738.1	99375	3105357824
+70	KI270748.1	93321	3105619968
+71	KI270435.1	92983	3105882112
+72	GL000208.1	92689	3106144256
+73	KI270538.1	91309	3106406400
+74	KI270756.1	79590	3106668544
+75	KI270739.1	73985	3106930688
+76	KI270757.1	71251	3107192832
+77	KI270709.1	66860	3107454976
+78	KI270746.1	66486	3107717120
+79	KI270753.1	62944	3107979264
+80	KI270589.1	44474	3108241408
+81	KI270726.1	43739	3108503552
+82	KI270735.1	42811	3108765696
+83	KI270711.1	42210	3109027840
+84	KI270745.1	41891	3109289984
+85	KI270714.1	41717	3109552128
+86	KI270732.1	41543	3109814272
+87	KI270713.1	40745	3110076416
+88	KI270754.1	40191	3110338560
+89	KI270710.1	40176	3110600704
+90	KI270717.1	40062	3110862848
+91	KI270724.1	39555	3111124992
+92	KI270720.1	39050	3111387136
+93	KI270723.1	38115	3111649280
+94	KI270718.1	38054	3111911424
+95	KI270317.1	37690	3112173568
+96	KI270740.1	37240	3112435712
+97	KI270755.1	36723	3112697856
+98	KI270707.1	32032	3112960000
+99	KI270579.1	31033	3113222144
+100	KI270752.1	27745	3113484288
+101	KI270512.1	22689	3113746432
+102	KI270322.1	21476	3114008576
+103	GL000226.1	15008	3114270720
+104	KI270311.1	12399	3114532864
+105	KI270366.1	8320	3114795008
+106	KI270511.1	8127	3115057152
+107	KI270448.1	7992	3115319296
+108	KI270521.1	7642	3115581440
+109	KI270581.1	7046	3115843584
+110	KI270582.1	6504	3116105728
+111	KI270515.1	6361	3116367872
+112	KI270588.1	6158	3116630016
+113	KI270591.1	5796	3116892160
+114	KI270522.1	5674	3117154304
+115	KI270507.1	5353	3117416448
+116	KI270590.1	4685	3117678592
+117	KI270584.1	4513	3117940736
+118	KI270320.1	4416	3118202880
+119	KI270382.1	4215	3118465024
+120	KI270468.1	4055	3118727168
+121	KI270467.1	3920	3118989312
+122	KI270362.1	3530	3119251456
+123	KI270517.1	3253	3119513600
+124	KI270593.1	3041	3119775744
+125	KI270528.1	2983	3120037888
+126	KI270587.1	2969	3120300032
+127	KI270364.1	2855	3120562176
+128	KI270371.1	2805	3120824320
+129	KI270333.1	2699	3121086464
+130	KI270374.1	2656	3121348608
+131	KI270411.1	2646	3121610752
+132	KI270414.1	2489	3121872896
+133	KI270510.1	2415	3122135040
+134	KI270390.1	2387	3122397184
+135	KI270375.1	2378	3122659328
+136	KI270420.1	2321	3122921472
+137	KI270509.1	2318	3123183616
+138	KI270315.1	2276	3123445760
+139	KI270302.1	2274	3123707904
+140	KI270518.1	2186	3123970048
+141	KI270530.1	2168	3124232192
+142	KI270304.1	2165	3124494336
+143	KI270418.1	2145	3124756480
+144	KI270424.1	2140	3125018624
+145	KI270417.1	2043	3125280768
+146	KI270508.1	1951	3125542912
+147	KI270303.1	1942	3125805056
+148	KI270381.1	1930	3126067200
+149	KI270529.1	1899	3126329344
+150	KI270425.1	1884	3126591488
+151	KI270396.1	1880	3126853632
+152	KI270363.1	1803	3127115776
+153	KI270386.1	1788	3127377920
+154	KI270465.1	1774	3127640064
+155	KI270383.1	1750	3127902208
+156	KI270384.1	1658	3128164352
+157	KI270330.1	1652	3128426496
+158	KI270372.1	1650	3128688640
+159	KI270548.1	1599	3128950784
+160	KI270580.1	1553	3129212928
+161	KI270387.1	1537	3129475072
+162	KI270391.1	1484	3129737216
+163	KI270305.1	1472	3129999360
+164	KI270373.1	1451	3130261504
+165	KI270422.1	1445	3130523648
+166	KI270316.1	1444	3130785792
+167	KI270340.1	1428	3131047936
+168	KI270338.1	1428	3131310080
+169	KI270583.1	1400	3131572224
+170	KI270334.1	1368	3131834368
+171	KI270429.1	1361	3132096512
+172	KI270393.1	1308	3132358656
+173	KI270516.1	1300	3132620800
+174	KI270389.1	1298	3132882944
+175	KI270466.1	1233	3133145088
+176	KI270388.1	1216	3133407232
+177	KI270544.1	1202	3133669376
+178	KI270310.1	1201	3133931520
+179	KI270412.1	1179	3134193664
+180	KI270395.1	1143	3134455808
+181	KI270376.1	1136	3134717952
+182	KI270337.1	1121	3134980096
+183	KI270335.1	1048	3135242240
+184	KI270378.1	1048	3135504384
+185	KI270379.1	1045	3135766528
+186	KI270329.1	1040	3136028672
+187	KI270419.1	1029	3136290816
+188	KI270336.1	1026	3136552960
+189	KI270312.1	998	3136815104
+190	KI270539.1	993	3137077248
+191	KI270385.1	990	3137339392
+192	KI270423.1	981	3137601536
+193	KI270392.1	971	3137863680
+194	KI270394.1	970	3138125824
+--sjdbOverhang = 100 taken from the generated genome
+Started loading the genome: Mon Jan 25 16:53:43 2021
+
+Genome: size given as a parameter = 3215810555
+SA: size given as a parameter = 24938805931
+SAindex: size given as a parameter = 1
+Read from SAindex: pGe.gSAindexNbases=14  nSAi=357913940
+nGenome=3215810555;  nSAbyte=24938805931
+GstrandBit=32   SA number of indices=6045771134
+Shared memory is not used for genomes. Allocated a private copy of the genome.
+Genome file size: 3215810555 bytes; state: good=1 eof=0 fail=0 bad=0
+Loading Genome ... done! state: good=1 eof=0 fail=0 bad=0; loaded 3215810555 bytes
+SA file size: 24938805931 bytes; state: good=1 eof=0 fail=0 bad=0
+Loading SA ... done! state: good=1 eof=0 fail=0 bad=0; loaded 24938805931 bytes
+Loading SAindex ... done: 1565873619 bytes
+Finished loading the genome: Mon Jan 25 16:55:08 2021
+
+Processing splice junctions database sjdbN=385187,   pGe.sjdbOverhang=100 
+alignIntronMax=alignMatesGapMax=0, the max intron size will be approximately determined by (2^winBinNbits)*winAnchorDistNbins=589824
+Loaded transcript database, nTr=229487
+Loaded exon database, nEx=1397832
+Created thread # 1
+Starting to map file # 0
+mate 1:   /mnt/e/scratch/nasc/tmp/tmputskxkzx
+mate 2:   /mnt/e/scratch/nasc/tmp/tmpywjcodh3
+Created thread # 2
+Created thread # 3
+Created thread # 4
+Starting to map file # 1
+mate 1:   /mnt/e/scratch/nasc/tmp/tmpr0np79pz
+mate 2:   /mnt/e/scratch/nasc/tmp/tmpl_etsdpx
+Created thread # 5
+Created thread # 6
+Created thread # 7
+Created thread # 8
+Created thread # 9
+Created thread # 10
+Created thread # 11
+Created thread # 12
+Created thread # 13
+Created thread # 14
+Created thread # 15
+Created thread # 16
+Created thread # 17
+Created thread # 18
+Created thread # 19
+Created thread # 20
+Thread #1 end of input stream, nextChar=-1
+Thread #1 end of input stream, nextChar=-1
+Created thread # 21
+Completed: thread #7
+Completed: thread #13
+Completed: thread #20
+Completed: thread #5
+Completed: thread #6
+Completed: thread #2
+Completed: thread #8
+Created thread # 22
+Completed: thread #22
+Completed: thread #9
+Completed: thread #10
+Completed: thread #11
+Completed: thread #12
+Completed: thread #3
+Completed: thread #14
+Completed: thread #15
+Completed: thread #16
+Completed: thread #17
+Completed: thread #18
+Completed: thread #19
+Completed: thread #4
+Completed: thread #21
+Created thread # 23
+Completed: thread #23
+Created thread # 24
+Completed: thread #24
+Created thread # 25
+Completed: thread #25
+Created thread # 26
+Completed: thread #26
+Created thread # 27
+Completed: thread #27
+Created thread # 28
+Completed: thread #28
+Created thread # 29
+Completed: thread #29
+Created thread # 30
+Completed: thread #30
+Created thread # 31
+Completed: thread #0
+Completed: thread #31
+BAM sorting: 1277 mapped reads
+BAM sorting bins genomic start loci:
+1	0	25900953
+2	0	32621896
+3	0	45514875
+4	0	92836231
+5	0	114704478
+6	0	158354515
+7	0	165685771
+8	0	202333243
+9	0	228106692
+10	1	49819491
+11	1	73782120
+12	1	103882693
+13	1	129767582
+14	2	43445946
+15	2	62628869
+16	2	86252185
+17	2	123060164
+18	3	6867530
+19	3	42317371
+20	3	56663524
+21	3	93479428
+22	3	112026879
+23	3	120498284
+24	3	124913441
+25	4	46126576
+26	5	24214315
+27	5	49614337
+28	5	102083249
+29	6	34225624
+30	6	48142933
+31	6	63062218
+32	6	78174440
+33	7	30067499
+34	7	85806736
+35	8	8382165
+36	8	43002748
+37	8	68045777
+38	8	81511492
+39	10	16190898
+40	10	40763603
+41	11	3575638
+42	11	86859903
+43	11	119372289
+44	11	201085593
+45	11	237764855
+46	12	21326382
+47	12	64028506
+48	13	8209985
+49	13	8210314
+50	13	8210757
+51	13	8211002
+52	13	8215549
+53	13	8254527
+54	13	8254980
+55	13	8392757
+56	13	8393175
+57	13	8393668
+58	13	8393911
+59	13	8394211
+60	13	8437167
+61	13	8437510
+62	13	8437934
+63	13	8438202
+64	13	8442532
+65	13	8988493
+66	13	31666474
+67	14	24557723
+68	14	43129309
+69	15	39411974
+70	15	52546592
+71	15	128806475
+72	15	160404371
+73	15	184307667
+74	16	2953514
+75	16	108622546
+76	16	151104471
+77	17	69355745
+78	17	113020746
+79	17	151267797
+80	17	180702373
+81	18	30723788
+82	18	36602067
+83	18	127769464
+84	19	1567603
+85	19	5528541
+86	19	25124071
+87	19	44799829
+88	19	92606642
+89	19	142801040
+90	20	70128868
+91	20	100153389
+92	20	144791863
+93	21	19379535
+94	21	36211849
+95	21	104140652
+96	21	136414623
+97	22	1866
+98	22	2519
+99	22	2819
+100	22	4684
+101	22	6700
+102	22	8016
+103	22	9454
+104	22	15514
+105	23	1386626
+106	23	72186505
+107	23	136875129
+108	40	126010
+109	40	126439
+110	40	126871
+111	40	127165
+112	40	127430
+113	40	171088
+114	40	171520
+115	40	171834
+116	40	172222
+Completed: thread #1
+Joined thread # 1
+Joined thread # 2
+Joined thread # 3
+Joined thread # 4
+Joined thread # 5
+Joined thread # 6
+Joined thread # 7
+Joined thread # 8
+Joined thread # 9
+Joined thread # 10
+Joined thread # 11
+Joined thread # 12
+Joined thread # 13
+Joined thread # 14
+Joined thread # 15
+Joined thread # 16
+Joined thread # 17
+Joined thread # 18
+Joined thread # 19
+Joined thread # 20
+Joined thread # 21
+Joined thread # 22
+Joined thread # 23
+Joined thread # 24
+Joined thread # 25
+Joined thread # 26
+Joined thread # 27
+Joined thread # 28
+Joined thread # 29
+Joined thread # 30
+Joined thread # 31
+Jan 25 16:55:15 ..... started Solo counting
+Jan 25 16:55:15 ... Starting Solo post-map for Gene
+     Redistributing reads into 96files; nReadRec=341;   nReadRecBin=3
+Jan 25 16:55:15 ... Finished redistribution of reads from Solo read files
+Jan 25 16:55:15 ... Finished reading / collapsing
+Jan 25 16:55:15 ... Finished SmartSeq counting
+Jan 25 16:55:15 ..... finished Solo counting
+Jan 25 16:55:15 ..... started sorting BAM
+Max memory needed for sorting = 44117
+ALL DONE!

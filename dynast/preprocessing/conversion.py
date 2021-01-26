@@ -293,7 +293,7 @@ def count_conversions_part(
     pos,
     n_lines,
     snps=None,
-    quality=20,
+    quality=27,
     temp_dir=None,
     update_every=10000,
 ):
@@ -391,7 +391,7 @@ def count_conversions(
     counts_path,
     deduplicate=True,
     snps=None,
-    quality=20,
+    quality=27,
     n_threads=8,
     temp_dir=None
 ):
