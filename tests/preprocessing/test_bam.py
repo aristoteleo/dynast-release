@@ -115,13 +115,13 @@ class TestBam(mixins.TestMixin, TestCase):
 
             self.assertEqual((conversions_path, index_path, no_conversions_path, no_index_path),
                              bam.parse_all_reads(
-                                 self.paired_bam_path,
+                                 self.nasc_bam_path,
                                  conversions_path,
                                  index_path,
                                  no_conversions_path,
                                  no_index_path,
-                                 utils.read_pickle(self.paired_genes_path),
-                                 utils.read_pickle(self.paired_transcripts_path),
+                                 utils.read_pickle(self.nasc_genes_path),
+                                 utils.read_pickle(self.nasc_transcripts_path),
                                  strand='forward',
                                  umi_tag=None,
                                  barcode_tag='RG',

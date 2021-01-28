@@ -185,7 +185,6 @@ def count(
                 no_conversions_path,
                 no_index_path,
                 counts_path,
-                deduplicate=umi_tag is not None,
                 snps=snps,
                 quality=quality,
                 n_threads=n_threads,

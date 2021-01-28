@@ -258,8 +258,10 @@ def parse_read_contig(
             # If we are dealing with paired-end reads, we have to check for
             # overlaps.
             if read.is_paired:
-                if read_id not in paired:
-                    paired[read_id] = (
+                # Use HI tag, which is the multiple alignment index
+                key = (read_id, read.get_tag('HI'))
+                if key not in paired:
+                    paired[key] = (
                         set(reference_positions),
                         reference,
                         sequence,
@@ -276,8 +278,8 @@ def parse_read_contig(
                     mate_qualities,
                     mate_reference_start,
                     aligned_pairs,
-                ) = paired[read_id]
-                del paired[read_id]
+                ) = paired[key]
+                del paired[key]
 
                 # Update counts. union(A, B) = A + B - intersection(A, B)
                 counts += Counter(mate_reference)

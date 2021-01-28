@@ -1,12 +1,11 @@
 STAR version=2.7.7a
 STAR compilation time,server,dir=Mon Dec 28 13:38:40 EST 2020 vega:/home/dobin/data/STAR/STARcode/STAR.master/source
 ##### Command Line:
-/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR --readFilesManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28 --outSAMtype BAM SortedByCoordinate --outSAMattributes NH HI AS NM nM MD GX GN RG --outFilterScoreMinOverLread 0.3 --outFilterMatchNminOverLread 0.3 --soloType SmartSeq --soloUMIdedup Exact --soloStrand Unstranded --bamRemoveDuplicatesType UniqueIdentical --genomeDir /mnt/e/references/human/ensembl/STAR --runThreadN 32 --outFileNamePrefix nasc_align/ --outTmpDir tmp/tmppx0bsfjo --outBAMsortingBinsN 118
+/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR --outSAMtype BAM SortedByCoordinate --outSAMattributes NH HI AS NM nM MD GX GN RG --outFilterScoreMinOverLread 0.3 --outFilterMatchNminOverLread 0.3 --soloType SmartSeq --soloUMIdedup Exact --soloStrand Unstranded --bamRemoveDuplicatesType UniqueIdentical --readFilesManifest /mnt/e/scratch/nasc/tmp/tmp6d90iofo --genomeDir /mnt/e/references/human/ensembl/STAR --runThreadN 32 --outFileNamePrefix smartseq_align/ --outTmpDir tmp/tmpu6uz8lrq --outBAMsortingBinsN 118
 ##### Initial USER parameters from Command Line:
-outFileNamePrefix                 nasc_align/
-outTmpDir                         tmp/tmppx0bsfjo
+outFileNamePrefix                 smartseq_align/
+outTmpDir                         tmp/tmpu6uz8lrq
 ###### All USER parameters from Command Line:
-readFilesManifest             /mnt/e/scratch/nasc/tmp/tmpku5_ir28        ~RE-DEFINED
 outSAMtype                    BAM   SortedByCoordinate        ~RE-DEFINED
 outSAMattributes              NH   HI   AS   NM   nM   MD   GX   GN   RG        ~RE-DEFINED
 outFilterScoreMinOverLread    0.3     ~RE-DEFINED
@@ -15,20 +14,21 @@ soloType                      SmartSeq     ~RE-DEFINED
 soloUMIdedup                  Exact        ~RE-DEFINED
 soloStrand                    Unstranded     ~RE-DEFINED
 bamRemoveDuplicatesType       UniqueIdentical     ~RE-DEFINED
+readFilesManifest             /mnt/e/scratch/nasc/tmp/tmp6d90iofo        ~RE-DEFINED
 genomeDir                     /mnt/e/references/human/ensembl/STAR     ~RE-DEFINED
 runThreadN                    32     ~RE-DEFINED
-outFileNamePrefix             nasc_align/     ~RE-DEFINED
-outTmpDir                     tmp/tmppx0bsfjo     ~RE-DEFINED
+outFileNamePrefix             smartseq_align/     ~RE-DEFINED
+outTmpDir                     tmp/tmpu6uz8lrq     ~RE-DEFINED
 outBAMsortingBinsN            118     ~RE-DEFINED
 ##### Finished reading parameters from all sources
 
 ##### Final user re-defined parameters-----------------:
 runThreadN                        32
 genomeDir                         /mnt/e/references/human/ensembl/STAR
-readFilesManifest                 /mnt/e/scratch/nasc/tmp/tmpku5_ir28   
+readFilesManifest                 /mnt/e/scratch/nasc/tmp/tmp6d90iofo   
 bamRemoveDuplicatesType           UniqueIdentical
-outFileNamePrefix                 nasc_align/
-outTmpDir                         tmp/tmppx0bsfjo
+outFileNamePrefix                 smartseq_align/
+outTmpDir                         tmp/tmpu6uz8lrq
 outSAMtype                        BAM   SortedByCoordinate   
 outSAMattributes                  NH   HI   AS   NM   nM   MD   GX   GN   RG   
 outBAMsortingBinsN                118
@@ -40,38 +40,38 @@ soloUMIdedup                      Exact
 
 -------------------------------
 ##### Final effective command line:
-/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR   --runThreadN 32   --genomeDir /mnt/e/references/human/ensembl/STAR   --readFilesManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28      --bamRemoveDuplicatesType UniqueIdentical   --outFileNamePrefix nasc_align/   --outTmpDir tmp/tmppx0bsfjo   --outSAMtype BAM   SortedByCoordinate      --outSAMattributes NH   HI   AS   NM   nM   MD   GX   GN   RG      --outBAMsortingBinsN 118   --outFilterScoreMinOverLread 0.3   --outFilterMatchNminOverLread 0.3   --soloType SmartSeq   --soloStrand Unstranded   --soloUMIdedup Exact   
+/home/lioscro/miniconda3/lib/python3.8/site-packages/dynast/bins/linux/STAR/STAR   --runThreadN 32   --genomeDir /mnt/e/references/human/ensembl/STAR   --readFilesManifest /mnt/e/scratch/nasc/tmp/tmp6d90iofo      --bamRemoveDuplicatesType UniqueIdentical   --outFileNamePrefix smartseq_align/   --outTmpDir tmp/tmpu6uz8lrq   --outSAMtype BAM   SortedByCoordinate      --outSAMattributes NH   HI   AS   NM   nM   MD   GX   GN   RG      --outBAMsortingBinsN 118   --outFilterScoreMinOverLread 0.3   --outFilterMatchNminOverLread 0.3   --soloType SmartSeq   --soloStrand Unstranded   --soloUMIdedup Exact   
 ----------------------------------------
 
-Reading input file names and read groups from readFileManifest /mnt/e/scratch/nasc/tmp/tmpku5_ir28
-/mnt/e/scratch/nasc/tmp/tmputskxkzx	/mnt/e/scratch/nasc/tmp/tmpywjcodh3	ID:P1_A06_S6
-/mnt/e/scratch/nasc/tmp/tmpr0np79pz	/mnt/e/scratch/nasc/tmp/tmpl_etsdpx	ID:P1_A09_S9
+Reading input file names and read groups from readFileManifest /mnt/e/scratch/nasc/tmp/tmp6d90iofo
+/mnt/e/scratch/nasc/tmp/tmp32g04g03	/mnt/e/scratch/nasc/tmp/tmp7qsqqhkd	ID:P1_A06_S6
+/mnt/e/scratch/nasc/tmp/tmp1jyztadz	/mnt/e/scratch/nasc/tmp/tmpv1agsat9	ID:P1_A09_S9
 Number of fastq files for each mate = 2
 
    Input read files for mate 1 :
--rw------- 1 lioscro lioscro 91105 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmputskxkzx
--rw------- 1 lioscro lioscro 89996 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpr0np79pz
+-rw------- 1 lioscro lioscro 91105 Jan 28  2021 /mnt/e/scratch/nasc/tmp/tmp32g04g03
+-rw------- 1 lioscro lioscro 89996 Jan 28  2021 /mnt/e/scratch/nasc/tmp/tmp1jyztadz
 
    readsCommandsFile:
-exec > "tmp/tmppx0bsfjo/tmp.fifo.read1"
+exec > "tmp/tmpu6uz8lrq/tmp.fifo.read1"
 echo FILE 0
-cat      "/mnt/e/scratch/nasc/tmp/tmputskxkzx"
+cat      "/mnt/e/scratch/nasc/tmp/tmp32g04g03"
 echo FILE 1
-cat      "/mnt/e/scratch/nasc/tmp/tmpr0np79pz"
+cat      "/mnt/e/scratch/nasc/tmp/tmp1jyztadz"
 
 
    Input read files for mate 2 :
--rw------- 1 lioscro lioscro 90621 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpywjcodh3
--rw------- 1 lioscro lioscro 90624 Jan 25 16:53 /mnt/e/scratch/nasc/tmp/tmpl_etsdpx
+-rw------- 1 lioscro lioscro 90621 Jan 28  2021 /mnt/e/scratch/nasc/tmp/tmp7qsqqhkd
+-rw------- 1 lioscro lioscro 90624 Jan 28  2021 /mnt/e/scratch/nasc/tmp/tmpv1agsat9
 
    readsCommandsFile:
-exec > "tmp/tmppx0bsfjo/tmp.fifo.read2"
+exec > "tmp/tmpu6uz8lrq/tmp.fifo.read2"
 echo FILE 0
-cat      "/mnt/e/scratch/nasc/tmp/tmpywjcodh3"
+cat      "/mnt/e/scratch/nasc/tmp/tmp7qsqqhkd"
 echo FILE 1
-cat      "/mnt/e/scratch/nasc/tmp/tmpl_etsdpx"
+cat      "/mnt/e/scratch/nasc/tmp/tmpv1agsat9"
 
-Jan 25 16:53:43Finished reading, sorting and deduplicating CB whitelist sequences.
+Jan 28 17:24:34Finished reading, sorting and deduplicating CB whitelist sequences.
 WARNING: --limitBAMsortRAM=0, will use genome size as RAM limit for BAM sorting
 Finished loading and checking parameters
 Reading genome generation parameters:
@@ -291,7 +291,7 @@ Number of real (reference) chromosomes= 194
 193	KI270392.1	971	3137863680
 194	KI270394.1	970	3138125824
 --sjdbOverhang = 100 taken from the generated genome
-Started loading the genome: Mon Jan 25 16:53:43 2021
+Started loading the genome: Thu Jan 28 17:24:34 2021
 
 Genome: size given as a parameter = 3215810555
 SA: size given as a parameter = 24938805931
@@ -305,7 +305,7 @@ Loading Genome ... done! state: good=1 eof=0 fail=0 bad=0; loaded 3215810555 byt
 SA file size: 24938805931 bytes; state: good=1 eof=0 fail=0 bad=0
 Loading SA ... done! state: good=1 eof=0 fail=0 bad=0; loaded 24938805931 bytes
 Loading SAindex ... done: 1565873619 bytes
-Finished loading the genome: Mon Jan 25 16:55:08 2021
+Finished loading the genome: Thu Jan 28 17:26:02 2021
 
 Processing splice junctions database sjdbN=385187,   pGe.sjdbOverhang=100 
 alignIntronMax=alignMatesGapMax=0, the max intron size will be approximately determined by (2^winBinNbits)*winAnchorDistNbins=589824
@@ -313,14 +313,14 @@ Loaded transcript database, nTr=229487
 Loaded exon database, nEx=1397832
 Created thread # 1
 Starting to map file # 0
-mate 1:   /mnt/e/scratch/nasc/tmp/tmputskxkzx
-mate 2:   /mnt/e/scratch/nasc/tmp/tmpywjcodh3
+mate 1:   /mnt/e/scratch/nasc/tmp/tmp32g04g03
+mate 2:   /mnt/e/scratch/nasc/tmp/tmp7qsqqhkd
 Created thread # 2
 Created thread # 3
-Created thread # 4
 Starting to map file # 1
-mate 1:   /mnt/e/scratch/nasc/tmp/tmpr0np79pz
-mate 2:   /mnt/e/scratch/nasc/tmp/tmpl_etsdpx
+mate 1:   /mnt/e/scratch/nasc/tmp/tmp1jyztadz
+mate 2:   /mnt/e/scratch/nasc/tmp/tmpv1agsat9
+Created thread # 4
 Created thread # 5
 Created thread # 6
 Created thread # 7
@@ -336,32 +336,32 @@ Created thread # 16
 Created thread # 17
 Created thread # 18
 Created thread # 19
+Created thread # 19
+Thread #1 end of input stream, nextChar=-1
 Created thread # 20
-Thread #1 end of input stream, nextChar=-1
-Thread #1 end of input stream, nextChar=-1
+Completed: thread #5
+Completed: thread #11
+Completed: thread #16
+Completed: thread #2
+Completed: thread #6
 Created thread # 21
 Completed: thread #7
-Completed: thread #13
-Completed: thread #20
-Completed: thread #5
-Completed: thread #6
-Completed: thread #2
+Completed: thread #21
 Completed: thread #8
-Created thread # 22
-Completed: thread #22
 Completed: thread #9
 Completed: thread #10
-Completed: thread #11
-Completed: thread #12
 Completed: thread #3
+Completed: thread #12
+Completed: thread #13
 Completed: thread #14
 Completed: thread #15
-Completed: thread #16
+Completed: thread #4
 Completed: thread #17
 Completed: thread #18
 Completed: thread #19
-Completed: thread #4
-Completed: thread #21
+Completed: thread #20
+Created thread # 22
+Completed: thread #22
 Created thread # 23
 Completed: thread #23
 Created thread # 24
@@ -531,13 +531,13 @@ Joined thread # 28
 Joined thread # 29
 Joined thread # 30
 Joined thread # 31
-Jan 25 16:55:15 ..... started Solo counting
-Jan 25 16:55:15 ... Starting Solo post-map for Gene
+Jan 28 17:26:09 ..... started Solo counting
+Jan 28 17:26:09 ... Starting Solo post-map for Gene
      Redistributing reads into 96files; nReadRec=341;   nReadRecBin=3
-Jan 25 16:55:15 ... Finished redistribution of reads from Solo read files
-Jan 25 16:55:15 ... Finished reading / collapsing
-Jan 25 16:55:15 ... Finished SmartSeq counting
-Jan 25 16:55:15 ..... finished Solo counting
-Jan 25 16:55:15 ..... started sorting BAM
+Jan 28 17:26:09 ... Finished redistribution of reads from Solo read files
+Jan 28 17:26:09 ... Finished reading / collapsing
+Jan 28 17:26:09 ... Finished SmartSeq counting
+Jan 28 17:26:09 ..... finished Solo counting
+Jan 28 17:26:09 ..... started sorting BAM
 Max memory needed for sorting = 44117
 ALL DONE!

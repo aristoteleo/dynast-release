@@ -108,7 +108,6 @@ class TestConversion(mixins.TestMixin, TestCase):
                     self.umi_no_conversions_path,
                     self.umi_no_conversions_index_path,
                     counts_path,
-                    deduplicate=True,
                     snps=None,
                     quality=20,
                     n_threads=2,
@@ -117,7 +116,7 @@ class TestConversion(mixins.TestMixin, TestCase):
             )
             self.assertTrue(mixins.files_equal(self.umi_counts_path, counts_path))
 
-    def test_conversions_no_deduplication(self):
+    def test_conversions_paired(self):
         counts_path = os.path.join(self.temp_dir, 'counts.csv')
         with mock.patch('dynast.preprocessing.conversion.utils.display_progress_with_counter'):
             self.assertEqual(
@@ -128,9 +127,8 @@ class TestConversion(mixins.TestMixin, TestCase):
                     self.paired_no_conversions_path,
                     self.paired_no_conversions_index_path,
                     counts_path,
-                    deduplicate=False,
                     snps=None,
-                    quality=20,
+                    quality=27,
                     n_threads=2,
                     temp_dir=self.temp_dir
                 )

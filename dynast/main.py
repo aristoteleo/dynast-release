@@ -186,10 +186,10 @@ def setup_count_args(parser, parent):
         metavar='QUALITY',
         help=(
             'Base quality threshold. Only bases with PHRED quality greater than '
-            'this value will be considered when counting conversions. (default: 20)'
+            'this value will be considered when counting conversions. (default: 27)'
         ),
         type=int,
-        default=20
+        default=27
     )
     parser_count.add_argument(
         '--re',

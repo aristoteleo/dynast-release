@@ -128,8 +128,12 @@ class TestMixin(TestCase):
         ######################################
         # Paired (smartseq, no velocity, nasc)
         ######################################
+        # Align
+        cls.nasc_align_dir = os.path.join(cls.fixtures_dir, 'nasc_align')
+        cls.nasc_bam_path = os.path.join(cls.nasc_align_dir, 'Aligned.sortedByCoord.out.bam')
+
         # Count
-        cls.nasc_count_dir = os.path.join(cls.fixtures_dir, 'smartseq_count_nasc')
+        cls.nasc_count_dir = os.path.join(cls.fixtures_dir, 'nasc_count')
         cls.nasc_count_parse_dir = os.path.join(cls.nasc_count_dir, '0_parse')
         cls.nasc_count_count_dir = os.path.join(cls.nasc_count_dir, '1_count')
         cls.nasc_count_aggregate_dir = os.path.join(cls.nasc_count_dir, '2_aggregate')

@@ -84,6 +84,7 @@ def read_counts(counts_path, *args, **kwargs):
     :rtype: pandas.DataFrame
     """
     dtypes = {
+        'read_id': 'string',
         'barcode': 'string',
         'umi': 'string',
         'GX': 'string',
@@ -92,7 +93,7 @@ def read_counts(counts_path, *args, **kwargs):
         **{column: np.uint8
            for column in COLUMNS}
     }
-    return pd.read_csv(counts_path, dtype=dtypes, *args, **kwargs)
+    return pd.read_csv(counts_path, dtype=dtypes, na_filter=False, *args, **kwargs)
 
 
 def complement_counts(df_counts, gene_infos):
@@ -117,6 +118,46 @@ def complement_counts(df_counts, gene_infos):
     df_reverse = df_reverse[columns]
 
     return pd.concat((df_forward, df_reverse)).reset_index()
+
+
+def drop_multimappers(df_counts):
+    """Drop multimappings that have the same read ID where
+    * some map to the transcriptome while some do not -- drop non-transcriptome alignments
+    * none map to the transcriptome AND aligned to multiple genes -- drop all
+    * none map to the transcriptome AND assigned multiple velocity types -- set to ambiguous
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+
+    :return: counts dataframe with multimappers appropriately filtered
+    :rtype: pandas.DataFrame
+    """
+    # Multimapping reads
+    duplicated_mask = df_counts.duplicated('read_id', keep=False)
+    if not any(duplicated_mask):
+        return df_counts
+
+    df_multi = df_counts[duplicated_mask]
+
+    filtered = []
+    for read_id, df_read in df_multi.groupby('read_id'):
+        # Rule 1
+        if True in df_read['transcriptome'] and False in df_read['transcriptome']:
+            filtered.append(df_read[df_read['transcriptome']])
+        # Rule 2, 3
+        elif all(~df_read['transcriptome']):
+            # Rule 2
+            if len(df_read['GX'].unique()) > 1:
+                continue
+            # Rule 3
+            elif len(df_read['velocity'].unique()) > 1:
+                df_read = df_read.copy()
+                df_read['velocity'] = 'ambiguous'
+                filtered.append(df_read.drop_duplicates('read_id', keep='first'))
+            else:
+                filtered.append(df_read.drop_duplicates('read_id', keep='first'))
+
+    return df_counts[~duplicated_mask].append(pd.concat(filtered, ignore_index=True), ignore_index=True)
 
 
 def deduplicate_counts(df_counts):
@@ -271,7 +312,7 @@ def count_no_conversions_part(
             line = f.readline()
             groups = NO_CONVERSIONS_PARSER.match(line).groupdict()
             out.write(
-                f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
+                f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
                 f'{",".join(groups.get(key, "0") for key in COLUMNS)},{groups["velocity"]},{groups["transcriptome"]}\n'
             )
             if (i + 1) % update_every == 0:
@@ -350,7 +391,7 @@ def count_conversions_part(
             if read_id != groups['read_id']:
                 if read_id is not None:
                     out.write(
-                        f'{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
+                        f'{prev_groups["read_id"]},{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)},{prev_groups["velocity"]},{prev_groups["transcriptome"]}\n'
                     )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
@@ -371,7 +412,7 @@ def count_conversions_part(
         # Add last record
         if read_id is not None:
             out.write(
-                f'{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
+                f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
                 f'{",".join(str(c) for c in counts)},{groups["velocity"]},{groups["transcriptome"]}\n'
             )
 
@@ -388,7 +429,6 @@ def count_conversions(
     no_conversions_path,
     no_index_path,
     counts_path,
-    deduplicate=True,
     snps=None,
     quality=27,
     n_threads=8,
@@ -409,8 +449,6 @@ def count_conversions(
     :type no_index_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
-    :param deduplicate: whether to deduplicate reads based on UMI, defaults to `True`
-    :type deduplicate: bool, optional
     :param snps: dictionary of contig as keys and list of genomic positions as
                  values that indicate SNP locations, defaults to `None`
     :type snps: dictionary, optional
@@ -463,10 +501,10 @@ def count_conversions(
     pool.join()
 
     # Combine csvs
-    combined_path = utils.mkstemp(dir=temp_dir) if deduplicate else counts_path
+    combined_path = utils.mkstemp(dir=temp_dir)
     logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
-        out.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
+        out.write(f'read_id,barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
         for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
@@ -474,8 +512,13 @@ def count_conversions(
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
 
-    if deduplicate:
+    # Deduplicate using UMIs if possible, otherwise use read id
+    df_counts = read_counts(combined_path)
+    if all(df_counts['umi'] != 'NA'):
         logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
-        deduplicate_counts(read_counts(combined_path)).to_csv(counts_path, index=False)
+        deduplicate_counts(df_counts).drop(columns='read_id').to_csv(counts_path, index=False)
+    else:
+        logger.debug(f'Filtering multimappers to {counts_path}')
+        drop_multimappers(df_counts).drop(columns='read_id').to_csv(counts_path, index=False)
 
     return counts_path
