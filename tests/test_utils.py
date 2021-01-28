@@ -173,16 +173,21 @@ class TestUtils(mixins.TestMixin, TestCase):
             self.assertEqual(['future1', 'future2'], list(utils.as_completed(futures)))
             as_completed.assert_called_once_with(futures)
 
+    def test_flatten_dictionary(self):
+        d = {'a': 'b', 'c': 'd', 'e': {'f': 'g', 'h': {'i': 'j'}}}
+        self.assertEqual([(('a',), 'b'), (('c',), 'd'), (('e', 'f'), 'g'), (('e', 'h', 'i'), 'j')],
+                         list(utils.flatten_dictionary(d)))
+
     def test_merge_dictionaries(self):
         d1 = {'a': 'b', 'c': {'d': 'e'}, 'f': 'g'}
         d2 = {'a': 'h', 'c': {'i': 'j'}}
         self.assertEqual({
             'a': 'bh',
             'c': {
-                'd': 'e',
+                'd': 'eX',
                 'i': 'Xj'
             },
-            'f': 'g'
+            'f': 'gX'
         }, utils.merge_dictionaries(d1, d2, default='X'))
 
     def test_write_pickle(self):
@@ -196,3 +201,7 @@ class TestUtils(mixins.TestMixin, TestCase):
         with gzip.open(path, 'wb') as f:
             pickle.dump('test', f)
         self.assertEqual('test', utils.read_pickle(path))
+
+    def test_split_index(self):
+        index = [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]
+        self.assertEqual([(0, 15), (3, 10)], utils.split_index(index, n=2))

@@ -9,7 +9,6 @@ import pandas as pd
 from scipy import sparse
 
 from .. import utils
-from . import index
 
 logger = logging.getLogger(__name__)
 
@@ -433,7 +432,7 @@ def count_conversions(
 
     # Split index into n contiguous pieces
     logger.debug(f'Splitting index into {n_threads} parts')
-    parts = index.split_index(idx, n=n_threads)
+    parts = utils.split_index(idx, n=n_threads)
     no_parts = []
     for i in range(0, len(no_idx), (len(no_idx) // n_threads) + 1):
         no_parts.append((no_idx[i], min((len(no_idx) // n_threads) + 1, len(no_idx[i:]))))

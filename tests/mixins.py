@@ -39,6 +39,7 @@ class TestMixin(TestCase):
         cls.temp_dir = None
         cls.base_dir = os.path.dirname(os.path.abspath(__file__))
         cls.fixtures_dir = os.path.join(cls.base_dir, 'fixtures')
+        cls.gtf_path = os.path.join(cls.fixtures_dir, 'not_sorted.gtf')
 
         ###########################
         # UMI-based (with velocity)
@@ -56,6 +57,7 @@ class TestMixin(TestCase):
         # Count
         cls.umi_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count')
         cls.umi_count_parse_dir = os.path.join(cls.umi_count_dir, '0_parse')
+        cls.umi_count_snp_dir = os.path.join(cls.umi_count_dir, '0_snp')
         cls.umi_count_count_dir = os.path.join(cls.umi_count_dir, '1_count')
         cls.umi_count_aggregate_dir = os.path.join(cls.umi_count_dir, '2_aggregate')
         cls.umi_count_estimate_dir = os.path.join(cls.umi_count_dir, '3_estimate')
@@ -67,6 +69,9 @@ class TestMixin(TestCase):
         cls.umi_no_conversions_index_path = os.path.join(cls.umi_count_parse_dir, 'no_conversions.idx')
         cls.umi_genes_path = os.path.join(cls.umi_count_parse_dir, 'genes.pkl.gz')
         cls.umi_transcripts_path = os.path.join(cls.umi_count_parse_dir, 'transcripts.pkl.gz')
+        cls.umi_coverage_path = os.path.join(cls.umi_count_snp_dir, 'coverage.csv')
+        cls.umi_coverage_index_path = os.path.join(cls.umi_count_snp_dir, 'coverage.idx')
+        cls.umi_snps_path = os.path.join(cls.umi_count_snp_dir, 'snps.csv')
         cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts.csv')
         cls.umi_rates_path = os.path.join(cls.umi_count_aggregate_dir, 'rates.csv')
         cls.umi_aggregates_paths = {

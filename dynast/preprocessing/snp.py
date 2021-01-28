@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-from .index import split_index
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +149,7 @@ def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
     index = utils.read_pickle(index_path)
 
     logger.debug(f'Splitting index into {n_threads} parts')
-    parts = split_index(index, n=n_threads)
+    parts = utils.split_index(index, n=n_threads)
 
     logger.debug(f'Spawning {n_threads} processes')
     n_lines = sum(idx[1] for idx in index)
@@ -241,7 +240,7 @@ def extract_coverage(coverage_path, index_path, n_threads=8):
     index = utils.read_pickle(index_path)
 
     logger.debug(f'Splitting index into {n_threads} parts')
-    parts = split_index(index, n=n_threads)
+    parts = utils.split_index(index, n=n_threads)
 
     logger.debug(f'Spawning {n_threads} processes')
     n_lines = sum(idx[1] for idx in index)
@@ -301,7 +300,7 @@ def detect_snps(
     conversions = extract_conversions(conversions_path, conversions_index_path, quality=quality, n_threads=n_threads)
 
     logger.info('Counting coverage for each genomic position')
-    coverage = extract_coverage(coverage_path, coverage_index_path, quality=quality, n_threads=n_threads)
+    coverage = extract_coverage(coverage_path, coverage_index_path, n_threads=n_threads)
 
     logger.info('Calculating fraction of conversions for each genomic position')
     fractions = utils.merge_dictionaries(conversions, coverage, f=truediv)

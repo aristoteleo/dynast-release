@@ -415,6 +415,28 @@ def as_completed_with_progress(futures):
             pbar.update(1)
 
 
+def flatten_dictionary(d, keys=None):
+    """Generator that flattens the given dictionary into 2-element tuples
+    containing keys and values. For nested dictionaries, the keys are
+    appended into a tuple.
+
+    :param d: dictionary to flatten
+    :type d: dictionary
+    :param keys: previous keys, defaults to `None`. Used exclusively for recursion.
+    :type keys: tuple, optional
+
+    :return: flattened dictionary as (keys, value)
+    :rtype: (tuple, object)
+    """
+    keys = keys or tuple()
+    for k, v in d.items():
+        new_keys = keys + (k,)
+        if isinstance(v, dict):
+            yield from flatten_dictionary(v, new_keys)
+        else:
+            yield new_keys, v
+
+
 def merge_dictionaries(d1, d2, f=add, default=0):
     """Merge two dictionaries, applying an arbitrary function `f` to duplicate keys.
     Dictionaries may be nested.
@@ -423,49 +445,39 @@ def merge_dictionaries(d1, d2, f=add, default=0):
     :type d1: dictionary
     :param d2: second dictionary
     :type d2: dictionary
-    :param f: merge function to use for keys present in both dictionaries. This
-              function should take two arguments and return one.
-    :type f: callable
-    :param default: default value to use for keys not present in the first dictionary
-                    but present in the second
-    :type default: object
+    :param f: merge function. This function should take two arguments and return one,
+              defaults to `+`
+    :type f: callable, optional
+    :param default: default value or callable to use for keys not present in either
+                    dictionary, defaults to `0`
+    :type default: object, optional
 
     :return: merged dictionary
     :rtype: dictionary
     """
-    merged = d1.copy()
-    for key, value2 in d2.items():
-        if key in d1 and isinstance(d1[key], dict) != isinstance(value2, dict):
-            raise Exception(f'Inconsistent key {key}')
 
-        value1 = d1.get(key, {} if isinstance(value2, dict) else (default() if callable(default) else default))
-        if isinstance(value1, dict) and isinstance(value2, dict):
-            merged[key] = merge_dictionaries(value1, value2, f=f, default=default)
-        else:
-            merged[key] = f(value1, value2)
+    def setdefault_nested(d, t, value):
+        inner = d
+        for k in t[:-1]:
+            inner = inner.setdefault(k, {})
+        return inner.setdefault(t[-1], value)
+
+    def get_nested(d, t, default=None):
+        inner = d
+        for k in t[:-1]:
+            inner = inner.get(k, {})
+        return inner.get(t[-1], default)
+
+    # Extract all keys
+    d1_keys = [key for key, value in flatten_dictionary(d1)]
+    d2_keys = [key for key, value in flatten_dictionary(d2)]
+    keys = list(set(d1_keys + d2_keys))
+
+    merged = {}
+    for key in sorted(keys):
+        setdefault_nested(merged, key, f(get_nested(d1, key, default), get_nested(d2, key, default)))
+
     return merged
-
-
-def flatten_dictionary(d, keys=None):
-    """Generator that flattens the given dictionary into 2-element tuples
-    containing keys and values. For nested dictionaries, the keys are
-    appended into a list.
-
-    :param d: dictionary to flatten
-    :type d: dictionary
-    :param keys: previous keys, defaults to `None`
-    :type keys: list, optional
-
-    :return: flattened dictionary
-    :rtype: (object, object)
-    """
-    keys = keys or []
-    for k, v in d.items():
-        new_keys = keys + [k]
-        if isinstance(v, dict):
-            yield from flatten_dictionary(v, new_keys)
-        else:
-            yield new_keys, v
 
 
 def write_pickle(obj, path, *args, **kwargs):
@@ -497,3 +509,38 @@ def read_pickle(path):
     """
     with gzip.open(path, 'rb') as f:
         return pickle.load(f)
+
+
+def split_index(index, n=8):
+    """Split a conversions index, which is a list of tuples (file position,
+    number of lines), one for each read, into `n` approximately equal parts.
+    This function is used to split the conversions CSV for multiprocessing.
+
+    :param index: index
+    :type index: list
+    :param n: number of splits, defaults to `8`
+    :type n: int, optional
+
+    :return: list of parts, where each part is a (file position, number of lines) tuple
+    :rtype: list
+    """
+    n_lines = sum(idx[1] for idx in index)
+    target = (n_lines // n) + 1  # add one to prevent underflow
+
+    # Split the index to "approximately" equal parts
+    parts = []
+    start_pos = None
+    current_size = 0
+    for pos, size in index:
+        if start_pos is None:
+            start_pos = pos
+        current_size += size
+
+        if current_size >= target:
+            parts.append((start_pos, current_size))
+            start_pos = None
+            current_size = 0
+    if current_size > 0:
+        parts.append((start_pos, current_size))
+
+    return parts

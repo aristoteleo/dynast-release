@@ -186,20 +186,6 @@ class SegmentCollection:
     def span_is_exclusive(self, collection):
         return self.end <= collection.start or self.start >= collection.end
 
-    def is_spliced(self, collection):
-        if self.span_is_exclusive(collection):
-            return False
-        for i in range(1, len(self)):
-            cls_segment_1 = self[i - 1]
-            cls_segment_2 = self[i]
-            for j in range(1, len(collection)):
-                collection_segment_1 = collection[j - 1]
-                collection_segment_2 = collection[j]
-
-                if cls_segment_1.is_subset(collection_segment_1) and cls_segment_2.is_subset(collection_segment_2):
-                    return True
-        return False
-
     def is_overlapping(self, collection):
         if self.span_is_exclusive(collection):
             return False
@@ -223,21 +209,7 @@ class SegmentCollection:
         return True
 
     def is_superset(self, collection):
-        if self.span_is_exclusive(collection):
-            return False
-        # Assume segments are sorted
-        collection_i = 0
-        for cls_segment in self.segments:
-            found = False
-            for collection_segment in collection.segments[collection_i:]:
-                if cls_segment.is_superset(collection_segment):
-                    found = True
-                    break
-                collection_i += 1
-
-            if not found:
-                return False
-        return True
+        return collection.is_subset(self)
 
     @classmethod
     def from_positions(cls, positions):
@@ -269,6 +241,14 @@ class SegmentCollection:
 
     def __repr__(self):
         return str(self)
+
+    def __eq__(self, other):
+        if len(self) != len(other):
+            return False
+        for segment1, segment2 in zip(self.segments, other.segments):
+            if segment1 != segment2:
+                return False
+        return True
 
 
 def parse_gtf(gtf_path):
@@ -325,7 +305,7 @@ def parse_gtf(gtf_path):
         exons = transcript_exons.get(transcript_id, SegmentCollection())
         if exons:
             if exons[0].start > transcript_interval.start:
-                introns.add_segment(Segment(transcript_interval.start, exons[0].start - 1))
+                introns.add_segment(Segment(transcript_interval.start, exons[0].start))
 
             for i in range(len(exons) - 1):
                 introns.add_segment(Segment(exons[i].end, exons[i + 1].start))
