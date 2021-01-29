@@ -6,7 +6,8 @@ import pandas as pd
 import dynast.preprocessing.aggregation as aggregation
 import dynast.preprocessing.conversion as conversion
 import dynast.utils as utils
-from tests import mixins
+
+from .. import mixins
 
 
 class TestAggregation(mixins.TestMixin, TestCase):

@@ -5,7 +5,8 @@ import pandas as pd
 
 import dynast.preprocessing.coverage as coverage
 import dynast.utils as utils
-from tests import mixins
+
+from .. import mixins
 
 
 class TestCoverage(mixins.TestMixin, TestCase):

@@ -5,7 +5,8 @@ import pandas as pd
 
 import dynast.preprocessing.bam as bam
 import dynast.utils as utils
-from tests import mixins
+
+from .. import mixins
 
 
 class TestBam(mixins.TestMixin, TestCase):

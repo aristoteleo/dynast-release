@@ -85,6 +85,38 @@ class TestMixin(TestCase):
         cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c.csv')
         cls.umi_pi_paths = {key: os.path.join(cls.umi_count_estimate_dir, f'{key}.csv') for key in cls.types}
 
+        #########
+        # Control
+        #########
+        # Count
+        cls.control_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count_control')
+        cls.control_count_parse_dir = os.path.join(cls.control_count_dir, '0_parse')
+        cls.control_count_snp_dir = os.path.join(cls.control_count_dir, '0_snp')
+        cls.control_count_count_dir = os.path.join(cls.control_count_dir, '1_count')
+        cls.control_count_aggregate_dir = os.path.join(cls.control_count_dir, '2_aggregate')
+        cls.control_count_estimate_dir = os.path.join(cls.control_count_dir, '3_estimate')
+        cls.control_adata_path = os.path.join(cls.control_count_dir, 'adata.h5ad')
+
+        cls.control_conversions_path = os.path.join(cls.control_count_parse_dir, 'conversions.csv')
+        cls.control_conversions_index_path = os.path.join(cls.control_count_parse_dir, 'conversions.idx')
+        cls.control_no_conversions_path = os.path.join(cls.control_count_parse_dir, 'no_conversions.csv')
+        cls.control_no_conversions_index_path = os.path.join(cls.control_count_parse_dir, 'no_conversions.idx')
+        cls.control_genes_path = os.path.join(cls.control_count_parse_dir, 'genes.pkl.gz')
+        cls.control_transcripts_path = os.path.join(cls.control_count_parse_dir, 'transcripts.pkl.gz')
+        cls.control_coverage_path = os.path.join(cls.control_count_snp_dir, 'coverage.csv')
+        cls.control_coverage_index_path = os.path.join(cls.control_count_snp_dir, 'coverage.idx')
+        cls.control_snps_path = os.path.join(cls.control_count_snp_dir, 'snps.csv')
+        cls.control_counts_path = os.path.join(cls.control_count_count_dir, 'counts.csv')
+        cls.control_rates_path = os.path.join(cls.control_count_aggregate_dir, 'rates.csv')
+        cls.control_aggregates_paths = {
+            key: {
+                conversion: os.path.join(cls.control_count_aggregate_dir, key, f'{conversion}.csv')
+                for conversion in cls.conversions
+            }
+            for key in cls.types
+        }
+        cls.control_p_e_path = os.path.join(cls.control_count_estimate_dir, 'p_e.csv')
+
         ################################
         # Paired (smartseq, no velocity)
         ################################

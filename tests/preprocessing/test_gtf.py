@@ -1,7 +1,8 @@
 from unittest import TestCase
 
 import dynast.preprocessing.gtf as gtf
-from tests import mixins
+
+from .. import mixins
 
 
 class TestGtf(mixins.TestMixin, TestCase):

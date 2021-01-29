@@ -4,7 +4,8 @@ from unittest import mock, TestCase
 import pandas as pd
 
 import dynast.preprocessing.snp as snp
-from tests import mixins
+
+from .. import mixins
 
 
 class TestSnp(mixins.TestMixin, TestCase):
