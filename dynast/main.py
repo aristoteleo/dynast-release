@@ -216,7 +216,10 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--conversion',
         metavar='CONVERSION',
-        help=argparse.SUPPRESS,
+        help=(
+            'The type of conversion introduced, represented as a two-character '
+            'string. For example, a T>C conversion is `TC` (default: `TC`)'
+        ),
         type=str,
         choices=CONVERSION_COLUMNS,
         default='TC',

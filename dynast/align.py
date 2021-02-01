@@ -128,8 +128,9 @@ def STAR_solo(
     )
     arguments.update(overrides or {})
 
-    logger.info(f'Increasing maximum number of open file descriptors from {current} to {maximum}')
+    logger.debug(f'Increasing maximum number of open file descriptors from {current} to {maximum}')
     with utils.increase_file_descriptor_limit(maximum):
+        logger.info('Starting alignment')
         command += utils.arguments_to_list(arguments)
         utils.run_executable(command)
 
