@@ -19,6 +19,7 @@ def count(
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
+    gene_tag='GX',
     barcodes=None,
     control=False,
     filtered_only=False,
@@ -26,6 +27,7 @@ def count(
     conversion='TC',
     snp_threshold=0.5,
     snp_csv=None,
+    correction=False,
     read_threshold=16,
     control_p_e=None,
     p_group_by=None,
@@ -112,6 +114,7 @@ def count(
                 strand=strand,
                 umi_tag=umi_tag,
                 barcode_tag=barcode_tag,
+                gene_tag=gene_tag,
                 barcodes=barcodes,
                 n_threads=n_threads,
                 temp_dir=temp_dir,
@@ -143,6 +146,7 @@ def count(
                 coverage_index_path,
                 umi_tag=umi_tag,
                 barcode_tag=barcode_tag,
+                gene_tag=gene_tag,
                 barcodes=barcodes,
                 n_threads=n_threads,
                 temp_dir=temp_dir,
@@ -210,7 +214,7 @@ def count(
     df_counts_uncomplemented = None
     df_counts_complemented = None
     df_counts_transcriptome = None
-    skip = utils.all_exists(aggregates_required) and not redo('aggregate')
+    skip = not correction or (utils.all_exists(aggregates_required) and not redo('aggregate'))
     with STATS.step('aggregate', skipped=skip):
         if not skip:
             logger.info('Computing mutation rates')
@@ -240,7 +244,7 @@ def count(
     p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
     estimates_paths = [p_e_path, p_c_path]
     value_columns = [conversion, conversion[0], 'count']
-    skip = utils.all_exists(estimates_paths) and not redo('p')
+    skip = not correction or (utils.all_exists(estimates_paths) and not redo('p'))
     with STATS.step('p', skipped=skip):
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
@@ -324,7 +328,7 @@ def count(
         for key in aggregates_paths.keys()
         if key not in velocity_blacklist
     }
-    skip = utils.all_exists(list(pi_paths.values())) and not redo('pi')
+    skip = not correction or (utils.all_exists(list(pi_paths.values())) and not redo('pi'))
     with STATS.step('pi', skipped=skip):
         if not skip:
             for key, paths in aggregates_paths.items():
@@ -376,9 +380,10 @@ def count(
                     'X_labeled': matrix_labeled
                 }
             )
-            pis = estimation.read_pi(pi_paths['transcriptome'])
-            (adata.layers['X_pi'], adata.layers['X_unlabeled_estimate'],
-             adata.layers['X_labeled_estimate']) = estimation.split_matrix(adata.X, pis, barcodes, features)
+            if correction:
+                pis = estimation.read_pi(pi_paths['transcriptome'])
+                (adata.layers['X_pi'], adata.layers['X_unlabeled_estimate'],
+                 adata.layers['X_labeled_estimate']) = estimation.split_matrix(adata.X, pis, barcodes, features)
 
             # All the other counts as layers
             for key in aggregates_paths.keys():
@@ -391,12 +396,13 @@ def count(
                          df_counts_velocity, barcodes, features, conversion=conversion
                      )
 
-                    # Estimates
-                    pis = estimation.read_pi(pi_paths[key])
-                    (
-                        adata.layers[f'{key}_pi'], adata.layers[f'{key}_unlabeled_estimate'],
-                        adata.layers[f'{key}_labeled_estimate']
-                    ) = estimation.split_matrix(adata.layers[key], pis, barcodes, features)
+                    if correction:
+                        # Estimates
+                        pis = estimation.read_pi(pi_paths[key])
+                        (
+                            adata.layers[f'{key}_pi'], adata.layers[f'{key}_unlabeled_estimate'],
+                            adata.layers[f'{key}_labeled_estimate']
+                        ) = estimation.split_matrix(adata.layers[key], pis, barcodes, features)
 
             adata.write(adata_path, compression='gzip')
         else:

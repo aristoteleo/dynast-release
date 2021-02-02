@@ -8,7 +8,7 @@ import warnings
 from . import __version__
 from .config import RE_CHOICES
 from .preprocessing.conversion import CONVERSION_COLUMNS
-from .technology import TECHNOLOGIES_MAP
+from .technology import BARCODE_UMI_TECHNOLOGIES, TECHNOLOGIES_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,37 @@ def silence_logger(name):
     package_logger = logging.getLogger(name)
     package_logger.setLevel(logging.CRITICAL + 10)
     package_logger.propagate = False
+
+
+def print_technologies():
+    """Displays a list of supported technologies along with whether a whitelist
+    is provided for that technology.
+    """
+    headers = ['name', 'whitelist provided', 'barcode (start, length)', 'UMI (start, length)']
+    rows = [headers]
+
+    print('List of supported single-cell technologies.\nPositions are 1-indexed.\n')
+    for key in sorted(TECHNOLOGIES_MAP):
+        t = TECHNOLOGIES_MAP[key]
+        barcode = umi = 'NA'
+        if t in BARCODE_UMI_TECHNOLOGIES:
+            barcode = (t.arguments['--soloCBstart'], t.arguments['--soloCBlen'])
+            umi = (t.arguments['--soloUMIstart'], t.arguments['--soloUMIlen'])
+        row = [key, 'yes' if t.whitelist_path else '', str(barcode), str(umi)]
+        rows.append(row)
+
+    max_lens = []
+    for i in range(len(headers)):
+        max_lens.append(len(headers[i]))
+        for row in rows[1:]:
+            max_lens[i] = max(max_lens[i], len(row[i]))
+
+    rows.insert(1, ['-' * l for l in max_lens])  # noqa
+    for row in rows:
+        for col, l in zip(row, max_lens):
+            print(col.ljust(l + 4), end='')
+        print()
+    sys.exit(1)
 
 
 def setup_ref_args(parser, parent):
@@ -87,7 +118,7 @@ def setup_align_args(parser, parent):
     required_align.add_argument(
         '-x',
         metavar='TECHNOLOGY',
-        help=f'Single-cell technology used. Available choices are: {",".join(TECHNOLOGIES_MAP.keys())}.',
+        help='Single-cell technology used. `dynast --list` to view all supported technologies',
         type=str,
         required=True,
         choices=TECHNOLOGIES_MAP.keys()
@@ -99,7 +130,9 @@ def setup_align_args(parser, parent):
               'If not provided, all barcodes are used.'),
     )
     parser_align.add_argument('--overwrite', help='Overwrite existing alignment files', action='store_true')
-    parser_align.add_argument('--STAR-overrides', metavar='ARGUMENTS', help=argparse.SUPPRESS, type=str, default=None)
+    parser_align.add_argument(
+        '--STAR-overrides', metavar='ARGUMENTS', help='Arguments to pass directly to STAR.', type=str, default=None
+    )
     parser_align.add_argument(
         '--nasc',
         help=argparse.SUPPRESS,
@@ -132,8 +165,8 @@ def setup_count_args(parser, parent):
     """
     parser_count = parser.add_parser(
         'count',
-        description='Quantify new RNA',
-        help='Quantify new RNA',
+        description='Quantify unlabeled and labeled RNA',
+        help='Quantify unlabeled and labeled RNA',
         parents=[parent],
     )
     parser_count._actions[0].help = parser_count._actions[0].help.capitalize()
@@ -153,9 +186,8 @@ def setup_count_args(parser, parent):
         '--umi-tag',
         metavar='TAG',
         help=(
-            'BAM tag to use as unique molecular identifiers (UMI). Used to '
-            'collapse duplicate molecules. If not provided, all reads are assumed '
-            'to be unique. (default: None)'
+            'BAM tag to use as unique molecular identifiers (UMI). If not provided, '
+            'all reads are assumed to be unique. (default: None)'
         ),
         type=str,
         default=None,
@@ -164,20 +196,23 @@ def setup_count_args(parser, parent):
         '--barcode-tag',
         metavar='TAG',
         help=(
-            'BAM tag to use as cell barcodes. Used to identify from which cell a read '
-            'originated. If not provided, all reads are assumed to be from a single '
-            'cell. (default: None)'
+            'BAM tag to use as cell barcodes. If not provided, all reads are '
+            'assumed to be from a single cell. (default: None)'
         ),
         type=str,
         default=None,
     )
     parser_count.add_argument(
+        '--gene-tag',
+        metavar='TAG',
+        help=('BAM tag to use as gene assignments (default: GX)'),
+        type=str,
+        default='GX',
+    )
+    parser_count.add_argument(
         '--strand',
-        help=(
-            'Read strandedness. Droplet-based single cell technologies are usually '
-            '`forward` stranded, while common Smart-seq protocols are `unstranded`. '
-            '(default: `forward` if `--umi-tag` is provided, otherwise `unstranded`)'
-        ),
+        help=('Read strandedness. '
+              '(default: `forward` if `--umi-tag` is provided, otherwise `unstranded`)'),
         choices=['forward', 'reverse', 'unstranded'],
         default=None,
     )
@@ -203,13 +238,6 @@ def setup_count_args(parser, parent):
         '--p-group-by',
         metavar='GROUPBY',
         help=argparse.SUPPRESS,
-        # help=(
-        #     'Comma-delimited column names to group by when calculating p_e and p_c estimates. '
-        #     'Available choices are: `barcode`, `GX`. `barcode` corresponds to '
-        #     'either raw or corrected barcodes, depending on whether '
-        #     '--use-corrected-barcodes was specified. `GX` corresponds to genes. '
-        #     '(default: `barcode`)'
-        # ),
         type=str,
         default='barcode',
     )
@@ -218,7 +246,7 @@ def setup_count_args(parser, parent):
         metavar='CONVERSION',
         help=(
             'The type of conversion introduced, represented as a two-character '
-            'string. For example, a T>C conversion is `TC` (default: `TC`)'
+            'string. For example, a T>C conversion is TC. (default: TC)'
         ),
         type=str,
         choices=CONVERSION_COLUMNS,
@@ -238,17 +266,15 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--snp-csv',
         metavar='CSV',
-        help=(
-            'CSV file of two columns: contig (i.e. chromosome) and genome position '
-            'of known SNPs. (default: None)'
-        ),
+        help=('CSV file of two columns: contig (i.e. chromosome) and genome position '
+              'of known SNPs'),
         type=str,
         default=None,
     )
     parser_count.add_argument(
         '--barcodes',
-        help=('Only consider cell barcodes in the provided textfile, containing one '
-              'cell barcode per line.'),
+        help=('Textfile containing filtered cell barcodes. Only these barcodes will '
+              'be processed.'),
         type=str,
     )
     parser_count.add_argument(
@@ -260,9 +286,7 @@ def setup_count_args(parser, parent):
         default=16,
     )
     parser_count.add_argument(
-        '--no-velocity',
-        help='Do not prepare matrices for RNA velocity estimation (default: False)',
-        action='store_true'
+        '--no-velocity', help='Do not prepare matrices for RNA velocity estimation', action='store_true'
     )
     parser_count.add_argument(
         '--nasc',
@@ -274,10 +298,14 @@ def setup_count_args(parser, parent):
         '--control',
         help=(
             'Indicate this is a control sample, which is used to estimate the background mutation rate '
-            'and/or detect SNPs. After using this option, the estimated background mutation rate and/or '
-            'detected SNPs can be input to the `--p-e` and `--snp-csv` options, respectively, when '
-            'running the test sample(s).'
+            'and/or detect SNPs. The estimated background mutation rate and/or detected SNPs can be '
+            'used when running subsequent test samples.'
         ),
+        action='store_true',
+    )
+    parser_count.add_argument(
+        '--correction',
+        help='Perform statistical correction of unlabeled and labeled read counts',
         action='store_true',
     )
     parser_count.add_argument(
@@ -432,6 +460,12 @@ def parse_count(parser, args, temp_dir=None):
     elif args.no_velocity:
         parser.error('`--strand` may not be used with `--no-velocity`')
 
+    if not args.correction:
+        logger.warning('No statistical correction will be performed. Use `--correction` otherwise.')
+
+    if not args.gene_tag:
+        parser.error('`--gene-tag` must be a valid tag')
+
     from .count import count
     count(
         args.bam,
@@ -440,12 +474,14 @@ def parse_count(parser, args, temp_dir=None):
         strand=args.strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
+        gene_tag=args.gene_tag,
         barcodes=barcodes,
         control=args.control,
         quality=args.quality,
         conversion=args.conversion,
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
+        correction=args.correction,
         read_threshold=args.read_threshold,
         control_p_e=control_p_e,
         p_group_by=args.p_group_by,
@@ -469,6 +505,7 @@ COMMAND_TO_FUNCTION = {
 def main():
     parser = argparse.ArgumentParser(description=f'{__version__}')
     parser._actions[0].help = parser._actions[0].help.capitalize()
+    parser.add_argument('--list', help='Display list of supported single-cell technologies', action='store_true')
     subparsers = parser.add_subparsers(
         dest='command',
         metavar='<CMD>',
@@ -490,6 +527,8 @@ def main():
         'align': parser_align,
         'count': parser_count,
     }
+    if '--list' in sys.argv:
+        print_technologies()
 
     # Show help when no arguments are given
     if len(sys.argv) == 1:

@@ -21,6 +21,7 @@ def calculate_coverage_contig(
     indices,
     umi_tag=None,
     barcode_tag=None,
+    gene_tag='GX',
     barcodes=None,
     temp_dir=None,
     update_every=50000,
@@ -46,6 +47,8 @@ def calculate_coverage_contig(
     :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
                         is output in the `barcode` column, defaults to `None`
     :type barcode_tag: str, optional
+    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+    :type gene_tag: str, optional
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -68,7 +71,7 @@ def calculate_coverage_contig(
 
     required_tags = []
     if not velocity:
-        required_tags.append('GX')
+        required_tags.append(gene_tag)
     if umi_tag:
         required_tags.append(umi_tag)
     if barcode_tag:
@@ -143,6 +146,7 @@ def calculate_coverage(
     index_path,
     umi_tag=None,
     barcode_tag=None,
+    gene_tag='GX',
     barcodes=None,
     n_threads=8,
     temp_dir=None,
@@ -165,6 +169,8 @@ def calculate_coverage(
     :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
                         is output in the `barcode` column, defaults to `None`
     :type barcode_tag: str, optional
+    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+    :type gene_tag: str, optional
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -197,6 +203,7 @@ def calculate_coverage(
             lock,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
+            gene_tag=gene_tag,
             barcodes=barcodes,
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             velocity=velocity

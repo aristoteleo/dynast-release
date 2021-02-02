@@ -59,6 +59,7 @@ def parse_read_contig(
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
+    gene_tag='GX',
     barcodes=None,
     temp_dir=None,
     update_every=2000,
@@ -95,6 +96,8 @@ def parse_read_contig(
     :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
                         is output in the `barcode` column, defaults to `None`
     :type barcode_tag: str, optional
+    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+    :type gene_tag: str, optional
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -190,7 +193,7 @@ def parse_read_contig(
 
     required_tags = []
     if not velocity:
-        required_tags.append('GX')
+        required_tags.append(gene_tag)
     if umi_tag:
         required_tags.append(umi_tag)
     if barcode_tag:
@@ -240,8 +243,8 @@ def parse_read_contig(
                 continue
 
             umi = read.get_tag(umi_tag) if umi_tag else 'NA'
-            gx_assigned = read.has_tag('GX')
-            gx = read.get_tag('GX') if gx_assigned else ''
+            gx_assigned = read.has_tag(gene_tag)
+            gx = read.get_tag(gene_tag) if gx_assigned else ''
             sequence = read.seq.upper()
             qualities = read.query_qualities
             reference = read.get_reference_sequence().upper()
@@ -427,6 +430,7 @@ def parse_all_reads(
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
+    gene_tag='GX',
     barcodes=None,
     n_threads=8,
     temp_dir=None,
@@ -462,6 +466,8 @@ def parse_all_reads(
     :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
                         is output in the `barcode` column, defaults to `None`
     :type barcode_tag: str, optional
+    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+    :type gene_tag: str, optional
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -521,6 +527,7 @@ def parse_all_reads(
             strand=strand,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
+            gene_tag=gene_tag,
             barcodes=barcodes,
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             nasc=nasc,

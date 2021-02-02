@@ -62,7 +62,7 @@ def beta_mode(alpha, beta):
     """Calculate the mode of a beta distribution.
     https://en.wikipedia.org/wiki/Beta_distribution
 
-    When the distribution is bimodal (alpha, beta < 1), this function returns
+    When the distribution is bimodal (`alpha`, `beta` < 1), this function returns
     `nan`.
 
     :param alpha: first parameter of the beta distribution
