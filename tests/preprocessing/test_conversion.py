@@ -92,11 +92,9 @@ class TestConversion(mixins.TestMixin, TestCase):
         barcodes = ['barcode1', 'barcode2']
         features = ['GX1', 'GX2']
         with mock.patch('dynast.preprocessing.conversion.counts_to_matrix') as counts_to_matrix:
-            self.assertEqual(
-                (counts_to_matrix.return_value, counts_to_matrix.return_value, counts_to_matrix.return_value),
-                conversion.split_counts(df, barcodes, features)
-            )
-            self.assertEqual(3, counts_to_matrix.call_count)
+            self.assertEqual((counts_to_matrix.return_value, counts_to_matrix.return_value),
+                             conversion.split_counts(df, barcodes, features))
+            self.assertEqual(2, counts_to_matrix.call_count)
 
     def test_conversions(self):
         counts_path = os.path.join(self.temp_dir, 'counts.csv')

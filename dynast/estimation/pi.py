@@ -210,7 +210,6 @@ def estimate_pi(
     p_c,
     pi_path,
     p_group_by=None,
-    value_columns=['TC', 'T', 'count'],
     n_threads=8,
     threshold=16,
     subset_threshold=8000,
@@ -242,6 +241,7 @@ def estimate_pi(
     :return: path to pi output
     :rtype: str
     """
+    value_columns = ['conversion', 'base', 'count']
     df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
 
     logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')

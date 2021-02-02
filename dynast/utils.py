@@ -437,6 +437,25 @@ def flatten_dictionary(d, keys=None):
             yield new_keys, v
 
 
+def flatten_list(lst):
+    """Generator that flattens the given list.
+
+    :param lst: list to flatten
+    :type lst: list
+
+    :return: flattened list
+    :rtype: list
+    """
+    if not isinstance(lst, list):
+        yield lst
+
+    for element in lst:
+        if not isinstance(element, list):
+            yield element
+        else:
+            yield from flatten_list(element)
+
+
 def merge_dictionaries(d1, d2, f=add, default=0):
     """Merge two dictionaries, applying an arbitrary function `f` to duplicate keys.
     Dictionaries may be nested.

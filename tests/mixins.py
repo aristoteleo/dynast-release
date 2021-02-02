@@ -74,13 +74,7 @@ class TestMixin(TestCase):
         cls.umi_snps_path = os.path.join(cls.umi_count_snp_dir, 'snps.csv')
         cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts.csv')
         cls.umi_rates_path = os.path.join(cls.umi_count_aggregate_dir, 'rates.csv')
-        cls.umi_aggregates_paths = {
-            key: {
-                conversion: os.path.join(cls.umi_count_aggregate_dir, key, f'{conversion}.csv')
-                for conversion in cls.conversions
-            }
-            for key in cls.types
-        }
+        cls.umi_aggregates_paths = {key: os.path.join(cls.umi_count_aggregate_dir, f'{key}.csv') for key in cls.types}
         cls.umi_p_e_path = os.path.join(cls.umi_count_estimate_dir, 'p_e.csv')
         cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c.csv')
         cls.umi_pi_paths = {key: os.path.join(cls.umi_count_estimate_dir, f'{key}.csv') for key in cls.types}
@@ -109,10 +103,7 @@ class TestMixin(TestCase):
         cls.control_counts_path = os.path.join(cls.control_count_count_dir, 'counts.csv')
         cls.control_rates_path = os.path.join(cls.control_count_aggregate_dir, 'rates.csv')
         cls.control_aggregates_paths = {
-            key: {
-                conversion: os.path.join(cls.control_count_aggregate_dir, key, f'{conversion}.csv')
-                for conversion in cls.conversions
-            }
+            key: os.path.join(cls.control_count_aggregate_dir, f'{key}_TC.csv')
             for key in cls.types
         }
         cls.control_p_e_path = os.path.join(cls.control_count_estimate_dir, 'p_e.csv')
@@ -148,14 +139,11 @@ class TestMixin(TestCase):
         cls.paired_counts_path = os.path.join(cls.paired_count_count_dir, 'counts.csv')
         cls.paired_rates_path = os.path.join(cls.paired_count_aggregate_dir, 'rates.csv')
         cls.paired_aggregates_paths = {
-            'transcriptome': {
-                conversion: os.path.join(cls.paired_count_aggregate_dir, 'transcriptome', f'{conversion}.csv')
-                for conversion in cls.conversions
-            }
+            'transcriptome': os.path.join(cls.paired_count_aggregate_dir, 'transcriptome.csv')
         }
         cls.paired_p_e_path = os.path.join(cls.paired_count_estimate_dir, 'p_e.csv')
         cls.paired_p_c_path = os.path.join(cls.paired_count_estimate_dir, 'p_c.csv')
-        cls.paired_pi_paths = {key: os.path.join(cls.paired_count_estimate_dir, f'{key}.csv') for key in cls.types}
+        cls.paired_pi_paths = {'transcriptome': os.path.join(cls.paired_count_estimate_dir, 'transcriptome.csv')}
 
         ######################################
         # Paired (smartseq, no velocity, nasc)
@@ -180,15 +168,10 @@ class TestMixin(TestCase):
         cls.nasc_transcripts_path = os.path.join(cls.nasc_count_parse_dir, 'transcripts.pkl.gz')
         cls.nasc_counts_path = os.path.join(cls.nasc_count_count_dir, 'counts.csv')
         cls.nasc_rates_path = os.path.join(cls.nasc_count_aggregate_dir, 'rates.csv')
-        cls.nasc_aggregates_paths = {
-            'transcriptome': {
-                conversion: os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome', f'{conversion}.csv')
-                for conversion in cls.conversions
-            }
-        }
+        cls.nasc_aggregates_paths = {'transcriptome': os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome.csv')}
         cls.nasc_p_e_path = os.path.join(cls.nasc_count_estimate_dir, 'p_e.csv')
         cls.nasc_p_c_path = os.path.join(cls.nasc_count_estimate_dir, 'p_c.csv')
-        cls.nasc_pi_paths = {key: os.path.join(cls.nasc_count_estimate_dir, f'{key}.csv') for key in cls.types}
+        cls.nasc_pi_paths = {'transcriptome': os.path.join(cls.nasc_count_estimate_dir, 'transcriptome.csv')}
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()

@@ -16,12 +16,12 @@ class TestAggregation(mixins.TestMixin, TestCase):
         aggregation.read_rates(self.umi_rates_path)
 
     def test_read_aggregates(self):
-        aggregation.read_aggregates(self.umi_aggregates_paths['transcriptome']['TC'])
+        aggregation.read_aggregates(self.umi_aggregates_paths['transcriptome'])
 
     def test_merge_aggregates(self):
-        df1 = pd.read_csv(self.umi_aggregates_paths['spliced']['TC'])
-        df2 = pd.read_csv(self.umi_aggregates_paths['unspliced']['TC'])
-        aggregation.merge_aggregates(df1, df2, conversion='TC')
+        df1 = pd.read_csv(self.umi_aggregates_paths['spliced'])
+        df2 = pd.read_csv(self.umi_aggregates_paths['unspliced'])
+        aggregation.merge_aggregates(df1, df2)
 
     def test_calculate_mutation_rates(self):
         rates_path = os.path.join(self.temp_dir, 'rates.csv')
@@ -37,12 +37,8 @@ class TestAggregation(mixins.TestMixin, TestCase):
 
     def test_aggregate_counts(self):
         df = conversion.complement_counts(pd.read_csv(self.umi_counts_path), utils.read_pickle(self.umi_genes_path))
-        self.assertEqual({c: os.path.join(self.temp_dir, f'{c}.csv')
-                          for c in self.conversions},
-                         aggregation.aggregate_counts(df[df['transcriptome']], self.temp_dir))
-        for c in self.conversions:
-            self.assertTrue(
-                mixins.files_equal(
-                    self.umi_aggregates_paths['transcriptome'][c], os.path.join(self.temp_dir, f'{c}.csv')
-                )
-            )
+        aggregates_path = os.path.join(self.temp_dir, 'aggregates.csv')
+        self.assertEqual(
+            aggregates_path, aggregation.aggregate_counts(df[df['transcriptome']], aggregates_path, conversions=['TC'])
+        )
+        self.assertTrue(mixins.files_equal(self.umi_aggregates_paths['transcriptome'], aggregates_path))

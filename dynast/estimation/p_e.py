@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ..preprocessing.conversion import BASE_COLUMNS, CONVERSION_COLUMNS
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -27,29 +28,30 @@ def read_p_e(p_e_path, group_by=None):
     return dict(df.set_index(group_by)['p_e'])
 
 
-def estimate_p_e_control(df_counts, p_e_path, conversion='TC'):
+def estimate_p_e_control(df_counts, p_e_path, conversions=['TC']):
     """Estimate background mutation rate of unlabeled RNA for a control sample
-    by simply calculating the average mutation rate of `conversion[0]` to
-    `conversion[1]`.
+    by simply calculating the average mutation rate.
 
     :param df_counts: Pandas dataframe containing number of each conversion and
                       nucleotide content of each read
     :type df_counts: pandas.DataFrame
     :param p_e_path: path to output CSV containing p_e estimates
     :type p_e_path: str
-    :param conversion: conversion in question, defaults to `TC`
-    :type conversion: str, optional
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
 
     :return: path to output CSV containing p_e estimates
     :rtype: str
     """
-    p_e = df_counts[conversion].sum() / df_counts[conversion[0]].sum()
+    flattened = list(utils.flatten_list(conversions))
+    bases = list(set(f[0] for f in flattened))
+    p_e = df_counts[flattened].sum().sum() / df_counts[bases].sum().sum()
     with open(p_e_path, 'w') as f:
         f.write(str(p_e))
     return p_e_path
 
 
-def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
+def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     """Estimate background mutation rate of unabeled RNA by calculating the
     average mutation rate of all three nucleotides other than `conversion[0]`.
 
@@ -58,14 +60,16 @@ def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
     :type df_counts: pandas.DataFrame
     :param p_e_path: path to output CSV containing p_e estimates
     :type p_e_path: str
-    :param conversion: conversion in question, defaults to `TC`
-    :type conversion: str, optional
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
     :param group_by: columns to group by, defaults to `None`
     :type group_by: list, optional
 
     :return: path to output CSV containing p_e estimates
     :rtype: str
     """
+    flattened = list(utils.flatten_list(conversions))
+    bases = list(set(f[0] for f in flattened))
     if group_by is not None:
         df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
     else:
@@ -73,8 +77,8 @@ def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
 
     # Filter for columns not starting with the conversion base.
     # If conversion='TC', then select columns that don't start with 'T'
-    base_columns = [base for base in BASE_COLUMNS if base != conversion[0]]
-    conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv[0] != conversion[0]]
+    base_columns = [base for base in BASE_COLUMNS if base not in bases]
+    conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv[0] not in bases]
     p_e = df_sum[conversion_columns].sum(axis=1) / df_sum[base_columns].sum(axis=1)
     if group_by is not None:
         p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
@@ -86,7 +90,7 @@ def estimate_p_e(df_counts, p_e_path, conversion='TC', group_by=None):
     return p_e_path
 
 
-def estimate_p_e_nasc(df_rates, p_e_path, conversion='TC', group_by=None):
+def estimate_p_e_nasc(df_rates, p_e_path, group_by=None):
     """Estimate background mutation rate of unabeled RNA by calculating the
     average `CT` and `GA` mutation rates. This function imitates the procedure
     implemented in the NASC-seq pipeline (DOI: 10.1038/s41467-019-11028-9).
@@ -96,8 +100,6 @@ def estimate_p_e_nasc(df_rates, p_e_path, conversion='TC', group_by=None):
     :type df_counts: pandas.DataFrame
     :param p_e_path: path to output CSV containing p_e estimates
     :type p_e_path: str
-    :param conversion: conversion in question, defaults to `TC`
-    :type conversion: str, optional
     :param group_by: columns to group by, defaults to `None`
     :type group_by: list, optional
 

@@ -23,9 +23,9 @@ class TestPC(mixins.TestMixin, TestCase):
     def test_estimate_p_c(self):
         p_c_path = os.path.join(self.temp_dir, 'p_c.csv')
         df_aggregates = aggregation.merge_aggregates(
-            aggregation.read_aggregates(self.umi_aggregates_paths['spliced']['TC']),
-            aggregation.read_aggregates(self.umi_aggregates_paths['unspliced']['TC']),
-            aggregation.read_aggregates(self.umi_aggregates_paths['ambiguous']['TC'])
+            aggregation.read_aggregates(self.umi_aggregates_paths['spliced']),
+            aggregation.read_aggregates(self.umi_aggregates_paths['unspliced']),
+            aggregation.read_aggregates(self.umi_aggregates_paths['ambiguous'])
         )
         with mock.patch('dynast.estimation.p_c.utils.as_completed_with_progress', mixins.tqdm_mock):
             self.assertEqual(
@@ -35,7 +35,6 @@ class TestPC(mixins.TestMixin, TestCase):
                     p_e.read_p_e(self.umi_p_e_path, group_by=['barcode']),
                     p_c_path,
                     group_by=['barcode'],
-                    value_columns=['TC', 'T', 'count'],
                     n_threads=2
                 )
             )

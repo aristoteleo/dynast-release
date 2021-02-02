@@ -1,10 +1,10 @@
 import logging
-import os
 
 import numpy as np
 import pandas as pd
 
-from .conversion import BASE_IDX, COLUMNS, CONVERSION_COLUMNS
+from .conversion import BASE_IDX, COLUMNS
+from .. import utils
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +35,18 @@ def read_aggregates(aggregates_path):
     return df
 
 
-def merge_aggregates(*dfs, conversion='TC'):
+def merge_aggregates(*dfs):
     """Merge multiple aggregate dataframes into one.
 
     :param *dfs: dataframes to merge
     :type *dfs: pandas.DataFrame
-    :param conversion: the conversion in question, defaults to `TC`
-    :type conversion: str, optional
 
     :return: merged dataframe
     :rtype: pandas.DataFrame
     """
-    df = pd.concat(dfs).groupby(['barcode', 'GX', conversion, conversion[0]]).sum().reset_index()
-    df[conversion] = df[conversion].astype(np.uint8)
-    df[conversion[0]] = df[conversion[0]].astype(np.uint8)
+    df = pd.concat(dfs).groupby(['barcode', 'GX', 'conversion', 'base']).sum().reset_index()
+    df['conversion'] = df['conversion'].astype(np.uint8)
+    df['base'] = df['base'].astype(np.uint8)
     df['count'] = df['count'].astype(np.uint16)
     return df
 
@@ -87,25 +85,27 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     return rates_path
 
 
-def aggregate_counts(df_counts, aggregates_dir):
+def aggregate_counts(df_counts, aggregates_path, conversions=['TC']):
     """Aggregate conversion counts for each pair of bases.
 
     :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
-    :param aggregates_dir: directory to write aggregate CSVs. One CSV is written
-                           per pair of bases (i.e. `AC.csv`, `AG.csv` etc.)
-    :type aggregates_dir: str
+    :param aggregates_path: path to write aggregate CSV
+    :type aggregates_path: str
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
 
-    :return: dictionary of pairs of bases to path to CSVs
-    :rtype: dict
+    :return: path to aggregate CSV that was written
+    :rtype: str
     """
-    paths = {}
-    for conversion in CONVERSION_COLUMNS:
-        csv_path = os.path.join(aggregates_dir, f'{conversion}.csv')
-        logger.debug(f'Aggregating counts for {conversion} conversion to {csv_path}')
-        df_agg = pd.DataFrame(df_counts.groupby(['barcode', 'GX', conversion, conversion[0]]).size())
-        df_agg.columns = ['count']
-        df_agg.reset_index().to_csv(csv_path, index=False)
-        paths[conversion] = csv_path
-
-    return paths
+    flattened = list(utils.flatten_list(conversions))
+    bases = list(set(f[0] for f in flattened))
+    df_combined = df_counts[['barcode', 'GX']].copy()
+    df_combined['conversion'] = df_counts[flattened].sum(axis=1)
+    df_combined['base'] = df_counts[bases].sum(axis=1)
+    pd.DataFrame(
+        df_combined.groupby(['barcode', 'GX', 'conversion', 'base']).size(), columns=['count']
+    ).reset_index().to_csv(
+        aggregates_path, index=False
+    )
+    return aggregates_path

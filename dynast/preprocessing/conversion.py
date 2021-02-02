@@ -235,7 +235,7 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
     return matrix.tocsr()
 
 
-def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversion='TC'):
+def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=['TC']):
     """Split counts dataframe into two count matrices by a column.
 
     :param df_counts: counts dataframe
@@ -248,30 +248,27 @@ def split_counts(df_counts, barcodes, features, barcode_column='barcode', featur
     :type barcode_column: str, optional
     :param feature_column: column in counts dataframe to use as features, defaults to `GX`
     :type feature_column: str, optional
-    :param conversion: conversion in question, defaults to `TC`
-    :type conversion: str, optional
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
 
     :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
     :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
     """
-    matrix = counts_to_matrix(
-        df_counts, barcodes, features, barcode_column=barcode_column, feature_column=feature_column
-    )
     matrix_unlabeled = counts_to_matrix(
-        df_counts[df_counts[conversion] == 0],
+        df_counts[(df_counts[conversions] == 0).all(axis=1)],
         barcodes,
         features,
         barcode_column=barcode_column,
         feature_column=feature_column
     )
     matrix_labeled = counts_to_matrix(
-        df_counts[df_counts[conversion] > 0],
+        df_counts[(df_counts[conversions] > 0).any(axis=1)],
         barcodes,
         features,
         barcode_column=barcode_column,
         feature_column=feature_column
     )
-    return matrix, matrix_unlabeled, matrix_labeled
+    return matrix_unlabeled, matrix_labeled
 
 
 def count_no_conversions_part(

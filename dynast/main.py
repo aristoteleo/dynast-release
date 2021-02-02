@@ -7,8 +7,8 @@ import warnings
 
 from . import __version__
 from .config import RE_CHOICES
-from .preprocessing.conversion import CONVERSION_COLUMNS
 from .technology import BARCODE_UMI_TECHNOLOGIES, TECHNOLOGIES_MAP
+from .utils import flatten_list
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +175,18 @@ def setup_count_args(parser, parent):
     required_count.add_argument(
         '-g', metavar='GTF', help='Path to GTF file used to generate the STAR index', type=str, required=True
     )
+    required_count.add_argument(
+        '--conversion',
+        metavar='CONVERSION',
+        help=(
+            'The type of conversion(s) introduced at a single timepoint. Multiple conversions '
+            'can be specified with a comma-delimited list. For example, T>C and A>G is TC,AG. '
+            'This option can be specified multiple times (i.e. dual labeling), for each labeling '
+            'timepoint.'
+        ),
+        action='append',
+        required=True
+    )
     parser_count.add_argument(
         '-o',
         metavar='OUT',
@@ -240,17 +252,6 @@ def setup_count_args(parser, parent):
         help=argparse.SUPPRESS,
         type=str,
         default='barcode',
-    )
-    parser_count.add_argument(
-        '--conversion',
-        metavar='CONVERSION',
-        help=(
-            'The type of conversion introduced, represented as a two-character '
-            'string. For example, a T>C conversion is TC. (default: TC)'
-        ),
-        type=str,
-        choices=CONVERSION_COLUMNS,
-        default='TC',
     )
     parser_count.add_argument(
         '--snp-threshold',
@@ -466,6 +467,18 @@ def parse_count(parser, args, temp_dir=None):
     if not args.gene_tag:
         parser.error('`--gene-tag` must be a valid tag')
 
+    # Check conversions
+    if args.nasc and args.conversion != ['TC']:
+        parser.error('`--conversion TC` is required for `--nasc`')
+    conversions = []
+    for arg in args.conversion:
+        conversions.append(arg.upper().split(','))
+    flattened = list(flatten_list(conversions))
+    if len(set(flattened)) != len(flattened):
+        parser.error('duplicate conversions are not allowed for `--conversion`')
+    if set(f[0] for f in flattened) == {'A', 'C', 'G', 'T'} and control_p_e is None:
+        parser.error('`--p-e` must be specified when conversions apply to all four nucleotides')
+
     from .count import count
     count(
         args.bam,
@@ -478,7 +491,7 @@ def parse_count(parser, args, temp_dir=None):
         barcodes=barcodes,
         control=args.control,
         quality=args.quality,
-        conversion=args.conversion,
+        conversions=conversions,
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
         correction=args.correction,

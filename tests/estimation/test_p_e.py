@@ -24,7 +24,7 @@ class TestPE(mixins.TestMixin, TestCase):
                     utils.read_pickle(self.control_genes_path),
                 ),
                 p_e_path,
-                conversion='TC'
+                conversions=['TC']
             )
         )
         self.assertAlmostEqual(p_e.read_p_e(self.control_p_e_path), p_e.read_p_e(p_e_path))
@@ -39,7 +39,7 @@ class TestPE(mixins.TestMixin, TestCase):
                     utils.read_pickle(self.umi_genes_path),
                 ),
                 p_e_path,
-                conversion='TC',
+                conversions=['TC'],
                 group_by=['barcode']
             )
         )
@@ -51,9 +51,7 @@ class TestPE(mixins.TestMixin, TestCase):
         p_e_path = os.path.join(self.temp_dir, 'p_e.csv')
         self.assertEqual(
             p_e_path,
-            p_e.estimate_p_e_nasc(
-                aggregation.read_rates(self.nasc_rates_path), p_e_path, conversion='TC', group_by=['barcode']
-            )
+            p_e.estimate_p_e_nasc(aggregation.read_rates(self.nasc_rates_path), p_e_path, group_by=['barcode'])
         )
         p_e_test = p_e.read_p_e(p_e_path, group_by=['barcode'])
         for barcode, value in p_e.read_p_e(self.nasc_p_e_path, group_by=['barcode']).items():

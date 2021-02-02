@@ -38,12 +38,11 @@ class TestPi(mixins.TestMixin, TestCase):
             self.assertEqual(
                 pi_path,
                 pi.estimate_pi(
-                    aggregation.read_aggregates(self.umi_aggregates_paths['transcriptome']['TC']),
+                    aggregation.read_aggregates(self.umi_aggregates_paths['transcriptome']),
                     p_e.read_p_e(self.umi_p_e_path, group_by=['barcode']),
                     p_c.read_p_c(self.umi_p_c_path, group_by=['barcode']),
                     pi_path,
                     p_group_by=['barcode'],
-                    value_columns=['TC', 'T', 'count'],
                     n_threads=2,
                     threshold=2,
                     subset_threshold=8000,

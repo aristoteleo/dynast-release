@@ -24,7 +24,7 @@ def count(
     control=False,
     filtered_only=False,
     quality=27,
-    conversion='TC',
+    conversions=['TC'],
     snp_threshold=0.5,
     snp_csv=None,
     correction=False,
@@ -199,16 +199,12 @@ def count(
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
+    velocities = list(preprocessing.read_counts(counts_path, usecols=['velocity'])['velocity'].unique()
+                      ) if velocity else []
     aggregates_paths = {
-        key: {
-            conversion: os.path.join(aggregates_dir, key, f'{conversion}.csv')
-            for conversion in preprocessing.conversion.CONVERSION_COLUMNS
-        }
-        for key in preprocessing.read_counts(counts_path, usecols=['velocity'])['velocity'].unique()
-    } if velocity else {}
-    aggregates_paths['transcriptome'] = {
-        conversion: os.path.join(aggregates_dir, constants.TRANSCRIPTOME_DIR, f'{conversion}.csv')
-        for conversion in preprocessing.conversion.CONVERSION_COLUMNS
+        key: {tuple(convs): os.path.join(aggregates_dir, f'{key}_{"_".join(convs)}.csv')
+              for convs in conversions}
+        for key in ['transcriptome'] + velocities
     }
     aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
     df_counts_uncomplemented = None
@@ -232,20 +228,31 @@ def count(
             if velocity:
                 dfs.update(preprocessing.split_counts_by_velocity(df_counts_complemented))
             for key, df in dfs.items():
-                logger.info(f'Aggregating counts for `{key}` reads')
-                velocity_aggregates_dir = os.path.join(aggregates_dir, key)
-                os.makedirs(velocity_aggregates_dir, exist_ok=True)
-                aggregates_paths[key] = preprocessing.aggregate_counts(df, velocity_aggregates_dir)
+                for convs in conversions:
+                    logger.info(f'Aggregating counts for `{key}` reads for conversions {convs}')
+                    # Ignore reads that have more than one conversion of interest
+                    other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                    aggregates_paths[key][tuple(convs)] = preprocessing.aggregate_counts(
+                        df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
+                        aggregates_paths[key][tuple(convs)],
+                        conversions=convs
+                    )
         else:
             logger.info('Skipped count aggregation')
 
+    velocity_blacklist = ['unassigned', 'ambiguous']
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
     p_e_path = os.path.join(estimates_dir, constants.P_E_FILENAME)
-    p_c_path = os.path.join(estimates_dir, constants.P_C_FILENAME)
-    estimates_paths = [p_e_path, p_c_path]
-    value_columns = [conversion, conversion[0], 'count']
-    skip = not correction or (utils.all_exists(estimates_paths) and not redo('p'))
-    with STATS.step('p', skipped=skip):
+    p_c_paths = {tuple(convs): os.path.join(estimates_dir, f'p_c_{"_".join(convs)}.csv') for convs in conversions}
+    pi_paths = {
+        key: {tuple(convs): os.path.join(estimates_dir, f'{key}_{"_".join(convs)}.csv')
+              for convs in conversions}
+        for key in aggregates_paths.keys()
+        if key not in velocity_blacklist
+    }
+    estimates_paths = [p_e_path] + utils.flatten_dict_values(p_c_paths) + utils.flatten_dict_values(pi_paths)
+    skip = not correction or (utils.all_exists(estimates_paths) and not redo('estimate'))
+    with STATS.step('estimate', skipped=skip):
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
 
@@ -270,13 +277,12 @@ def count(
                             preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
                         ),
                         p_e_path,
-                        conversion=conversion,
+                        conversions=conversions,
                     )
                 elif nasc:
                     p_e_path = estimation.estimate_p_e_nasc(
                         preprocessing.read_rates(rates_path),
                         p_e_path,
-                        conversion=conversion,
                         group_by=p_group_by,
                     )
                 else:
@@ -286,30 +292,43 @@ def count(
                             preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
                         ),
                         p_e_path,
-                        conversion=conversion,
+                        conversions=conversions,
                         group_by=p_group_by,
                     )
 
             if not control:
-                logger.info('Estimating average mismatch rate in labeled RNA')
-                df_aggregates = preprocessing.merge_aggregates(
-                    *[
-                        preprocessing.read_aggregates(paths[conversion])
-                        for key, paths in aggregates_paths.items()
-                        if key != 'transcriptome'
-                    ],
-                    conversion=conversion
-                ) if velocity else preprocessing.read_aggregates(aggregates_paths['transcriptome'][conversion])
-                p_c_path = estimation.estimate_p_c(
-                    df_aggregates,
-                    estimation.read_p_e(p_e_path, group_by=p_group_by),
-                    p_c_path,
-                    group_by=p_group_by,
-                    value_columns=value_columns,
-                    n_threads=n_threads,
-                )
-            else:
-                logger.info('Average mismatch rate in labeled RNA was not calculated because `--control` was provided')
+                for convs in conversions:
+                    logger.info(f'Estimating average mismatch rate in labeled RNA for conversions {convs}')
+                    df_aggregates = preprocessing.merge_aggregates(
+                        *[
+                            preprocessing.read_aggregates(paths[tuple(convs)])
+                            for key, paths in aggregates_paths.items()
+                            if key != 'transcriptome'
+                        ]
+                    ) if velocity else preprocessing.read_aggregates(aggregates_paths['transcriptome'][tuple(convs)])
+                    p_c_paths[tuple(convs)] = estimation.estimate_p_c(
+                        df_aggregates,
+                        estimation.read_p_e(p_e_path, group_by=p_group_by),
+                        p_c_paths[tuple(convs)],
+                        group_by=p_group_by,
+                        n_threads=n_threads,
+                    )
+
+                    for key, paths in aggregates_paths.items():
+                        if key in velocity_blacklist:
+                            continue
+                        logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs}')
+                        pi_paths[key][tuple(convs)] = estimation.estimate_pi(
+                            preprocessing.read_aggregates(paths[tuple(convs)]),
+                            estimation.read_p_e(p_e_path, group_by=p_group_by),
+                            estimation.read_p_c(p_c_paths[tuple(convs)], group_by=p_group_by),
+                            pi_paths[key][tuple(convs)],
+                            p_group_by=p_group_by,
+                            n_threads=n_threads,
+                            threshold=read_threshold,
+                            subset_threshold=subset_threshold,
+                            seed=seed,
+                        )
         else:
             logger.info('Skipped rate estimation')
 
@@ -321,34 +340,6 @@ def count(
         STATS.end()
         STATS.save(stats_path)
         return
-
-    velocity_blacklist = ['unassigned', 'ambiguous']
-    pi_paths = {
-        key: os.path.join(estimates_dir, f'{key}.csv')
-        for key in aggregates_paths.keys()
-        if key not in velocity_blacklist
-    }
-    skip = not correction or (utils.all_exists(list(pi_paths.values())) and not redo('pi'))
-    with STATS.step('pi', skipped=skip):
-        if not skip:
-            for key, paths in aggregates_paths.items():
-                if key in velocity_blacklist:
-                    continue
-                logger.info(f'Estimating fraction of labeled RNA for `{key}` reads')
-                pi_paths[key] = estimation.estimate_pi(
-                    preprocessing.read_aggregates(paths[conversion]),
-                    estimation.read_p_e(p_e_path, group_by=p_group_by),
-                    estimation.read_p_c(p_c_path, group_by=p_group_by),
-                    pi_paths[key],
-                    p_group_by=p_group_by,
-                    value_columns=value_columns,
-                    n_threads=n_threads,
-                    threshold=read_threshold,
-                    subset_threshold=subset_threshold,
-                    seed=seed,
-                )
-        else:
-            logger.info('Skipped estimation of labeled RNA')
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     skip = utils.all_exists([adata_path]) and not redo('split')
@@ -367,43 +358,59 @@ def count(
             # Deal with transcriptome reads first because those need to be
             # in adata.X
             df_counts_transcriptome = df_counts[df_counts['transcriptome']]
-            matrix, matrix_unlabeled, matrix_labeled = preprocessing.split_counts(
-                df_counts_transcriptome, barcodes, features, conversion=conversion
-            )
+            matrix = preprocessing.counts_to_matrix(df_counts_transcriptome, barcodes, features)
+            layers = {}
+            for convs in conversions:
+                # Ignore reads that have other conversions
+                other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                join = '_'.join(convs)
+                layers[f'X_unlabeled_{join}'], layers[f'X_labeled_{join}'] = preprocessing.split_counts(
+                    df_counts_transcriptome[(df_counts_transcriptome[other_convs] == 0).all(axis=1)],
+                    barcodes,
+                    features,
+                    conversions=convs
+                )
+                if correction:
+                    pis = estimation.read_pi(pi_paths['transcriptome'][tuple(convs)])
+                    (
+                        layers[f'X_pi_{join}'],
+                        layers[f'X_unlabeled_{join}_corrected'],
+                        layers[f'X_labeled_{join}_corrected'],
+                    ) = estimation.split_matrix(matrix, pis, barcodes, features)
+
+            # Velocities
+            for key in velocities:
+                if key == 'transcriptome':
+                    continue
+                logger.info(f'Loading results for `{key}` reads')
+                df_counts_velocity = df_counts[df_counts['velocity'] == key]
+                layers[key] = preprocessing.counts_to_matrix(df_counts_velocity, barcodes, features)
+                if key in velocity_blacklist:
+                    continue
+                for convs in conversions:
+                    other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                    join = '_'.join(convs)
+                    layers[f'{key}_unlabeled_{join}'], layers[f'{key}_labeled_{join}'] = preprocessing.split_counts(
+                        df_counts_velocity[(df_counts_velocity[other_convs] == 0).all(axis=1)],
+                        barcodes,
+                        features,
+                        conversions=convs
+                    )
+                    if correction:
+                        pis = estimation.read_pi(pi_paths[key][tuple(convs)])
+                        (
+                            layers[f'{key}_pi_{join}'],
+                            layers[f'{key}_unlabeled_{join}_corrected'],
+                            layers[f'{key}_labeled_{join}_corrected'],
+                        ) = estimation.split_matrix(layers[key], pis, barcodes, features)
+
             # Construct adata with umi counts as layers
             adata = anndata.AnnData(
                 X=matrix,
                 obs=pd.DataFrame(index=pd.Series(barcodes, name='barcodes')),
                 var=pd.DataFrame(index=pd.Series(features, name='gene_id')),
-                layers={
-                    'X_unlabeled': matrix_unlabeled,
-                    'X_labeled': matrix_labeled
-                }
+                layers=layers
             )
-            if correction:
-                pis = estimation.read_pi(pi_paths['transcriptome'])
-                (adata.layers['X_pi'], adata.layers['X_unlabeled_estimate'],
-                 adata.layers['X_labeled_estimate']) = estimation.split_matrix(adata.X, pis, barcodes, features)
-
-            # All the other counts as layers
-            for key in aggregates_paths.keys():
-                if key != 'transcriptome' and key not in velocity_blacklist:
-                    logger.info(f'Loading result for `{key}` reads')
-                    df_counts_velocity = df_counts[df_counts['velocity'] == key]
-                    # UMI counts
-                    (adata.layers[key], adata.layers[f'{key}_unlabeled'],
-                     adata.layers[f'{key}_labeled']) = preprocessing.split_counts(
-                         df_counts_velocity, barcodes, features, conversion=conversion
-                     )
-
-                    if correction:
-                        # Estimates
-                        pis = estimation.read_pi(pi_paths[key])
-                        (
-                            adata.layers[f'{key}_pi'], adata.layers[f'{key}_unlabeled_estimate'],
-                            adata.layers[f'{key}_labeled_estimate']
-                        ) = estimation.split_matrix(adata.layers[key], pis, barcodes, features)
-
             adata.write(adata_path, compression='gzip')
         else:
             logger.info('Skipped splitting of new and old RNA')

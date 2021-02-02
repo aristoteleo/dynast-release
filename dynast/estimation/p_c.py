@@ -79,7 +79,7 @@ def filter_aggregates_part(values, p_e, threshold=0.01):
     return sp, mask
 
 
-def filter_aggregates(df_aggregates, p_e, group_by=None, value_columns=['TC', 'T', 'count'], n_threads=8):
+def filter_aggregates(df_aggregates, p_e, group_by=None, n_threads=8):
     """Wrapper around `filter_aggregates_part` function that runs in parallel.
 
     :param df_aggregates: Pandas dataframe containing aggregate values
@@ -88,9 +88,6 @@ def filter_aggregates(df_aggregates, p_e, group_by=None, value_columns=['TC', 'T
     :type p_e: float
     :param group_by: columns to group by, defaults to `None`
     :type group_by: list, optional
-    :param value_columns: columns of `df_aggregates` that contain values needed for
-                          calculations, defaults to `['TC', 'T', 'count']`
-    :type value_columns: list, optional
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
 
@@ -98,7 +95,7 @@ def filter_aggregates(df_aggregates, p_e, group_by=None, value_columns=['TC', 'T
     :rtype: dictionary
     """
 
-    values = df_aggregates[value_columns].values
+    values = df_aggregates[['conversion', 'base', 'count']].values
     if group_by is None:
         return filter_aggregates_part(values, p_e)
 
@@ -208,7 +205,6 @@ def estimate_p_c(
     p_e,
     p_c_path,
     group_by=None,
-    value_columns=['TC', 'T', 'count'],
     n_threads=8,
 ):
     """Estimate the average conversion rate in labeled RNA.
@@ -221,20 +217,15 @@ def estimate_p_c(
     :type p_c_path: str
     :param group_by: columns to group by, defaults to `None`
     :type group_by: list, optional
-    :param value_columns: columns of `df_aggregates` that contain values needed for
-                          calculations, defaults to `['TC', 'T', 'count']`
-    :type value_columns: list, optional
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
 
     :return: path to output CSV containing p_c estimates
     :rtype: str
     """
-    logger.debug(f'p_c estimation will be grouped by {group_by} using columns {value_columns}')
+    logger.debug(f'p_c estimation will be grouped by {group_by}')
     logger.debug('Filtering aggregates')
-    filtered = filter_aggregates(
-        df_aggregates, p_e, group_by=group_by, value_columns=value_columns, n_threads=n_threads
-    )
+    filtered = filter_aggregates(df_aggregates, p_e, group_by=group_by, n_threads=n_threads)
 
     logger.debug('Running EM algorithm')
     em = expectation_maximization(filtered, group_by=group_by, n_threads=n_threads)
