@@ -83,19 +83,82 @@ All files generated during this step is output to the output directory (:code:`-
 
 Statistical correction
 ^^^^^^^^^^^^^^^^^^^^^^
+Dynast can statistically correct unlabeled and labeled RNA counts by modeling the distribution as a binomial mixture model [Jürges2018]_. Statistical correction can be run by supplying the :code:`--correction` argument. Note that this procedure significantly increases the runtime.
 
 Overview
 ''''''''
+First, we define the following model parameters. For the remainder of this section, let the conversion be T>C. Note that all parameters are calculated per barcode (i.e. cell) unless otherwise specified.
+
+.. math::
+
+  \begin{align*}
+	  p_e &: \text{average conversion rate in unlabeled RNA}\\
+		p_c &: \text{average conversion rate in labeled RNA}\\
+		\pi_g &: \text{fraction of labeled RNA for gene } g\\
+		y &: \text{number of observed T>C conversions (in a read)}\\
+		n &: \text{number of T bases in the genomic region (a read maps to)}
+	\end{align*}
+
+Then, the probability of observing :math:`y` conversions given the above parameters is
+
+.. math::
+
+	\mathbb{P}(y;p_e,p_c,n,\pi) = (1-\pi_g) B(y;n,p_e) + \pi_g B(y;n,p_c)
+
+where :math:`B(k,n,p)` is the binomial PMF. The goal is to calculate :math:`\pi_g`, which can be used the split the raw counts to get the corrected counts. We can extract :math:`y` and :math:`n` directly from the read alignments, while calculating :math:`p_e` and :math:`p_c` is more complicated (detailed below).
 
 .. _background_estimation:
 
-Background estimation
-'''''''''''''''''''''
+Background estimation (:math:`p_e`)
+'''''''''''''''''''''''''''''''''''
+If we have control samples (i.e. samples without the conversion-introducing treatment), we can calculate :math:`p_e` directly by simply calculating the mutation rate of T to C. This is exactly what dynast does for :code:`--control` samples. All cells are aggregated when calculating :math:`p_e` for control samples.
+
+Otherwise, we need to use other mutation rates as a proxy for the real T>C background mutation rate. In this case, :math:`p_e` is calculated as the mutation rate of all non-T bases to any other base. Mathematically,
+
+.. math::
+
+	p_e = \frac{n(A,C)+n(A,G)+n(A,T)+n(C,A)+\cdots+n(G,T)}{n(A)+n(C)+n(G)}
+
+where :math:`n(X)` is the number of :math:`X` bases and :math:`n(X,Y)` is the number of observed :math:`X`>:math:`Y` conversions.
 
 .. _induced_rate_estimation:
 
-Induced rate estimation
-'''''''''''''''''''''''
+Induced rate estimation (:math:`p_c`)
+'''''''''''''''''''''''''''''''''''''
+:math:`p_c` is estimated via an expectation maximization (EM) algorithm by constructing a sparse matrix :math:`A` where each element :math:`a_{k,n}` is the number of reads with :math:`k` T>C conversions and :math:`n` T bases in the genomic region that each read align to. Assuming :math:`p_e < p_c`, we treat :math:`a_{k,n}` as missing data if greater than or equal to 1% of the count is expected to originate from the :math:`p_e` component. Mathematically, :math:`a_{k,n}` is excluded if
 
-Bayesian inference
-''''''''''''''''''
+.. math::
+
+	e_{k,n}=B(k;n,p_e) \cdot \sum_{k'>k} a_{k',n} > 0.01 a_{k,n}
+
+Let :math:`X=\{(k_1,n_1),\cdots\}` be the excluded data. The E step fills in the excluded data by their expected values given the current estimate :math:`p_c^{(t)}`,
+
+.. math::
+
+	a_{k,n}^{(t+1)} = \frac{\sum_{(k',n) \not\in X} B(k;n,p_c^{(t)}) \cdot a_{k',n}}{\sum_{(k',n) \not\in X} B(k';n,p_c^{(t)})}
+
+The M step updates the estiamte for :math:`p_c`
+
+.. math::
+
+	p_c^{(t+1)} = \frac{\sum_{k,n} ka_{k,n}^{(t+1)}}{\sum_{k,n} na_{k,n}^{(t+1)}}
+
+To speed up convergence, the dissection algorithm from [Jürges2018]_ is used.
+
+Bayesian inference (:math:`\pi_g`)
+''''''''''''''''''''''''''''''''''
+The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. :math:`\pi_g` is modeled as a :math:`Beta(\alpha,\beta)` random variable. Estimates of :math:`\alpha` and :math:`\beta` are calculated as the mean of the drawn samples from the model for each parameter. The final :math:`\pi_g` is estimated to be the *mode* of the :math:`Beta(\alpha,\beta)` distribution, as was done in [Hendriks2019]_. Mathematically,
+
+.. math::
+
+	\pi_g = \begin{cases}
+	  \frac{\alpha - 1}{\alpha + \beta - 2} & \alpha,\beta > 1 \\
+		0 & \alpha \leq 1, \beta > 1 \\
+		1 & \alpha > 1, \beta \leq 1 \\
+		\text{estimation failure} & \text{else}
+	\end{cases}
+
+
+
+.. [Jürges2018] https://doi.org/10.1093/bioinformatics/bty256
+.. [Hendriks2019] https://doi.org/10.1038/s41467-019-11028-9

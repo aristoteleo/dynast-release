@@ -6,7 +6,6 @@
 Dynast: Quantifying Unspliced and Spliced mRNA from Metabolically Labeled scRNA-seq Data
 ========================================================================================
 
-Brief summary
 
 .. toctree::
    :maxdepth: 2
