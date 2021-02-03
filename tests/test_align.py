@@ -29,14 +29,14 @@ class TestAlign(mixins.TestMixin, TestCase):
                 'bam': 'output/path/Aligned.sortedByCoord.out.bam',
                 'gene': {
                     'raw': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/raw/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/raw/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/raw/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/raw/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/raw/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/raw/matrix.mtx'
                     },
                     'filtered': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/filtered/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/filtered/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/filtered/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/filtered/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/filtered/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/filtered/matrix.mtx'
                     }
                 }
             }, result)
@@ -76,14 +76,14 @@ class TestAlign(mixins.TestMixin, TestCase):
                 'bam': 'output/path/Aligned.sortedByCoord.out.bam',
                 'gene': {
                     'raw': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/raw/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/raw/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/raw/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/raw/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/raw/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/raw/matrix.mtx'
                     },
                     'filtered': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/filtered/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/filtered/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/filtered/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/filtered/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/filtered/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/filtered/matrix.mtx'
                     }
                 }
             }, result)
@@ -128,14 +128,14 @@ class TestAlign(mixins.TestMixin, TestCase):
                 'bam': 'output/path/Aligned.sortedByCoord.out.bam',
                 'gene': {
                     'raw': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/raw/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/raw/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/raw/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/raw/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/raw/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/raw/matrix.mtx'
                     },
                     'filtered': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/filtered/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/filtered/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/filtered/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/filtered/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/filtered/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/filtered/matrix.mtx'
                     }
                 }
             }, result)
@@ -176,14 +176,14 @@ class TestAlign(mixins.TestMixin, TestCase):
                 'bam': 'output/path/Aligned.sortedByCoord.out.bam',
                 'gene': {
                     'raw': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/raw/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/raw/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/raw/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/raw/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/raw/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/raw/matrix.mtx'
                     },
                     'filtered': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/filtered/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/filtered/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/filtered/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/filtered/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/filtered/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/filtered/matrix.mtx'
                     }
                 }
             }, result)
@@ -223,14 +223,14 @@ class TestAlign(mixins.TestMixin, TestCase):
                 'bam': 'output/path/Aligned.sortedByCoord.out.bam',
                 'gene': {
                     'raw': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/raw/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/raw/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/raw/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/raw/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/raw/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/raw/matrix.mtx'
                     },
                     'filtered': {
-                        'barcodes': 'output/path/Solo.out/GeneFull/filtered/barcodes.tsv',
-                        'features': 'output/path/Solo.out/GeneFull/filtered/features.tsv',
-                        'matrix': 'output/path/Solo.out/GeneFull/filtered/matrix.mtx'
+                        'barcodes': 'output/path/Solo.out/Gene/filtered/barcodes.tsv',
+                        'features': 'output/path/Solo.out/Gene/filtered/features.tsv',
+                        'matrix': 'output/path/Solo.out/Gene/filtered/matrix.mtx'
                     }
                 }
             }, result)

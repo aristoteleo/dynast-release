@@ -142,35 +142,41 @@ def parse_read_contig(
                 # On different strand
                 if read_strand and read_strand != gene_infos[gene]['strand']:
                     continue
+
                 # Out of range
                 gene_segment = gene_infos[gene]['segment']
-                if alignment.start >= gene_segment.end:
+                if alignment.start >= gene_segment.end or not (alignment.start >= gene_segment.start
+                                                               and alignment.end <= gene_segment.end):
                     continue
                 elif alignment.end <= gene_segment.start:
                     break
 
                 any_exon_only = False
+                any_exon_overlap = False
                 any_intron_overlap = False
                 for transcript_id in gene_infos[gene]['transcripts']:
                     transcript = transcript_infos[transcript_id]
-                    # Check only if we have to
-                    if not any_exon_only:
+
+                    if not any_exon_overlap:
+                        any_exon_overlap |= alignment.is_overlapping(transcript['exons'])
+                    if any_exon_overlap and not any_exon_only:
                         any_exon_only |= alignment.is_subset(transcript['exons'])
                     if not any_intron_overlap:
                         any_intron_overlap |= alignment.is_overlapping(transcript['introns'])
 
-                if assigned_gene and (any_exon_only or any_intron_overlap):
+                # Multi-gene
+                if assigned_gene and (any_exon_overlap or any_intron_overlap):
                     return None, None
 
-                # These consider every possible combination of
-                # any_exon_only and any_intron_overlap
-                if not any_exon_only and not any_intron_overlap:
+                # No overlaps
+                if not any_exon_overlap and not any_intron_overlap:
                     continue
+
                 if any_exon_only and not any_intron_overlap:
                     assigned_gene, assigned_type = gene, 'spliced'
                 elif not any_exon_only and any_intron_overlap:
                     assigned_gene, assigned_type = gene, 'unspliced'
-                else:  # any_exon_only = any_intron_overlap = True
+                else:
                     assigned_gene, assigned_type = gene, 'ambiguous'
 
             return assigned_gene, assigned_type

@@ -1,7 +1,7 @@
 STATS_PREFIX = 'run_info'
 
 STAR_SOLO_DIR = 'Solo.out'
-STAR_GENE_DIR = 'GeneFull'
+STAR_GENE_DIR = 'Gene'
 STAR_RAW_DIR = 'raw'
 STAR_FILTERED_DIR = 'filtered'
 STAR_VELOCYTO_DIR = 'Velocyto'
