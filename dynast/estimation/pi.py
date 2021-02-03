@@ -241,8 +241,7 @@ def estimate_pi(
     :return: path to pi output
     :rtype: str
     """
-    value_columns = ['conversion', 'base', 'count']
-    df_aggregates = df_aggregates[(df_aggregates[value_columns] > 0).any(axis=1)]
+    df_aggregates = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)]
 
     logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
@@ -256,7 +255,7 @@ def estimate_pi(
         df_full = df_aggregates
         df_full['p_e'] = p_e
         df_full['p_c'] = p_c
-    values = df_full[value_columns].values
+    values = df_full[['conversion', 'base', 'count']].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
     groups = df_full.groupby(['barcode', 'GX']).indices
