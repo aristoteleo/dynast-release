@@ -262,6 +262,7 @@ def estimate_pi(
     groups = df_full.groupby(['barcode', 'GX']).indices
     pis = {}
     skipped = 0
+    failed = 0
     logger.debug(f'Spawning {n_threads} processes')
     with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
         futures = {}
@@ -293,7 +294,7 @@ def estimate_pi(
 
             futures[executor.submit(
                 fit_stan_mcmc,
-                values[idx],
+                vals,
                 p_e,
                 p_c,
                 guess=guess,
@@ -305,13 +306,13 @@ def estimate_pi(
 
         for future in utils.as_completed_with_progress(futures):
             key = futures[future]
-            guess, alpha, beta, pi = future.result()
+            try:
+                guess, alpha, beta, pi = future.result()
+                pis[key] = (guess, alpha, beta, pi)
+            except RuntimeError:
+                failed += 1
 
-            pis[key] = (guess, alpha, beta, pi)
-    logger.warning(
-        f'Estimation skipped {skipped} times because there were less reads than '
-        f'threshold ({threshold}).'
-    )
+    logger.warning(f'Estimation skipped {skipped} times and failed {failed} times')
 
     with open(pi_path, 'w') as f:
         f.write('barcode,GX,guess,alpha,beta,pi\n')
