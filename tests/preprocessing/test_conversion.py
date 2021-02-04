@@ -28,6 +28,45 @@ class TestConversion(mixins.TestMixin, TestCase):
         self.assertEqual(df_gene.iloc[0]['TC'], df_complemented_gene.iloc[0]['AG'])
         self.assertEqual(df_gene.iloc[0]['CG'], df_complemented_gene.iloc[0]['GC'])
 
+    def test_drop_multimappers(self):
+        rows = [
+            ['read1', 'GX', True],
+            ['read2', 'GX', False],
+        ]
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'])
+        df_dropped = conversion.drop_multimappers(df)
+        self.assertEqual(2, df_dropped.shape[0])
+        self.assertTrue(df.equals(df_dropped))
+
+    def test_drop_multimappers_transcriptome(self):
+        rows = [
+            ['read1', 'GX', True],
+            ['read1', 'GX', False],
+        ]
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'])
+        df_dropped = conversion.drop_multimappers(df)
+        self.assertEqual(1, df_dropped.shape[0])
+        self.assertTrue(df_dropped.iloc[0]['transcriptome'])
+
+    def test_drop_multimappers_multiple_genes(self):
+        rows = [
+            ['read1', 'GX1', False],
+            ['read1', 'GX2', False],
+        ]
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'])
+        df_dropped = conversion.drop_multimappers(df)
+        self.assertEqual(0, df_dropped.shape[0])
+
+    def test_drop_multimappers_multiple_velocity(self):
+        rows = [
+            ['read1', 'GX1', 'spliced', False],
+            ['read1', 'GX1', 'unspliced', False],
+        ]
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'velocity', 'transcriptome'])
+        df_dropped = conversion.drop_multimappers(df)
+        self.assertEqual(1, df_dropped.shape[0])
+        self.assertEqual('ambiguous', df_dropped.iloc[0]['velocity'])
+
     def test_deduplicate_counts_transcriptome(self):
         rows = [
             ['barcode', 'umi', 'GX'] + [0] * len(conversion.COLUMNS) + [True],

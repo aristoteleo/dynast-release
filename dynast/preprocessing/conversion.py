@@ -141,9 +141,10 @@ def drop_multimappers(df_counts):
 
     filtered = []
     for read_id, df_read in df_multi.groupby('read_id'):
+        transcriptome = list(df_read['transcriptome'])
         # Rule 1
-        if True in df_read['transcriptome'] and False in df_read['transcriptome']:
-            filtered.append(df_read[df_read['transcriptome']])
+        if True in transcriptome and False in transcriptome:
+            filtered.append(df_read[transcriptome])
         # Rule 2, 3
         elif all(~df_read['transcriptome']):
             # Rule 2
@@ -157,7 +158,9 @@ def drop_multimappers(df_counts):
             else:
                 filtered.append(df_read.drop_duplicates('read_id', keep='first'))
 
-    return df_counts[~duplicated_mask].append(pd.concat(filtered, ignore_index=True), ignore_index=True)
+    return df_counts[~duplicated_mask].append(
+        pd.concat(filtered, ignore_index=True), ignore_index=True
+    ) if filtered else df_counts[~duplicated_mask]
 
 
 def deduplicate_counts(df_counts):
