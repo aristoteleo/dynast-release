@@ -63,19 +63,22 @@ class TestGtf(mixins.TestMixin, TestCase):
                 'transcripts': ['TRANSCRIPT_C'],
                 'segment': gtf.Segment(1, 14),
                 'chr': '2',
-                'strand': '-'
+                'strand': '-',
+                'gene_name': 'GENE_C_NAME'
             },
             'GENE_B': {
                 'transcripts': ['TRANSCRIPT_B'],
                 'segment': gtf.Segment(0, 10),
                 'chr': '2',
-                'strand': '+'
+                'strand': '+',
+                'gene_name': 'GENE_B_NAME'
             },
             'GENE_A': {
                 'transcripts': ['TRANSCRIPT_A'],
                 'segment': gtf.Segment(0, 2),
                 'chr': '1',
-                'strand': '+'
+                'strand': '+',
+                'gene_name': 'GENE_A_NAME'
             }
         }, gene_infos)
         self.assertEqual({

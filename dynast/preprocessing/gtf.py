@@ -279,12 +279,14 @@ def parse_gtf(gtf_path):
         elif gtf_entry['feature'] == 'transcript':
             transcript_id = gtf_entry['group']['transcript_id']
             gene_id = gtf_entry['group']['gene_id']
+            gene_name = gtf_entry['group'].get('gene_name')
             gene_infos.setdefault(gene_id, {}).setdefault('transcripts', set()).add(transcript_id)
             segment = gene_infos[gene_id].setdefault('segment', Segment(start, end))
             gene_infos[gene_id].update({
                 'segment': Segment(min(segment.start, start), max(segment.end, end)),
                 'chr': chrom,
                 'strand': strand,
+                'gene_name': gene_name,
             })
 
             if transcript_id not in transcript_infos:

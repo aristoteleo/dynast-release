@@ -215,10 +215,9 @@ def count(
         if not skip:
             logger.info('Computing mutation rates')
             os.makedirs(aggregates_dir, exist_ok=True)
+            gene_infos = gene_infos or utils.read_pickle(genes_path)
             df_counts_uncomplemented = preprocessing.read_counts(counts_path)
-            df_counts_complemented = preprocessing.complement_counts(
-                df_counts_uncomplemented, gene_infos or utils.read_pickle(genes_path)
-            )
+            df_counts_complemented = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
             rates_path = preprocessing.calculate_mutation_rates(
                 df_counts_uncomplemented if nasc else df_counts_complemented, rates_path, group_by=p_group_by
             )
@@ -271,11 +270,10 @@ def count(
             else:
                 logger.info('Estimating average mismatch rate in unlabeled RNA')
                 if control:
+                    gene_infos = gene_infos or utils.read_pickle(genes_path)
                     p_e_path = estimation.estimate_p_e_control(
-                        df_counts_complemented
-                        if df_counts_complemented is not None else preprocessing.complement_counts(
-                            preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
-                        ),
+                        df_counts_complemented if df_counts_complemented is not None else
+                        preprocessing.complement_counts(preprocessing.read_counts(counts_path), gene_infos),
                         p_e_path,
                         conversions=conversions,
                     )
@@ -286,11 +284,10 @@ def count(
                         group_by=p_group_by,
                     )
                 else:
+                    gene_infos = gene_infos or utils.read_pickle(genes_path)
                     p_e_path = estimation.estimate_p_e(
-                        df_counts_complemented
-                        if df_counts_complemented is not None else preprocessing.complement_counts(
-                            preprocessing.read_counts(counts_path), gene_infos or utils.read_pickle(genes_path)
-                        ),
+                        df_counts_complemented if df_counts_complemented is not None else
+                        preprocessing.complement_counts(preprocessing.read_counts(counts_path), gene_infos),
                         p_e_path,
                         conversions=conversions,
                         group_by=p_group_by,
@@ -354,6 +351,8 @@ def count(
             )
             barcodes = barcodes or sorted(df_counts['barcode'].unique())
             features = sorted(df_counts['GX'].unique())
+            gene_infos = gene_infos or utils.read_pickle(genes_path)
+            names = [gene_infos.get(feature, {}).get('gene_name') for feature in features]
 
             # Deal with transcriptome reads first because those need to be
             # in adata.X
@@ -408,7 +407,7 @@ def count(
             adata = anndata.AnnData(
                 X=matrix,
                 obs=pd.DataFrame(index=pd.Series(barcodes, name='barcodes')),
-                var=pd.DataFrame(index=pd.Series(features, name='gene_id')),
+                var=pd.DataFrame(index=pd.Series(features, name='gene_id'), data={'gene_name': pd.Categorical(names)}),
                 layers=layers
             )
             adata.write(adata_path, compression='gzip')
