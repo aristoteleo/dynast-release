@@ -25,6 +25,10 @@ Dynast: Quantifying Unspliced and Spliced mRNA from Metabolically Labeled scRNA-
   :maxdepth: 2
   :caption: Tutorials:
 
+  nasc_seq
+  scnt_seq
+  sci_fate
+
 
 Indices and tables
 ==================

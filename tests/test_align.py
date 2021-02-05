@@ -45,6 +45,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({
+                '--soloStrand': 'Forward',
                 '--soloCBwhitelist': 'None',
                 '--genomeDir': 'path/to/index',
                 '--runThreadN': 8,
@@ -92,6 +93,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({
+                '--soloStrand': 'Forward',
                 '--soloCBwhitelist': 'path/to/whitelist',
                 '--genomeDir': 'path/to/index',
                 '--runThreadN': 8,
@@ -141,6 +143,7 @@ class TestAlign(mixins.TestMixin, TestCase):
             }, result)
             arguments = utils.combine_arguments(config.STAR_ARGUMENTS, self.smartseq_technology.arguments)
             arguments.update({
+                '--soloStrand': 'Forward',
                 '--genomeDir': 'path/to/index',
                 '--runThreadN': 8,
                 '--outFileNamePrefix': 'output/path/',
@@ -192,6 +195,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 config.NASC_ARGUMENTS
             )
             arguments.update({
+                '--soloStrand': 'Forward',
                 '--genomeDir': 'path/to/index',
                 '--runThreadN': 8,
                 '--outFileNamePrefix': 'output/path/',
@@ -239,6 +243,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({
+                '--soloStrand': 'Forward',
                 '--soloCBwhitelist': 'None',
                 '--genomeDir': 'path/to/index',
                 '--runThreadN': 8,

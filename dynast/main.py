@@ -124,6 +124,12 @@ def setup_align_args(parser, parent):
         choices=TECHNOLOGIES_MAP.keys()
     )
     parser_align.add_argument(
+        '--strand',
+        help='Read strandedness. (default: `forward`)',
+        choices=['forward', 'reverse', 'unstranded'],
+        default='forward',
+    )
+    parser_align.add_argument(
         '-w',
         metavar='WHITELIST',
         help=('Path to file of whitelisted barcodes to correct to. '
@@ -141,7 +147,8 @@ def setup_align_args(parser, parent):
     parser_align.add_argument(
         'fastqs',
         help=(
-            'FASTQ files. If `-x smartseq`, this is a single manifest CSV file where '
+            'FASTQ files, where the first contains biological reads and the second contains barcode and UMI reads. '
+            'If `-x smartseq`, this is a single manifest CSV file where '
             'the first column contains cell IDs and the next two columns contain '
             'paths to FASTQs (the third column may contain a dash `-` for single-end reads).'
         ),
@@ -223,10 +230,9 @@ def setup_count_args(parser, parent):
     )
     parser_count.add_argument(
         '--strand',
-        help=('Read strandedness. '
-              '(default: `forward` if `--umi-tag` is provided, otherwise `unstranded`)'),
+        help='Read strandedness. (default: `forward`)',
         choices=['forward', 'reverse', 'unstranded'],
-        default=None,
+        default='forward',
     )
     parser_count.add_argument(
         '--quality',
@@ -451,15 +457,6 @@ def parse_count(parser, args, temp_dir=None):
         logger.info(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed. ')
-
-    # Strand
-    if not args.strand:
-        if args.umi_tag:
-            args.strand = 'forward'
-        else:
-            args.strand = 'unstranded'
-    elif args.no_velocity:
-        parser.error('`--strand` may not be used with `--no-velocity`')
 
     if not args.correction:
         logger.warning('No statistical correction will be performed. Use `--correction` otherwise.')

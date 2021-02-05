@@ -65,8 +65,8 @@ All files generated during this step is output to the :code:`2_aggregate` direct
 ''''''''''''''''
 All files generated during this step is output to the :code:`3_estimate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correction` is not specified.
 
-1. The background conversion rate :math:`p_e` is estimated, if :code:`--p-e` was not provided (see :ref:`_background_estimation`). If :code:`--p-e` was provided, this value is used and estimation is skipped. :math:`p_e`s are written to :code:`p_e.csv`.
-2. The induced conversion rate :math:`p_c` is estimated using an expectation maximization (EM) approach, for each conversion provided with :code:`--conversion` (see :ref:`_induced_rate_estimation`). :math:`p_c`s are written to :code:`p_c_{conversion}.csv` where :code:`{conversion}` is an underscore-delimited list of each conversion (because multiple conversions can be introduced in a single timepoint). This step is skipped for control samples with :code:`--control`.
+1. The background conversion rate :math:`p_e` is estimated, if :code:`--p-e` was not provided (see :ref:`background_estimation`). If :code:`--p-e` was provided, this value is used and estimation is skipped. :math:`p_e`s are written to :code:`p_e.csv`.
+2. The induced conversion rate :math:`p_c` is estimated using an expectation maximization (EM) approach, for each conversion provided with :code:`--conversion` (see :ref:`induced_rate_estimation`). :math:`p_c`s are written to :code:`p_c_{conversion}.csv` where :code:`{conversion}` is an underscore-delimited list of each conversion (because multiple conversions can be introduced in a single timepoint). This step is skipped for control samples with :code:`--control`.
 
 .. _split:
 
@@ -157,7 +157,6 @@ The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference u
 		1 & \alpha > 1, \beta \leq 1 \\
 		\text{estimation failure} & \text{else}
 	\end{cases}
-
 
 
 .. [Jürges2018] https://doi.org/10.1093/bioinformatics/bty256

@@ -40,7 +40,6 @@ PLATE_TECHNOLOGIES = [
         'smartseq', {
             '--soloType': 'SmartSeq',
             '--soloUMIdedup': 'Exact',
-            '--soloStrand': 'Unstranded',
             '--outSAMattributes': ['RG'],
             '--bamRemoveDuplicatesType': 'UniqueIdentical',
         }, None

@@ -4,9 +4,11 @@ Pipeline Usage
 ==============
 This sections covers basic usage of dynast.
 
+.. _ref:
+
 Building the STAR index with :code:`ref`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [CITATION]. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to Cell Ranger [CITATION]. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
+Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [CITATION]. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to `Cell Ranger`_. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
 
 .. code-block:: text
 
@@ -32,7 +34,7 @@ Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [C
 
 Aligning FASTQs with :code:`align`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :code:`align` command is a wrapper around STARsolo [CITATION]. Dynast automatically formats the arguments to STARsolo to ensure the resulting alignment BAM contains information necessary for downstream processing.
+The :code:`align` command is a wrapper around STARsolo [Dobin2013]_. Dynast automatically formats the arguments to STARsolo to ensure the resulting alignment BAM contains information necessary for downstream processing.
 
 Additionally, :code:`align` sets a more lenient alignment score cutoff by setting :code:`--outFilterScoreMinOverLread 0.3 --outFilterMatchNminOverLread 0.3` because the reads are expected to have experimentally-induced conversions. The STARsolo defaults for both are :code:`0.66`. The :code:`--STAR-overrides` argument can be used to pass arguments directly to STAR.
 
@@ -41,7 +43,8 @@ Additionally, :code:`align` sets a more lenient alignment score cutoff by settin
 .. code-block:: text
 
 	usage: dynast align [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -i INDEX [-o OUT] -x TECHNOLOGY
-	                    [-w WHITELIST] [--overwrite] [--STAR-overrides ARGUMENTS]
+	                    [--strand {forward,reverse,unstranded}] [-w WHITELIST] [--overwrite]
+	                    [--STAR-overrides ARGUMENTS]
 	                    fastqs [fastqs ...]
 
 	Align FASTQs
@@ -57,6 +60,8 @@ Additionally, :code:`align` sets a more lenient alignment score cutoff by settin
 	  --keep-tmp            Do not delete the tmp directory
 	  --verbose             Print debugging information
 	  -t THREADS            Number of threads to use (default: 8)
+	  --strand {forward,reverse,unstranded}
+	                        Read strandedness. (default: `forward`)
 	  -w WHITELIST          Path to file of whitelisted barcodes to correct to. If not provided, all barcodes are
 	                        used.
 	  --overwrite           Overwrite existing alignment files
@@ -91,7 +96,7 @@ For plate-based technologies (such as Smart-Seq), the following BAM tags are wri
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:code:`count` parses the alignment BAM and quantifies the four RNA species (unlabeled unspliced, unlabeled spliced, labeled unspliced, labeled spliced) and outputs the results as a ready-to-use AnnData :code:`H5AD` file [CITATION]. In order to properly quantify the above four species, the alignment BAM must contain specific BAM tags, depending on what sequencing technology was used. If :code:`align` was used to generate the alignment BAM, dynast automatically configures the appropriate BAM tags to be written.
+:code:`count` parses the alignment BAM and quantifies the four RNA species (unlabeled unspliced, unlabeled spliced, labeled unspliced, labeled spliced) and outputs the results as a ready-to-use AnnData_ :code:`H5AD` file. In order to properly quantify the above four species, the alignment BAM must contain specific BAM tags, depending on what sequencing technology was used. If :code:`align` was used to generate the alignment BAM, dynast automatically configures the appropriate BAM tags to be written.
 
 .. code-block:: text
 
@@ -155,7 +160,7 @@ Basic arguments
 '''''''''''''''
 The :code:`--barcode-tag` and :code:`--umi-tag` arguments are used to specify what BAM tags should be used to differentiate cells (barcode) and RNA molecules (UMI). If the former is not specified, all BAM alignments are assumed to be from a single cell, and if the latter is not specified, all aligned reads are assumed to be unique (i.e. no read deduplication is performed). If :code:`align` was used to generate the alignment BAM, then :code:`--barcode-tag CB --umi-tag UB` is recommended for UMI-based technologies (see :ref:`umi_bam_tags`), and :code:`--barcode-tag RG` is recommended for Plate-based technologies (see :ref:`plate_bam_tags`).
 
-The :code:`--strand` argument can be used to specify the read strand of the sequencing technology. Usually, the default (:code:`forward` for UMI-based technologies and :code:`unstranded` otherwise) is appropriate, but this argument may be of use for other technologies.
+The :code:`--strand` argument can be used to specify the read strand of the sequencing technology. Usually, the default (:code:`forward`) is appropriate, but this argument may be of use for other technologies.
 
 The :code:`--conversion` argument is used to specify the type of conversion that is experimentally introduced as a two-character string. For instance, a T>C conversion is represented as :code:`TC`, which is the default. Multiple conversions can be specified as a comma-delimited list, and :code:`--conversion` may be specified multiple times to indicate multiple-indexing experiments. For example, for an experiment that introduced T>C mutations at timepoint 1 and A>G and C>G mutations at timepoint 2, the appropriate options would be :code:`--conversion TC --conversion AG,CG`.
 
@@ -174,3 +179,7 @@ Control samples
 To perform statistical correction of unlabeled and unlabeled RNA counts, one crucial piece of information is the background conversion rate of unlabeled RNA (see [LINK] for more details). Normally, :code:`count` estimates this value using the reads directly. However, it is possible to use a control sample (prepared in absence of the experimental introduction of conversions) to calculate this value directly. In addition, SNPs can be called in the control sample, and these called SNPs can be used when running the test sample(s) (see :ref:`snps` for SNP arguments).
 
 The :code:`--control` flag indicates the input BAM is a control sample. This will calculate the background conversion rate of unlabeled RNA to the file :code:`3_estimation/p_e.csv` relative to the output directory. Simultaneously, the :code:`--snp-threshold` can be provided, which will output SNP calls to the file :code:`0_snp/snps.csv`. These file can then be used as the input to the :code:`--p-e` and/or :code:`--snp-csv` arguments, respectively, when running the test sample(s).
+
+.. _AnnData: https://anndata.readthedocs.io/en/latest/
+.. _Cell Ranger: https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger
+.. [Dobin2013] https://doi.org/10.1093/bioinformatics/bts635

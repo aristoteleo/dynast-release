@@ -13,6 +13,7 @@ def STAR_solo(
     out_dir,
     technology,
     whitelist_path=None,
+    strand='forward',
     n_threads=8,
     temp_dir=None,
     nasc=False,
@@ -32,6 +33,9 @@ def STAR_solo(
     :param whitelist_path: path to textfile containing barcode whitelist,
                            defaults to `None`
     :type whitelist_path: str, optional
+    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
+                   may be one of the following: `forward`, `reverse`, `unstranded`
+    :type strand: str, optional
     :param n_threads: number of threads to use, defaults to `8`
     :type n_threads: int, optional
     :param temp_dir: STAR temporary directory, defaults to `None`, which
@@ -119,6 +123,7 @@ def STAR_solo(
     maximum = utils.get_max_file_descriptor_limit()
     arguments = utils.combine_arguments(
         arguments, {
+            '--soloStrand': strand.capitalize(),
             '--genomeDir': index_dir,
             '--runThreadN': n_threads,
             '--outFileNamePrefix': out_dir,
@@ -163,6 +168,7 @@ def align(
     out_dir,
     technology,
     whitelist_path=None,
+    strand='forward',
     n_threads=8,
     temp_dir=None,
     nasc=False,
@@ -223,6 +229,7 @@ def align(
             out_dir,
             technology,
             whitelist_path=whitelist_path,
+            strand=strand,
             n_threads=n_threads,
             temp_dir=temp_dir,
             nasc=nasc,
