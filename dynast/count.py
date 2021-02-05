@@ -119,6 +119,7 @@ def count(
                 n_threads=n_threads,
                 temp_dir=temp_dir,
                 nasc=nasc,
+                control=control,
                 velocity=velocity
             )
         else:

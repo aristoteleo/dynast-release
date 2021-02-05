@@ -64,6 +64,7 @@ def parse_read_contig(
     temp_dir=None,
     update_every=2000,
     nasc=False,
+    control=False,
     velocity=True
 ):
     """Parse all reads mapped to a contig, outputing conversion
@@ -107,6 +108,8 @@ def parse_read_contig(
     :type update_every: int, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
     :type nasc: bool, optional
+    :param control: whether this is a control sample, defaults to `False`
+    :type control: bool, optional
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
@@ -324,7 +327,7 @@ def parse_read_contig(
 
             # Assign velocity
             assignment = 'unassigned'
-            if velocity:
+            if velocity and not control:
                 read_strand = None
                 if strand == 'forward':
                     read_strand = '-' if read.is_reverse else '+'
@@ -441,6 +444,7 @@ def parse_all_reads(
     n_threads=8,
     temp_dir=None,
     nasc=False,
+    control=False,
     velocity=True
 ):
     """Parse all reads in a BAM and extract conversion, content and alignment
@@ -483,6 +487,8 @@ def parse_all_reads(
     :type temp_dir: str, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
     :type nasc: bool, optional
+    :param control: whether this is a control sample, defaults to `False`
+    :type control: bool, optional
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
@@ -537,6 +543,7 @@ def parse_all_reads(
             barcodes=barcodes,
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             nasc=nasc,
+            control=control,
             velocity=velocity,
         ), args
     )
