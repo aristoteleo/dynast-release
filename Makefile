@@ -9,7 +9,7 @@ check:
 	yapf -r --diff dynast && echo OK
 
 build:
-	python setup.py sdist bdist_wheel
+	python setup.py sdist
 
 docs:
 	sphinx-build -a docs docs/_build

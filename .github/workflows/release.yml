@@ -1,0 +1,62 @@
+name: Bump and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      part:
+        description: 'Bump'
+        required: true
+        default: 'patch'
+
+jobs:
+  bump-version:
+    name: Bump version
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@master
+      - name: Check branch
+        if: github.ref != 'refs/heads/main'
+        run: exit 1
+      - name: Setup python
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.8'
+          architecture: x64
+      - name: Install dependencies
+        run: pip install -r dev-requirements.txt
+      - name: Bump
+        run: bumpversion ${{ github.event.inputs.part }}
+      - name: Push
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+      - name: Push tag
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+          tags: true
+  release-to-pypi:
+    name: Release to Pypi
+    runs-on: ubuntu-20.04
+    needs: bump-version
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@master
+      - name: Setup python
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.8'
+          architecture: x64
+      - name: Install dependencies
+        run: pip install -r dev-requirements.txt
+      - name: Build
+        run: make build
+      - name: Upload
+        run: twine upload dist/*
+        env:
+          TWINE_REPOSITORY_URL: ${{ secrets.PYPI_URL }}
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}

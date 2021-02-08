@@ -3,9 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Dynast: Quantifying Unspliced and Spliced mRNA from Metabolically Labeled scRNA-seq Data
+Dynast: Complete splicing and labeling quantification from metabolic labeling scRNA-seq
 ========================================================================================
-
 
 .. toctree::
    :maxdepth: 2
