@@ -364,7 +364,7 @@ def count(
                 # Ignore reads that have other conversions
                 other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
                 join = '_'.join(convs)
-                layers[f'X_unlabeled_{join}'], layers[f'X_labeled_{join}'] = preprocessing.split_counts(
+                layers[f'unlabeled_{join}'], layers[f'labeled_{join}'] = preprocessing.split_counts(
                     df_counts_transcriptome[(df_counts_transcriptome[other_convs] == 0).all(axis=1)],
                     barcodes,
                     features,
@@ -373,9 +373,9 @@ def count(
                 if correction:
                     pis = estimation.read_pi(pi_paths['transcriptome'][tuple(convs)])
                     (
-                        layers[f'X_pi_{join}'],
-                        layers[f'X_unlabeled_{join}_corrected'],
-                        layers[f'X_labeled_{join}_corrected'],
+                        layers[f'pi_{join}'],
+                        layers[f'unlabeled_{join}_corrected'],
+                        layers[f'labeled_{join}_corrected'],
                     ) = estimation.split_matrix(matrix, pis, barcodes, features)
 
             # Velocities
