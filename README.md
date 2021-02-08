@@ -5,6 +5,6 @@
 [![docs](https://readthedocs.org/projects/dynast-release/badge/?version=latest)](https://dynast-release.readthedocs.io/en/latest/?badge=latest)
 [![license](https://img.shields.io/pypi/l/dynast-release)](LICENSE)
 
-# Dynast: Complete splicing and labeling quantification from metabolic labeling scRNA-seq
+## Dynast: Complete splicing and labeling quantification from metabolic labeling scRNA-seq
 
 Guides, tutorials, technical information, and API reference can be found in the dynast [documentation](https://dynast-release.readthedocs.io/en/latest/).
