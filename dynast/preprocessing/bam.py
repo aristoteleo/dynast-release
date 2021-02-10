@@ -125,67 +125,52 @@ def parse_read_contig(
     def assign_velocity_type(positions, gx=None, read_strand=None):
         alignment = gtf.SegmentCollection.from_positions(positions)
 
-        # STAR assigns a GX tag to a read iff it only overlaps exons of one transcript model
-        # But this doesn't mean it's still true for other transcript models of the same gene
-        # If the alignment overlaps introns of any transcript model of the given gene,
-        # it is ambiguous
-        if gx:
-            for transcript_id in gene_infos[gx]['transcripts']:
-                if alignment.is_overlapping(transcript_infos[transcript_id]['introns']):
-                    return gx, 'ambiguous'
-            return gx, 'spliced'
-        else:
-            # Read was not assigned a GX tag, which means it overlaps intronic
-            # regions, but we need to find which gene it is
-            # note that the read could also map to an intergenic region, in which
-            # case we ignore the read
-            assigned_gene = None
-            assigned_type = None
-            for gene in gene_order:
+        # If gx is provided, narrow down search to this single gene
+        assigned_gene = gx
+        assigned_type = None
+        for gene in gene_order if not gx else [gx]:
+            # Skip or break loop conditions, used when gx is not provided
+            if not gx:
                 # On different strand
                 if read_strand and read_strand != gene_infos[gene]['strand']:
                     continue
-
                 # Out of range
                 gene_segment = gene_infos[gene]['segment']
-                if alignment.start >= gene_segment.end or not (alignment.start >= gene_segment.start
-                                                               and alignment.end <= gene_segment.end):
+                if not (alignment.start >= gene_segment.start and alignment.end <= gene_segment.end):
                     continue
                 elif alignment.end <= gene_segment.start:
                     break
 
-                any_exon_only = False
-                any_exon_overlap = False
-                any_intron_overlap = False
-                for transcript_id in gene_infos[gene]['transcripts']:
-                    transcript = transcript_infos[transcript_id]
+            any_exon_only = False
+            any_exon_overlap = False
+            any_intron_overlap = False
+            for transcript_id in gene_infos[gene]['transcripts']:
+                transcript = transcript_infos[transcript_id]
 
-                    if not any_exon_overlap:
-                        any_exon_overlap |= alignment.is_overlapping(transcript['exons'])
-                    if any_exon_overlap and not any_exon_only:
-                        any_exon_only |= alignment.is_subset(transcript['exons'])
-                    if not any_intron_overlap:
-                        any_intron_overlap |= alignment.is_overlapping(transcript['introns'])
+                if not any_exon_overlap:
+                    any_exon_overlap |= alignment.is_overlapping(transcript['exons'])
+                if any_exon_overlap and not any_exon_only:
+                    any_exon_only |= alignment.is_subset(transcript['exons'])
+                if not any_intron_overlap:
+                    any_intron_overlap |= alignment.is_overlapping(transcript['introns'])
 
+            # Additional conditions for when gx is not provided
+            if not gx:
                 # Multi-gene
                 if assigned_gene and (any_exon_overlap or any_intron_overlap):
                     return None, None
-
                 # No overlaps
                 if not any_exon_overlap and not any_intron_overlap:
                     continue
 
-                if any_exon_only and not any_intron_overlap:
-                    assigned_gene, assigned_type = gene, 'spliced'
-                elif not any_exon_only and any_intron_overlap:
-                    assigned_gene, assigned_type = gene, 'unspliced'
-                else:
-                    assigned_gene, assigned_type = gene, 'ambiguous'
+            if any_exon_only and not any_intron_overlap:
+                assigned_gene, assigned_type = gene, 'spliced'
+            elif not any_exon_only and any_intron_overlap:
+                assigned_gene, assigned_type = gene, 'unspliced'
+            else:
+                assigned_gene, assigned_type = gene, 'ambiguous'
 
-            return assigned_gene, assigned_type
-
-        # SHOULD NEVER REACH HERE
-        raise Exception()
+        return assigned_gene, assigned_type
 
     conversions_path = utils.mkstemp(dir=temp_dir)
     no_conversions_path = utils.mkstemp(dir=temp_dir)
