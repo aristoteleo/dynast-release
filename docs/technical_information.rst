@@ -16,6 +16,10 @@ The dynast quantification procedure consists of six steps:
 6. :ref:`estimate`
 7. :ref:`split`
 
+.. image:: _static/steps.svg
+	:width: 700
+	:align: center
+
 .. _index:
 
 :code:`index`
@@ -47,7 +51,7 @@ All files generated during this step is output to the :code:`0_snp` directory in
 All files generated during this step is output to the :code:`1_count` directory in the output directory (:code:`-o`).
 
 1. For every read, the numbers of each conversion (A>C, A>G, A>T, C>A, etc.) and nucleotide content (how many of A, C, G, T there are in the region that the read aligned to) are counted. Any SNPs provided with :code:`--snp-csv` or detected from the :ref:`snp` step are not counted. If both are present, the union is used. Additionally, Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion.
-2. For UMI-based technologies, reads are deduplicated by the following order of priority: 1) read that aligns to the transcriptome, 2) read with the longest alignment, 3) read with least number of conversions. Reads are considered duplicates if they share the same barcode, UMI, and gene assignment. For plate-based technologies, read deduplication should have been performed in the alignment step (in the case of STAR, with the :code:`--soloUMIdedup Exact`), but in the case of multimapping reads, it becomes a bit more tricky. If a read is multimapping such that some alignments map to the transcriptome while some do not, the transcriptome alignment is taken (there can not be multiple transcriptome alignments, as this is a constraint within STAR). If none align to the transcriptome and the alignments are assigned to multiple genes, the read is dropped, as it is impossible to assign the read with confidence. If none align to the transcriptome and the alignments are assigned multiple velocity types, the velocity type is manually set to :code:`ambiguous` and the first alignment is kept. If none of these cases are true, the first alignment is kept. The final deduplicated/de-multimapped counts are output to :code:`counts.csv`.
+2. For UMI-based technologies, reads are deduplicated by the following order of priority: 1) read that aligns to the transcriptome, 2) read with the longest alignment, 3) read with least number of conversions. Reads are considered duplicates if they share the same barcode, UMI, and gene assignment. For plate-based technologies, read deduplication should have been performed in the alignment step (in the case of STAR, with the :code:`--soloUMIdedup Exact`), but in the case of multimapping reads, it becomes a bit more tricky. If a read is multimapping such that some alignments map to the transcriptome while some do not, the transcriptome alignment is taken (there can not be multiple transcriptome alignments, as this is a constraint within STAR). If none align to the transcriptome and the alignments are assigned to multiple genes, the read is dropped, as it is impossible to assign the read with confidence. If none align to the transcriptome and the alignments are assigned multiple velocity types, the velocity type is manually set to :code:`ambiguous` and the first alignment is kept. If none of these cases are true, the first alignment is kept. The final deduplicated/de-multimapped counts are output to :code:`counts.csv`. Note that all bases in this file are relative to the forward genomic strand (extracted directly from the BAM).
 
 .. _aggregate:
 

@@ -41,6 +41,11 @@ Dynast consists of three commands that represent three steps of the pipeline: :c
 
 Basic usage
 ^^^^^^^^^^^
+
+.. image:: _static/workflow.svg
+	:width: 600
+	:align: center
+
 Prerequisites:
 
 * FASTQ files from a metabolic labeling scRNA-seq experiment
