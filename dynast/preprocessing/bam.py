@@ -185,6 +185,7 @@ def parse_read_contig(
 
     paired = {}  # Dictionary to store paired read information
 
+    # Any reads that don't have all the required tags will be skipped.
     required_tags = []
     if not velocity:
         required_tags.append(gene_tag)

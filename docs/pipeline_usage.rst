@@ -100,18 +100,18 @@ Quantifying counts with :code:`count`
 
 .. code-block:: text
 
-	usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION
-	                    [-o OUT] [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG]
-	                    [--strand {forward,reverse,unstranded}] [--quality QUALITY] [--re RE]
-	                    [--snp-threshold THRESHOLD] [--snp-csv CSV] [--barcodes BARCODES]
-	                    [--read-threshold THRESHOLD] [--no-velocity] [--control] [--correction] [--p-e P_E]
+	usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
+	                    [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
+	                    [--quality QUALITY] [--re RE] [--snp-threshold THRESHOLD] [--snp-csv CSV] [--barcodes BARCODES]
+	                    [--read-threshold THRESHOLD] [--no-velocity] [--control]
+	                    [--correct {total,transcriptome,spliced,unspliced}] [--p-e P_E]
 	                    bam
 
 	Quantify unlabeled and labeled RNA
 
 	positional arguments:
-	  bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable
-	                        with `--umi-tag`, and `--barcode-tag`.
+	  bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable with
+	                        `--umi-tag`, and `--barcode-tag`.
 
 	optional arguments:
 	  -h, --help            Show this help message and exit
@@ -120,41 +120,41 @@ Quantifying counts with :code:`count`
 	  --verbose             Print debugging information
 	  -t THREADS            Number of threads to use (default: 8)
 	  -o OUT                Path to output directory (default: current directory)
-	  --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are
-	                        assumed to be unique. (default: None)
-	  --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a
-	                        single cell. (default: None)
+	  --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are assumed
+	                        to be unique. (default: None)
+	  --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single
+	                        cell. (default: None)
 	  --gene-tag TAG        BAM tag to use as gene assignments (default: GX)
 	  --strand {forward,reverse,unstranded}
-	                        Read strandedness. (default: `forward` if `--umi-tag` is provided, otherwise
-	                        `unstranded`)
+	                        Read strandedness. (default: `forward`)
 	  --quality QUALITY     Base quality threshold. Only bases with PHRED quality greater than this value will be
 	                        considered when counting conversions. (default: 27)
-	  --re RE               Re-do a step in the pipeline. Available choices are: index, parse, snp, count,
-	                        aggregate, estimate, split.
+	  --re RE               Re-do a step in the pipeline. Available choices are: index, parse, snp, count, aggregate,
+	                        estimate, split.
 	  --snp-threshold THRESHOLD
-	                        Conversions with (# conversions) / (# reads) greater than this threshold will be
-	                        considered a SNP and ignored. (default: no SNP detection)
+	                        Conversions with (# conversions) / (# reads) greater than this threshold will be considered a
+	                        SNP and ignored. (default: no SNP detection)
 	  --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
 	  --barcodes BARCODES   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
 	  --read-threshold THRESHOLD
-	                        Do not attempt statistical correction if there are less than this many reads.
-	                        (default: 16)
-	  --no-velocity         Do not prepare matrices for RNA velocity estimation
-	  --control             Indicate this is a control sample, which is used to estimate the background mutation
-	                        rate and/or detect SNPs. The estimated background mutation rate and/or detected SNPs
-	                        can be used when running subsequent test samples.
-	  --correction          Perform statistical correction of unlabeled and labeled read counts
-	  --p-e P_E             Textfile containing a single number, indicating the estimated background mutation
-	                        rate
+	                        Do not attempt statistical correction if there are less than this many reads. (default: 16)
+	  --no-velocity, --transcriptome-only
+	                        Do not prepare matrices for RNA velocity estimation and ignore reads that are not assigned to
+	                        the transcriptome.
+	  --control             Indicate this is a control sample, which is used to estimate the background mutation rate
+	                        and/or detect SNPs. The estimated background mutation rate and/or detected SNPs can be used
+	                        when running subsequent test samples.
+	  --correct {total,transcriptome,spliced,unspliced}
+	                        Perform statistical correction of unlabeled and labeled read counts. This option can be used
+	                        multiple times to correct multiple species. By default, no correction is performed.
+	  --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
 
 	required arguments:
 	  -g GTF                Path to GTF file used to generate the STAR index
 	  --conversion CONVERSION
-	                        The type of conversion(s) introduced at a single timepoint. Multiple conversions can
-	                        be specified with a comma-delimited list. For example, T>C and A>G is TC,AG. This
-	                        option can be specified multiple times (i.e. dual labeling), for each labeling
-	                        timepoint.
+	                        The type of conversion(s) introduced at a single timepoint. Multiple conversions can be
+	                        specified with a comma-delimited list. For example, T>C and A>G is TC,AG. This option can be
+	                        specified multiple times (i.e. dual labeling), for each labeling timepoint.
 
 Basic arguments
 '''''''''''''''
@@ -170,9 +170,10 @@ Detecting and filtering SNPs
 ''''''''''''''''''''''''''''
 :code:`count` has the ability to detect single-nucleotide polymorphisms (SNPs) by calculating the fraction of reads with a mutation at a certain genomic position. :code:`--snp-threshold` can be used to specify the proportion threshold greater than which a SNP will be called at that position. All conversions/mutations at the genomic positions with SNPs detected in this manner will be filtered out from further processing. In addition, a CSV file containing known SNP positions can be provided with the :code:`--snp-csv` argument. This argument accepts a CSV file containing two columns: contig (i.e. chromosome) and genomic position of known SNPs.
 
+
 Statistical correction
 ''''''''''''''''''''''
-The :code:`--correction` flag enables statistical correction of unlabeled and labeled RNA counts. This procedure involves estimating the conversion rate of unlabeled and labeled RNA, and modeling the fraction of new RNA as a binomial mixture model (see :ref:`statistical_correction`). The :code:`--read-threshold` argument controls the minimum number of reads required to attempt statistical correction, as too few reads can result in noisy results. Note that statistical correction takes significantly longer than simply counting reads, which is the default behavior when :code:`--correction` is not provided.
+The :code:`--correct` argument enables statistical correction of unlabeled and labeled RNA counts. This argument can take on the following values: :code:`total`, :code:`transcriptome`, :code:`spliced`, :code:`unspliced` (see :ref:`read_groups`). The value of this argument specifies which group of unlabeled/labeled RNA counts will be corrected. For instance, :code:`--correct spliced` will run statistical correction on unlabeled/labeled spliced reads. This option may be provided multiple times to run correction on multiple groups. The procedure involves estimating the conversion rate of unlabeled and labeled RNA, and modeling the fraction of new RNA as a binomial mixture model (see :ref:`statistical_correction`). The :code:`--read-threshold` argument controls the minimum number of reads required to attempt statistical correction, as too few reads can result in noisy results. Note that statistical correction takes significantly longer than simply counting reads, so no correction is performed when :code:`--correct` is not provided.
 
 Control samples
 '''''''''''''''

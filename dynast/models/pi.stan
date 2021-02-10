@@ -1,3 +1,6 @@
+// This model was adapted from the NASC-seq pipeline
+// https://github.com/sandberg-lab/NASC-seq/blob/master/data/NASCseqModel.stan
+
 data {
   int<lower=0> N;
   int<lower=0> contents[N];

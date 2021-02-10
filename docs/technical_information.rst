@@ -53,17 +53,16 @@ All files generated during this step is output to the :code:`1_count` directory 
 
 :code:`aggregate`
 '''''''''''''''''
-All files generated during this step is output to the :code:`2_aggregate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correction` is not specified.
+All files generated during this step is output to the :code:`2_aggregate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correct` is not specified.
 
 1. Mutation rates for each base is calculated and output to :code:`rates.csv`.
-2. For each cell and gene and for each conversion provided with :code:`--conversion`, the conversion counts are aggregated into a CSV file such that each row contains the following columns: cell barcode, gene, conversion count, nucleotide content of the original base (i.e. if the conversion is T>C, this would be T), and the number of reads that have this particular barcode-gene-conversion-content combination. This procedure is done for transcriptome reads, along with all velocity types as long as :code:`--no-velocity` was not specified. The resulting tables are written to :code:`transcriptome.csv`, :code:`spliced.csv`, :code:`unspliced.csv`, :code:`ambiguous.csv`, respectively.
-
+2. For each cell and gene and for each conversion provided with :code:`--conversion`, the conversion counts are aggregated into a CSV file such that each row contains the following columns: cell barcode, gene, conversion count, nucleotide content of the original base (i.e. if the conversion is T>C, this would be T), and the number of reads that have this particular barcode-gene-conversion-content combination. This procedure is done for all read groups that exist (see :ref:`read_groups`).
 
 .. _estimate:
 
 :code:`estimate`
 ''''''''''''''''
-All files generated during this step is output to the :code:`3_estimate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correction` is not specified.
+All files generated during this step is output to the :code:`3_estimate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correct` is not specified.
 
 1. The background conversion rate :math:`p_e` is estimated, if :code:`--p-e` was not provided (see :ref:`background_estimation`). If :code:`--p-e` was provided, this value is used and estimation is skipped. :math:`p_e`s are written to :code:`p_e.csv`.
 2. The induced conversion rate :math:`p_c` is estimated using an expectation maximization (EM) approach, for each conversion provided with :code:`--conversion` (see :ref:`induced_rate_estimation`). :math:`p_c`s are written to :code:`p_c_{conversion}.csv` where :code:`{conversion}` is an underscore-delimited list of each conversion (because multiple conversions can be introduced in a single timepoint). This step is skipped for control samples with :code:`--control`.
@@ -75,15 +74,29 @@ All files generated during this step is output to the :code:`3_estimate` directo
 All files generated during this step is output to the output directory (:code:`-o`). This step is skipped if :code:`--control` is specified. All results are compiled into a single AnnData :code:`H5AD` file. The AnnData object contains the following:
 
 * The transcriptome read counts in :code:`.X`.
-* Unlabeled and labeled transcriptome read counts in :code:`.layers['X_unlabeled']` and :code:`.layers['X_labeled']`. If :code:`--correction` was specified, the corrected counts are in :code:`.layers['X_unlabeled_{conversion}_corrected']` and :code:`.layers['X_labeled_{conversion}_corrected']` where :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`. In addition, the actual estimated fractions of labeled RNA :math:`\pi` are in :code:`.layers['X_pi_{conversion}']`.
-* [Only if :code:`--no-velocity` was not specified] Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`. If :code:`--correction` was specified, layers analogous to transcriptome read counts are added, with the exception of ambiguous read counts (i.e. no correction is ever performed on these reads).
+* Unlabeled and labeled transcriptome read counts in :code:`.layers['X_unlabeled']` and :code:`.layers['X_labeled']`. If :code:`--correct transcriptome` was specified, the corrected counts are in :code:`.layers['X_unlabeled_{conversion}_corrected']` and :code:`.layers['X_labeled_{conversion}_corrected']` where :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`. In addition, the actual estimated fractions of labeled RNA :math:`\pi` are in :code:`.layers['X_pi_{conversion}']`.
+* **[Only if :code:`--no-velocity` or :code:`--transcriptome-only` was not specified]** Unlabeled and labeled total read counts in :code:`.layers['unlabeled']` and :code:`.layers['labeled']`. If :code:`--correct total` is specified, the corrected counts are in :code:`.layers['unlabeled_{conversion}_corrected']` and :code:`.layers['labeled_{conversion}_corrected']` where :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`. In addition, the actual estimated fractions of labeled RNA :math:`\pi` are in :code:`.layers['pi_{conversion}']`.
+* **[Only if :code:`--no-velocity` or :code:`--transcriptome-only` was not specified]** Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`. If :code:`--correct` was specified, layers analogous to total read counts are added, with the exception of ambiguous read counts (i.e. no correction is ever performed on ambiguous reads).
 
+.. _read_groups:
+
+Read groups
+^^^^^^^^^^^
+Dynast separates reads into read groups, and each of these groups are processed together.
+
+* :code:`total`: All reads. Used only when :code:`--no-velocity` or :code:`--transcriptome-only` is not used.
+* :code:`transcriptome`: Reads that map to the transcriptome. These are reads that have the :code:`GX` tag in the BAM (or whatever you provide for the :code:`--gene-tag` argument). This group also represents all reads when :code:`--no-velocity` or :code:`--transcriptome-only` is used.
+* :code:`spliced`: Spliced reads
+* :code:`unspliced`: Unspliced reads
+* :code:`ambiguous`: Ambiguous reads
+
+The latter three groups are mutually exclusive.
 
 .. _statistical_correction:
 
 Statistical correction
 ^^^^^^^^^^^^^^^^^^^^^^
-Dynast can statistically correct unlabeled and labeled RNA counts by modeling the distribution as a binomial mixture model [Jürges2018]_. Statistical correction can be run by supplying the :code:`--correction` argument. Note that this procedure significantly increases the runtime.
+Dynast can statistically correct unlabeled and labeled RNA counts by modeling the distribution as a binomial mixture model [Jürges2018]_. Statistical correction can be run by supplying the :code:`--correct` argument. Note that this procedure significantly increases the runtime.
 
 Overview
 ''''''''
@@ -158,6 +171,7 @@ The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference u
 		\text{estimation failure} & \text{else}
 	\end{cases}
 
+This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
 
 .. [Jürges2018] https://doi.org/10.1093/bioinformatics/bty256
 .. [Hendriks2019] https://doi.org/10.1038/s41467-019-11028-9

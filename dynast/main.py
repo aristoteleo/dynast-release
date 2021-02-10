@@ -293,7 +293,13 @@ def setup_count_args(parser, parent):
         default=16,
     )
     parser_count.add_argument(
-        '--no-velocity', help='Do not prepare matrices for RNA velocity estimation', action='store_true'
+        '--no-velocity',
+        '--transcriptome-only',
+        help=(
+            'Do not prepare matrices for RNA velocity estimation and ignore reads that '
+            'are not assigned to the transcriptome.'
+        ),
+        action='store_true'
     )
     parser_count.add_argument(
         '--nasc',
@@ -311,9 +317,15 @@ def setup_count_args(parser, parent):
         action='store_true',
     )
     parser_count.add_argument(
-        '--correction',
-        help='Perform statistical correction of unlabeled and labeled read counts',
-        action='store_true',
+        '--correct',
+        help=(
+            'Perform statistical correction of unlabeled and labeled read counts. '
+            'This option can be used multiple times to correct multiple species. '
+            'By default, no correction is performed.'
+        ),
+        action='append',
+        default=None,
+        choices=['total', 'transcriptome', 'spliced', 'unspliced']
     )
     parser_count.add_argument(
         '--p-e',
@@ -456,10 +468,15 @@ def parse_count(parser, args, temp_dir=None):
             barcodes = [line.strip() for line in f if not line.isspace()]
         logger.info(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
-        logger.warning('`--barcodes` not provided. All cell barcodes will be processed. ')
+        logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
 
-    if not args.correction:
-        logger.warning('No statistical correction will be performed. Use `--correction` otherwise.')
+    if not args.correct:
+        logger.warning('No statistical correction will be performed because `--correct` is not provided.')
+    elif 'total' in args.correct and args.no_velocity:
+        parser.error(
+            '`--no-velocity` or `--transcriptome-only` can not be used with `--correct total`. '
+            'Use `--correct transcriptome` instead.'
+        )
 
     if not args.gene_tag:
         parser.error('`--gene-tag` must be a valid tag')
@@ -491,7 +508,7 @@ def parse_count(parser, args, temp_dir=None):
         conversions=conversions,
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
-        correction=args.correction,
+        correct=args.correct,
         read_threshold=args.read_threshold,
         control_p_e=control_p_e,
         p_group_by=args.p_group_by,
