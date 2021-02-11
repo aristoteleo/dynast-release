@@ -8,7 +8,7 @@ This sections covers basic usage of dynast.
 
 Building the STAR index with :code:`ref`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [CITATION]. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to `Cell Ranger`_. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
+Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [Dobin2013]_. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to `Cell Ranger`_. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
 
 .. code-block:: text
 

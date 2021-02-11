@@ -25,7 +25,7 @@ Dynast: Complete splicing and labeling quantification from metabolic labeling sc
    API Reference <autoapi/dynast/index>
 
 .. toctree::
-  :maxdepth: 2
+  :maxdepth: 1
   :caption: Tutorials:
 
   nasc_seq
