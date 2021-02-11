@@ -2,7 +2,7 @@ Getting started
 ===============
 Welcome to dynast!
 
-Dynast is a command-line pipeline that preprocesses data from metabolic labeling scRNA-seq experiments and quantify the following for mRNA species: unlabeled unspliced, unlabeled spliced, labeled unspliced and labeled spliced. In addition, dynast can perform statistical correction of these species through expectation maximization (EM) and Bayesian inference. Please see :ref:`statistical_correction` for more details on how the statistical correction is performed.
+Dynast is a command-line pipeline that preprocesses data from metabolic labeling scRNA-seq experiments and quantifies the following four mRNA species: unlabeled unspliced, unlabeled spliced, labeled unspliced and labeled spliced. In addition, dynast can perform statistical correction of these species through expectation maximization (EM) and Bayesian inference. Please see :ref:`statistical_correction` for more details on how the statistical correction is performed.
 
 .. image:: _static/punnet_square.svg
 	:width: 500

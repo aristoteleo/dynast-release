@@ -136,7 +136,7 @@ Otherwise, we need to use other mutation rates as a proxy for the real T>C backg
 
 	p_e = \frac{n(A,C)+n(A,G)+n(A,T)+n(C,A)+\cdots+n(G,T)}{n(A)+n(C)+n(G)}
 
-where :math:`n(X)` is the number of :math:`X` bases and :math:`n(X,Y)` is the number of observed :math:`X`>:math:`Y` conversions.
+where :math:`n(X)` is the number of :math:`X` bases and :math:`n(X,Y)` is the number of observed :math:`X` > :math:`Y` conversions.
 
 .. _induced_rate_estimation:
 
