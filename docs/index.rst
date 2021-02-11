@@ -6,6 +6,10 @@
 Dynast: Complete splicing and labeling quantification from metabolic labeling scRNA-seq
 ========================================================================================
 
+.. WARNING::
+
+  Dynast is still under active development, and usage may change without warning.
+
 .. toctree::
    :maxdepth: 2
    :caption: Introduction:
