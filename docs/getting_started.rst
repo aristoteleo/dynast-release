@@ -77,8 +77,8 @@ Finally, we quantify the four RNA species of interest. Note that we re-use the g
 
 .. code-block::
 
-	dynast count -g Mus_musculus.GRCm38.102.gtf.gz --barcode-tag CB --umi-tag UB -o count --barcodes align/Solo.out/Gene/filtered/barcodes.tsv align/Aligned.sortedByCoord.out.bam
+	dynast count -g Mus_musculus.GRCm38.102.gtf.gz --barcode-tag CB --umi-tag UB -o count --barcodes align/Solo.out/Gene/filtered/barcodes.tsv --conversion TC align/Aligned.sortedByCoord.out.bam
 
-where :code:`count` is the directory to which to save RNA quantifications. We provide a filtered barcode list :code:`align/Solo.out/Gene/filtered/barcodes.tsv`, which was generated from the previous step, so that only these barcodes are processed during quantification.
+where :code:`count` is the directory to which to save RNA quantifications. We provide a filtered barcode list :code:`align/Solo.out/Gene/filtered/barcodes.tsv`, which was generated from the previous step, so that only these barcodes are processed during quantification. We specify the experimentally induced conversion with :code:`--conversion`. In this example, our experiment introduces T-to-C conversions.
 
 Once the above command finishes, the :code:`count` directory will contain an :code:`adata.h5ad` AnnData file containing all quantification results.
