@@ -294,16 +294,16 @@ def detect_snps(
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
     """
-    logger.info('Counting number of conversions for each genomic position')
+    logger.debug('Counting number of conversions for each genomic position')
     conversions = extract_conversions(conversions_path, conversions_index_path, quality=quality, n_threads=n_threads)
 
-    logger.info('Counting coverage for each genomic position')
+    logger.debug('Counting coverage for each genomic position')
     coverage = extract_coverage(coverage_path, coverage_index_path, n_threads=n_threads)
 
-    logger.info('Calculating fraction of conversions for each genomic position')
+    logger.debug('Calculating fraction of conversions for each genomic position')
     fractions = utils.merge_dictionaries(conversions, coverage, f=truediv)
 
-    logger.info(f'Writing detected SNPs to {snps_path}')
+    logger.debug(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:
         f.write('contig,genome_i\n')
         for (contig, genome_i), fraction in utils.flatten_dictionary(fractions):

@@ -322,5 +322,5 @@ def parse_gtf(gtf_path):
     for info in gene_infos.values():
         info['transcripts'] = list(info.get('transcripts', set()))
 
-    logger.info(f'Parsed {len(gene_infos)} genes and {len(transcript_infos)} ' f'transcripts from {count} GTF entries')
+    logger.debug(f'Parsed {len(gene_infos)} genes and {len(transcript_infos)} ' f'transcripts from {count} GTF entries')
     return gene_infos, transcript_infos

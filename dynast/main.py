@@ -459,7 +459,7 @@ def parse_count(parser, args, temp_dir=None):
     if args.barcodes:
         with open(args.barcodes, 'r') as f:
             barcodes = [line.strip() for line in f if not line.isspace()]
-        logger.info(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
+        logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
 

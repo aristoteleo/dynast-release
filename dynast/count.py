@@ -136,7 +136,7 @@ def count(
     skip = not snp_threshold or (utils.all_exists(snps_required) and not redo('snp'))
     with stats.step('snp', skipped=skip), logger.namespaced_context('snp'):
         if not skip:
-            logger.info('Calculating coverage and detecting SNPs')
+            logger.info(f'Calculating coverage and outputting to {coverage_path}')
             os.makedirs(snp_dir, exist_ok=True)
             coverage_path, coverage_index_path = preprocessing.calculate_coverage(
                 bam_path, {
@@ -155,6 +155,8 @@ def count(
                 temp_dir=temp_dir,
                 velocity=velocity
             )
+
+            logger.info(f'Detecting SNPs with threshold {snp_threshold} to {snps_path}')
             snps_path = preprocessing.detect_snps(
                 conversions_path,
                 conversions_index_path,
@@ -166,10 +168,7 @@ def count(
                 n_threads=n_threads,
             )
         else:
-            if not snp_threshold:
-                logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
-            else:
-                logger.info('Skipped')
+            logger.info('Skipped')
 
     # Count conversions and calculate mutation rates
     count_dir = os.path.join(out_dir, constants.COUNT_DIR)
@@ -179,7 +178,7 @@ def count(
     with stats.step('count', skipped=skip), logger.namespaced_context('count'):
         if not skip:
             os.makedirs(count_dir, exist_ok=True)
-            logger.info('Counting conversions')
+            logger.info(f'Counting conversions to {conversions_path}')
             snps = utils.merge_dictionaries(
                 preprocessing.read_snps(snps_path) if snp_threshold else {},
                 preprocessing.read_snp_csv(snp_csv) if snp_csv else {},
@@ -216,7 +215,7 @@ def count(
     skip = not correct or (utils.all_exists(aggregates_required) and not redo('aggregate'))
     with stats.step('aggregate', skipped=skip), logger.namespaced_context('aggregate'):
         if not skip:
-            logger.info('Computing mutation rates')
+            logger.info(f'Computing mutation rates and outputting to {rates_path}')
             os.makedirs(aggregates_dir, exist_ok=True)
             gene_infos = gene_infos or utils.read_pickle(genes_path)
             df_counts_uncomplemented = preprocessing.read_counts(counts_path)
@@ -237,12 +236,13 @@ def count(
 
             for key, df in dfs.items():
                 for convs in conversions:
-                    logger.info(f'Aggregating counts for `{key}` reads for conversions {convs}')
+                    aggregates_path = aggregates_paths[key][tuple(convs)]
+                    logger.info(f'Aggregating counts for `{key}` reads for conversions {convs} to {aggregates_path}')
                     # Ignore reads that have more than one conversion of interest
                     other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
                     aggregates_paths[key][tuple(convs)] = preprocessing.aggregate_counts(
                         df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
-                        aggregates_paths[key][tuple(convs)],
+                        aggregates_path,
                         conversions=convs
                     )
         else:
@@ -277,7 +277,7 @@ def count(
                         f.write(str(control_p_e))
 
             else:
-                logger.info('Estimating average mismatch rate in unlabeled RNA')
+                logger.info(f'Estimating average mismatch rate in unlabeled RNA to {p_e_path}')
                 if control:
                     gene_infos = gene_infos or utils.read_pickle(genes_path)
                     p_e_path = estimation.estimate_p_e_control(
@@ -304,14 +304,17 @@ def count(
 
             if not control:
                 for convs in conversions:
-                    logger.info(f'Estimating average mismatch rate in labeled RNA for conversions {convs}')
+                    p_c_path = p_c_paths[tuple(convs)]
+                    logger.info(
+                        f'Estimating average mismatch rate in labeled RNA for conversions {convs} to {p_c_path}'
+                    )
                     df_aggregates = preprocessing.read_aggregates(
                         aggregates_paths['total' if velocity else 'transcriptome'][tuple(convs)]
                     )
                     p_c_paths[tuple(convs)] = estimation.estimate_p_c(
                         df_aggregates,
                         estimation.read_p_e(p_e_path, group_by=p_group_by),
-                        p_c_paths[tuple(convs)],
+                        p_c_path,
                         group_by=p_group_by,
                         n_threads=n_threads,
                     )
@@ -319,12 +322,13 @@ def count(
                     for key, paths in aggregates_paths.items():
                         if key in velocity_blacklist or key not in correct:
                             continue
-                        logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs}')
+                        pi_path = pi_paths[key][tuple(convs)]
+                        logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs} to {pi_path}')
                         pi_paths[key][tuple(convs)] = estimation.estimate_pi(
                             preprocessing.read_aggregates(paths[tuple(convs)]),
                             estimation.read_p_e(p_e_path, group_by=p_group_by),
                             estimation.read_p_c(p_c_paths[tuple(convs)], group_by=p_group_by),
-                            pi_paths[key][tuple(convs)],
+                            pi_path,
                             p_group_by=p_group_by,
                             n_threads=n_threads,
                             threshold=read_threshold,
@@ -350,7 +354,7 @@ def count(
             logger.info(f'Combining results into an Anndata object at {adata_path}')
             gene_infos = gene_infos or utils.read_pickle(genes_path)
 
-            logger.info(f'Loading results for `transcriptome`{" and `total`" if velocity else ""} reads')
+            logger.info('Loading results for `transcriptome` reads')
             df_counts = (
                 df_counts_complemented if df_counts_complemented is not None else
                 preprocessing.complement_counts(preprocessing.read_counts(counts_path), gene_infos)
@@ -387,6 +391,8 @@ def count(
                     )
 
                 if velocity:
+                    logger.info('Loading results for `total` reads')
+
                     # Counts for all reads, regardless of whether they map to the transcriptome
                     layers[f'unlabeled_{join}'], layers[f'labeled_{join}'] = preprocessing.split_counts(
                         df_counts[(df_counts[other_convs] == 0).all(axis=1)], barcodes, features, conversions=convs
