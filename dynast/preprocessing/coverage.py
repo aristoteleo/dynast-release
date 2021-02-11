@@ -1,5 +1,4 @@
 import gzip
-import logging
 import os
 import pickle
 import shutil
@@ -9,8 +8,7 @@ from functools import partial
 import pysam
 
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 def calculate_coverage_contig(

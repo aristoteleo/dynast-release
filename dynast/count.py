@@ -1,5 +1,4 @@
 import datetime as dt
-import logging
 import os
 import pysam
 
@@ -7,11 +6,11 @@ import anndata
 import pandas as pd
 
 from . import config, constants, estimation, preprocessing, utils
-from .stats import STATS
+from .logging import logger
+from .stats import Stats
 
-logger = logging.getLogger(__name__)
 
-
+@logger.namespaced('count')
 def count(
     bam_path,
     gtf_path,
@@ -44,9 +43,10 @@ def count(
     def redo(key):
         return re in config.RE_CHOICES[:config.RE_CHOICES.index(key) + 1]
 
-    STATS.start()
+    stats = Stats()
+    stats.start()
     stats_path = os.path.join(
-        out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(STATS.start_time, "%Y%m%d_%H%M%S_%f")}.json'
+        out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(stats.start_time, "%Y%m%d_%H%M%S_%f")}.json'
     )
     os.makedirs(out_dir, exist_ok=True)
 
@@ -68,7 +68,7 @@ def count(
         if f.header.get('HD', {}).get('SO') == 'coordinate':
             bam_sorted = True
     skip = utils.all_exists([sorted_bam_path]) or bam_sorted
-    with STATS.step('sort', skipped=skip) or redo('sort'):
+    with stats.step('sort', skipped=skip) or redo('sort'):
         if not skip:
             logger.info(f'Sorting {bam_path} with samtools to {sorted_bam_path}')
             pysam.sort(bam_path, '-o', sorted_bam_path, '-@', str(n_threads))
@@ -77,7 +77,7 @@ def count(
     # Check if BAM index exists and create one if it doesn't.
     bai_path = f'{bam_path}.bai'
     skip = utils.all_exists([bai_path]) and not redo('index')
-    with STATS.step('index', skipped=skip):
+    with stats.step('index', skipped=skip):
         if not skip:
             logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
             pysam.index(bam_path, bai_path, '-@', str(n_threads))
@@ -96,7 +96,7 @@ def count(
     gene_infos = None
     transcript_infos = None
     skip = utils.all_exists(conversions_required) and not redo('parse')
-    with STATS.step('parse', skipped=skip):
+    with stats.step('parse', skipped=skip), logger.namespaced_context('parse'):
         if not skip:
             os.makedirs(parse_dir, exist_ok=True)
             logger.info('Parsing gene and transcript information from GTF')
@@ -125,7 +125,7 @@ def count(
                 velocity=velocity
             )
         else:
-            logger.info('Skipped read and conversion parsing from BAM')
+            logger.info('Skipped')
 
     # Detect SNPs
     snp_dir = os.path.join(out_dir, constants.SNP_DIR)
@@ -134,7 +134,7 @@ def count(
     snps_path = os.path.join(snp_dir, constants.SNPS_FILENAME)
     snps_required = [coverage_path, coverage_index_path, snps_path]
     skip = not snp_threshold or (utils.all_exists(snps_required) and not redo('snp'))
-    with STATS.step('snp', skipped=skip):
+    with stats.step('snp', skipped=skip), logger.namespaced_context('snp'):
         if not skip:
             logger.info('Calculating coverage and detecting SNPs')
             os.makedirs(snp_dir, exist_ok=True)
@@ -169,14 +169,14 @@ def count(
             if not snp_threshold:
                 logger.info('No SNP filtering will be done. Use `--snp-threshold` to detect possible SNPs.')
             else:
-                logger.info('Skipped coverage calculation and SNP detection')
+                logger.info('Skipped')
 
     # Count conversions and calculate mutation rates
     count_dir = os.path.join(out_dir, constants.COUNT_DIR)
     counts_path = os.path.join(count_dir, constants.COUNTS_FILENAME)
     count_required = [counts_path]
     skip = utils.all_exists(count_required) and not redo('count')
-    with STATS.step('count', skipped=skip):
+    with stats.step('count', skipped=skip), logger.namespaced_context('count'):
         if not skip:
             os.makedirs(count_dir, exist_ok=True)
             logger.info('Counting conversions')
@@ -198,7 +198,7 @@ def count(
                 temp_dir=temp_dir
             )
         else:
-            logger.info('Skipped conversion counting')
+            logger.info('Skipped')
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
@@ -214,7 +214,7 @@ def count(
     df_counts_uncomplemented = None
     df_counts_complemented = None
     skip = not correct or (utils.all_exists(aggregates_required) and not redo('aggregate'))
-    with STATS.step('aggregate', skipped=skip):
+    with stats.step('aggregate', skipped=skip), logger.namespaced_context('aggregate'):
         if not skip:
             logger.info('Computing mutation rates')
             os.makedirs(aggregates_dir, exist_ok=True)
@@ -246,7 +246,7 @@ def count(
                         conversions=convs
                     )
         else:
-            logger.info('Skipped count aggregation')
+            logger.info('Skipped')
 
     velocity_blacklist = ['unassigned', 'ambiguous']
     estimates_dir = os.path.join(out_dir, constants.ESTIMATES_DIR)
@@ -260,7 +260,7 @@ def count(
     }
     estimates_paths = [p_e_path] + utils.flatten_dict_values(p_c_paths) + utils.flatten_dict_values(pi_paths)
     skip = not correct or (utils.all_exists(estimates_paths) and not redo('estimate'))
-    with STATS.step('estimate', skipped=skip):
+    with stats.step('estimate', skipped=skip), logger.namespaced_context('estimate'):
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
 
@@ -332,20 +332,20 @@ def count(
                             seed=seed,
                         )
         else:
-            logger.info('Skipped rate estimation')
+            logger.info('Skipped')
 
     if control:
         logger.info('Downstream processing skipped for controls')
         if snp_threshold:
             logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
         logger.info(f'Use `--p-e {p_e_path}` for test samples')
-        STATS.end()
-        STATS.save(stats_path)
+        stats.end()
+        stats.save(stats_path)
         return
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     skip = utils.all_exists([adata_path]) and not redo('split')
-    with STATS.step('split', skipped=skip):
+    with stats.step('split', skipped=skip), logger.namespaced_context('split'):
         if not skip:
             logger.info(f'Combining results into an Anndata object at {adata_path}')
             gene_infos = gene_infos or utils.read_pickle(genes_path)
@@ -436,6 +436,6 @@ def count(
             )
             adata.write(adata_path, compression='gzip')
         else:
-            logger.info('Skipped splitting of new and old RNA')
-    STATS.end()
-    STATS.save(stats_path)
+            logger.info('Skipped')
+    stats.end()
+    stats.save(stats_path)

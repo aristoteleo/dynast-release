@@ -1,12 +1,9 @@
-import logging
-
 import numpy as np
 import pandas as pd
 
 from .conversion import BASE_IDX, COLUMNS
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 def read_rates(rates_path):

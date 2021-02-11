@@ -1,4 +1,3 @@
-import logging
 import re
 from functools import partial
 from operator import truediv
@@ -7,8 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 CONVERSIONS_PARSER = re.compile(
     r'''^

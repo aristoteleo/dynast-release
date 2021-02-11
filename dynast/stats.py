@@ -120,6 +120,3 @@ class Stats:
             'steps': {key: step.to_dict()
                       for key, step in self.steps.items()}
         }
-
-
-STATS = Stats()

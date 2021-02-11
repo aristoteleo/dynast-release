@@ -1,11 +1,9 @@
 import bisect
-import logging
 import re
 from itertools import product
 
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 class GTF:

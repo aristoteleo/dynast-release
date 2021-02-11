@@ -7,16 +7,9 @@ import warnings
 
 from . import __version__
 from .config import RE_CHOICES
+from .logging import logger
 from .technology import BARCODE_UMI_TECHNOLOGIES, TECHNOLOGIES_MAP
 from .utils import flatten_list
-
-logger = logging.getLogger(__name__)
-
-
-def silence_logger(name):
-    package_logger = logging.getLogger(name)
-    package_logger.setLevel(logging.CRITICAL + 10)
-    package_logger.propagate = False
 
 
 def print_technologies():
@@ -529,6 +522,7 @@ COMMAND_TO_FUNCTION = {
 }
 
 
+@logger.namespaced('main')
 def main():
     parser = argparse.ArgumentParser(description=f'{__version__}')
     parser._actions[0].help = parser._actions[0].help.capitalize()
@@ -570,18 +564,7 @@ def main():
 
     args = parser.parse_args()
 
-    logging.basicConfig(
-        format='[%(asctime)s] %(levelname)7s %(message)s',
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        force=True,
-    )
-
-    # Silence logging from other packages
-    silence_logger('anndata')
-    silence_logger('h5py')
-    silence_logger('numba')
-    silence_logger('pysam')
-    silence_logger('pystan')
+    logger.setLevel(logging.DEBUG if args.verbose else logging.INFO)
 
     logger.debug('Printing verbose output')
     logger.debug(f'Input args: {args}')

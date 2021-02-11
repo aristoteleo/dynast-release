@@ -1,4 +1,3 @@
-import logging
 import re
 import shutil
 import tempfile
@@ -9,8 +8,7 @@ import pandas as pd
 from scipy import sparse
 
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 CONVERSIONS_PARSER = re.compile(
     r'''^

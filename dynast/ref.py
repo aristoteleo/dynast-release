@@ -1,11 +1,9 @@
-import logging
 import math
 import os
 import tempfile
 
 from . import utils
-
-logger = logging.getLogger(__name__)
+from .logging import logger
 
 
 def STAR_genomeGenerate(
@@ -101,6 +99,7 @@ def STAR_genomeGenerate(
     return {'index': index_dir}
 
 
+@logger.namespaced('ref')
 def ref(fasta_path, gtf_path, index_dir, n_threads=8, memory=16 * 1024**3, temp_dir=None):
     logger.info(f'Indexing FASTA {fasta_path} and GTF {gtf_path} with STAR')
     index_dir = STAR_genomeGenerate(

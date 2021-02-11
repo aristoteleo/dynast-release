@@ -1,5 +1,4 @@
 import gzip
-import logging
 import multiprocessing
 import os
 import pickle
@@ -15,8 +14,7 @@ import psutil
 from tqdm import tqdm
 
 from . import config
-
-logger = logging.getLogger(__name__)
+from .logging import logger
 
 
 class UnsupportedOSException(Exception):

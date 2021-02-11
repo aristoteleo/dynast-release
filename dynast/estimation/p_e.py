@@ -1,12 +1,8 @@
-import logging
-
 import numpy as np
 import pandas as pd
 
-from ..preprocessing.conversion import BASE_COLUMNS, CONVERSION_COLUMNS
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..preprocessing.conversion import BASE_COLUMNS, CONVERSION_COLUMNS
 
 
 def read_p_e(p_e_path, group_by=None):

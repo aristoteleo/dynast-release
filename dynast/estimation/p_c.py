@@ -1,4 +1,3 @@
-import logging
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -7,8 +6,7 @@ from numba import njit
 from scipy import sparse
 
 from .. import utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 def read_p_c(p_c_path, group_by=None):

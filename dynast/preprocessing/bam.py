@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import tempfile
@@ -11,8 +10,7 @@ import pysam
 
 from . import gtf
 from .. import config, utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 def read_conversions(conversions_path, *args, **kwargs):

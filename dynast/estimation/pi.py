@@ -1,4 +1,3 @@
-import logging
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -7,8 +6,7 @@ import pystan
 from scipy import sparse
 
 from .. import config, utils
-
-logger = logging.getLogger(__name__)
+from ..logging import logger
 
 
 def read_pi(pi_path):

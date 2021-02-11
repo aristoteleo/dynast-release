@@ -1,10 +1,8 @@
-import logging
 import os
 import tempfile
 
 from . import config, constants, utils
-
-logger = logging.getLogger(__name__)
+from .logging import logger
 
 
 def STAR_solo(
@@ -162,6 +160,7 @@ def STAR_solo(
     return result
 
 
+@logger.namespaced('align')
 def align(
     fastqs,
     index_dir,
