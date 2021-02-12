@@ -71,8 +71,8 @@ Next, we align the FASTQs to the genome.
 
 where :code:`align` is the directory to which to save alignment files, and :code:`TECHNOLOGY` is a scRNA-seq technology. A list of supported technologies can be found by running :code:`dynast --list`. :code:`BARCODE_UMI_FASTQ` is the FASTQ containing the barcode and UMI sequences, whereas the :code:`CDNA_FASTQ` is the FASTQ containing the biological cDNA sequences.
 
-Count
-'''''
+Quantify
+''''''''
 Finally, we quantify the four RNA species of interest. Note that we re-use the gene annotations GTF.
 
 .. code-block::

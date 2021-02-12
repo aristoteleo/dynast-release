@@ -212,7 +212,7 @@ def count(
     aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
     df_counts_uncomplemented = None
     df_counts_complemented = None
-    skip = not correct or (utils.all_exists(aggregates_required) and not redo('aggregate'))
+    skip = utils.all_exists(aggregates_required) and not redo('aggregate')
     with stats.step('aggregate', skipped=skip), logger.namespaced_context('aggregate'):
         if not skip:
             logger.info(f'Computing mutation rates and outputting to {rates_path}')

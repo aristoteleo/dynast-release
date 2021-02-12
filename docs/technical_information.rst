@@ -57,9 +57,9 @@ All files generated during this step is output to the :code:`1_count` directory 
 
 :code:`aggregate`
 '''''''''''''''''
-All files generated during this step is output to the :code:`2_aggregate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correct` is not specified.
+All files generated during this step is output to the :code:`2_aggregate` directory in the output directory (:code:`-o`).
 
-1. Mutation rates for each base is calculated and output to :code:`rates.csv`.
+1. Mutation rates for each base is calculated for each cell and output to :code:`rates.csv`.
 2. For each cell and gene and for each conversion provided with :code:`--conversion`, the conversion counts are aggregated into a CSV file such that each row contains the following columns: cell barcode, gene, conversion count, nucleotide content of the original base (i.e. if the conversion is T>C, this would be T), and the number of reads that have this particular barcode-gene-conversion-content combination. This procedure is done for all read groups that exist (see :ref:`read_groups`).
 
 .. _estimate:
