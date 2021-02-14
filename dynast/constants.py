@@ -25,7 +25,7 @@ COVERAGE_INDEX_FILENAME = 'coverage.idx'
 SNPS_FILENAME = 'snps.csv'
 
 COUNT_DIR = '1_count'
-COUNTS_FILENAME = 'counts.csv'
+COUNTS_PREFIX = 'counts'
 
 BARCODES_FILENAME = 'barcodes.csv'
 

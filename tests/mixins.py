@@ -72,12 +72,15 @@ class TestMixin(TestCase):
         cls.umi_coverage_path = os.path.join(cls.umi_count_snp_dir, 'coverage.csv')
         cls.umi_coverage_index_path = os.path.join(cls.umi_count_snp_dir, 'coverage.idx')
         cls.umi_snps_path = os.path.join(cls.umi_count_snp_dir, 'snps.csv')
-        cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts.csv')
+        cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts_TC.csv')
         cls.umi_rates_path = os.path.join(cls.umi_count_aggregate_dir, 'rates.csv')
-        cls.umi_aggregates_paths = {key: os.path.join(cls.umi_count_aggregate_dir, f'{key}.csv') for key in cls.types}
+        cls.umi_aggregates_paths = {
+            key: os.path.join(cls.umi_count_aggregate_dir, f'{key}_TC.csv')
+            for key in cls.types
+        }
         cls.umi_p_e_path = os.path.join(cls.umi_count_estimate_dir, 'p_e.csv')
-        cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c.csv')
-        cls.umi_pi_paths = {key: os.path.join(cls.umi_count_estimate_dir, f'{key}.csv') for key in cls.types}
+        cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c_TC.csv')
+        cls.umi_pi_paths = {key: os.path.join(cls.umi_count_estimate_dir, f'{key}_TC.csv') for key in cls.types}
 
         #########
         # Control

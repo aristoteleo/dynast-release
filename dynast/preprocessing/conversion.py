@@ -161,26 +161,26 @@ def drop_multimappers(df_counts):
     ) if filtered else df_counts[~duplicated_mask]
 
 
-def deduplicate_counts(df_counts):
+def deduplicate_counts(df_counts, conversions=None):
     """Deduplicate counts based on barcode, UMI, and gene.
 
     The order of priority is the following.
     1. Reads that align to the transcriptome (exon only)
-    2. Reads with the longest alignment (largest sum of nucleotide columns)
-    3. Reads with least number of conversions (smallest sum of conversion columns)
+    2. If `conversions` is provided, reads that have a larger sum of such conversions
+       If `conversions` is not provided, reads that have larger sum of all conversions
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
+    :param conversions: conversions to prioritize, defaults to `None`
+    :type conversions: list, optional
 
     :return: deduplicated counts dataframe
     :rtype: pandas.DataFrame
     """
-    df_counts['base_sum'] = df_counts[BASE_COLUMNS].sum(axis=1)
-    df_counts['conversion_sum'] = -df_counts[CONVERSION_COLUMNS].sum(axis=1)
+    df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
 
     # Sort by transcriptome last, longest alignment last, least conversion first
-    df_sorted = df_counts.sort_values(['transcriptome', 'base_sum',
-                                       'conversion_sum']).drop(columns=['base_sum', 'conversion_sum'])
+    df_sorted = df_counts.sort_values(['transcriptome', 'conversion_sum']).drop(columns='conversion_sum')
 
     # Always select transcriptome read if there are duplicates
     df_deduplicated = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi', 'GX'], keep='last')].sort_values(
@@ -429,6 +429,7 @@ def count_conversions(
     counts_path,
     snps=None,
     quality=27,
+    conversions=None,
     n_threads=8,
     temp_dir=None
 ):
@@ -450,6 +451,9 @@ def count_conversions(
     :param snps: dictionary of contig as keys and list of genomic positions as
                  values that indicate SNP locations, defaults to `None`
     :type snps: dictionary, optional
+    :param conversions: conversions to prioritize when deduplicating only applicable
+                        for UMI technologies, defaults to `None`
+    :type conversions: list, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -514,7 +518,7 @@ def count_conversions(
     df_counts = read_counts(combined_path)
     if all(df_counts['umi'] != 'NA'):
         logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
-        deduplicate_counts(df_counts).drop(columns='read_id').to_csv(counts_path, index=False)
+        deduplicate_counts(df_counts, conversions=conversions).drop(columns='read_id').to_csv(counts_path, index=False)
     else:
         logger.debug(f'Filtering multimappers to {counts_path}')
         drop_multimappers(df_counts).drop(columns='read_id').to_csv(counts_path, index=False)

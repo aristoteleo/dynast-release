@@ -1,0 +1,67 @@
+{
+    "version": "0.0.1",
+    "call": "/home/lioscro/miniconda3/bin/dynast count -g /mnt/e/references/human/ensembl/Homo_sapiens.GRCh38.101.gtf --barcode-tag CB --umi-tag UB SRR11683995_align/Aligned.sortedByCoord.out.bam -o SRR11683995_count --conversion TC --re count --correct total --read-threshold 2",
+    "start_time": "2021-02-14T10:44:59.888811",
+    "end_time": "2021-02-14T10:46:01.843824",
+    "elapsed": 61.955013,
+    "step_order": [
+        "sort",
+        "index",
+        "parse",
+        "snp",
+        "count",
+        "aggregate",
+        "estimate",
+        "split"
+    ],
+    "steps": {
+        "sort": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "index": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "parse": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "snp": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "count": {
+            "start_time": "2021-02-14T10:44:59.913854",
+            "end_time": "2021-02-14T10:45:00.146121",
+            "elapsed": 0.232267,
+            "skipped": false
+        },
+        "aggregate": {
+            "start_time": "2021-02-14T10:45:00.155256",
+            "end_time": "2021-02-14T10:45:00.211481",
+            "elapsed": 0.056225,
+            "skipped": false
+        },
+        "estimate": {
+            "start_time": "2021-02-14T10:45:00.214400",
+            "end_time": "2021-02-14T10:46:01.656266",
+            "elapsed": 61.441866,
+            "skipped": false
+        },
+        "split": {
+            "start_time": "2021-02-14T10:46:01.657244",
+            "end_time": "2021-02-14T10:46:01.843814",
+            "elapsed": 0.18657,
+            "skipped": false
+        }
+    }
+}

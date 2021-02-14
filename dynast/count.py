@@ -23,7 +23,7 @@ def count(
     control=False,
     filtered_only=False,
     quality=27,
-    conversions=['TC'],
+    conversions=[['TC']],
     snp_threshold=0.5,
     snp_csv=None,
     correct=None,
@@ -50,6 +50,7 @@ def count(
     )
     os.makedirs(out_dir, exist_ok=True)
 
+    all_conversions = sorted(utils.flatten_list(conversions))
     correct = correct or []
 
     # Check memory.
@@ -172,7 +173,7 @@ def count(
 
     # Count conversions and calculate mutation rates
     count_dir = os.path.join(out_dir, constants.COUNT_DIR)
-    counts_path = os.path.join(count_dir, constants.COUNTS_FILENAME)
+    counts_path = os.path.join(count_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
     count_required = [counts_path]
     skip = utils.all_exists(count_required) and not redo('count')
     with stats.step('count', skipped=skip), logger.namespaced_context('count'):
@@ -193,6 +194,7 @@ def count(
                 counts_path,
                 snps=snps,
                 quality=quality,
+                conversions=all_conversions,
                 n_threads=n_threads,
                 temp_dir=temp_dir
             )
@@ -239,7 +241,7 @@ def count(
                     aggregates_path = aggregates_paths[key][tuple(convs)]
                     logger.info(f'Aggregating counts for `{key}` reads for conversions {convs} to {aggregates_path}')
                     # Ignore reads that have more than one conversion of interest
-                    other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                    other_convs = list(set(all_conversions) - set(convs))
                     aggregates_paths[key][tuple(convs)] = preprocessing.aggregate_counts(
                         df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
                         aggregates_path,
@@ -370,7 +372,7 @@ def count(
             layers = {}
             for convs in conversions:
                 # Ignore reads that have other conversions
-                other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                other_convs = list(set(all_conversions) - set(convs))
                 join = '_'.join(convs)
 
                 # Counts for transcriptome reads (i.e. X_unlabeled + X_labeled = X)
@@ -415,7 +417,7 @@ def count(
                 if key in velocity_blacklist:
                     continue
                 for convs in conversions:
-                    other_convs = list(set(utils.flatten_list(conversions)) - set(utils.flatten_list(convs)))
+                    other_convs = list(set(all_conversions) - set(convs))
                     join = '_'.join(convs)
                     layers[f'{key}_unlabeled_{join}'], layers[f'{key}_labeled_{join}'] = preprocessing.split_counts(
                         df_counts_velocity[(df_counts_velocity[other_convs] == 0).all(axis=1)],

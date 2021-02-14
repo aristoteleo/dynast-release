@@ -77,18 +77,6 @@ class TestConversion(mixins.TestMixin, TestCase):
         self.assertEqual(1, df_deduplicated.shape[0])
         self.assertTrue(df_deduplicated.iloc[0]['transcriptome'])
 
-    def test_deduplicate_counts_alignment(self):
-        rows = [
-            ['barcode', 'umi', 'GX'] + [0] * len(conversion.CONVERSION_COLUMNS) + [1] * len(conversion.BASE_COLUMNS) +
-            [True],
-            ['barcode', 'umi', 'GX'] + [0] * len(conversion.CONVERSION_COLUMNS) + [0] * len(conversion.BASE_COLUMNS) +
-            [True],
-        ]
-        df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX'] + conversion.COLUMNS + ['transcriptome'])
-        df_deduplicated = conversion.deduplicate_counts(df)
-        self.assertEqual(1, df_deduplicated.shape[0])
-        self.assertEqual(1, df_deduplicated.iloc[0]['A'])
-
     def test_deduplicate_counts_conversion(self):
         rows = [
             ['barcode', 'umi', 'GX'] + [1] * len(conversion.CONVERSION_COLUMNS) + [0] * len(conversion.BASE_COLUMNS) +
@@ -99,7 +87,7 @@ class TestConversion(mixins.TestMixin, TestCase):
         df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX'] + conversion.COLUMNS + ['transcriptome'])
         df_deduplicated = conversion.deduplicate_counts(df)
         self.assertEqual(1, df_deduplicated.shape[0])
-        self.assertEqual(0, df_deduplicated.iloc[0]['AC'])
+        self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
 
     def test_split_counts_by_velocity(self):
         df = pd.read_csv(self.umi_counts_path)
@@ -148,6 +136,7 @@ class TestConversion(mixins.TestMixin, TestCase):
                     counts_path,
                     snps=None,
                     quality=20,
+                    conversions=['TC'],
                     n_threads=2,
                     temp_dir=self.temp_dir
                 )
