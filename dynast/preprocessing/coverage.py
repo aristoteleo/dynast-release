@@ -76,7 +76,7 @@ def calculate_coverage_contig(
         required_tags.append(barcode_tag)
 
     n = 0
-    with pysam.AlignmentFile(bam_path, 'rb') as bam, \
+    with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
         open(coverage_path, 'w') as coverage_out:
         for read in bam.fetch(contig):
             n_lines = 0

@@ -8,7 +8,7 @@ This sections covers basic usage of dynast.
 
 Building the STAR index with :code:`ref`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [Dobin2013]_. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to `Cell Ranger`_. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
+Internally, dynast uses the STAR RNA-seq aligner to align reads to the genome [Dobin2013]_. Therefore, we must construct a STAR index to use for alignment. The :code:`ref` command is a wrapper around the STAR's :code:`--runMode genomeGenerate` command, while also providing useful default parameters to limit memory usage, similar to `Cell Ranger <https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger>`_. Existing STAR indices can be used interchangeably with ones generated through dynast. A genome FASTA and gene annotation GTF are required to build the STAR index.
 
 .. code-block:: text
 
@@ -96,7 +96,7 @@ For plate-based technologies (such as Smart-Seq), the following BAM tags are wri
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:code:`count` parses the alignment BAM and quantifies the four RNA species (unlabeled unspliced, unlabeled spliced, labeled unspliced, labeled spliced) and outputs the results as a ready-to-use AnnData_ :code:`H5AD` file. In order to properly quantify the above four species, the alignment BAM must contain specific BAM tags, depending on what sequencing technology was used. If :code:`align` was used to generate the alignment BAM, dynast automatically configures the appropriate BAM tags to be written.
+:code:`count` parses the alignment BAM and quantifies the four RNA species (unlabeled unspliced, unlabeled spliced, labeled unspliced, labeled spliced) and outputs the results as a ready-to-use `AnnData <https://anndata.readthedocs.io/en/latest/>`_ :code:`H5AD` file. In order to properly quantify the above four species, the alignment BAM must contain specific BAM tags, depending on what sequencing technology was used. If :code:`align` was used to generate the alignment BAM, dynast automatically configures the appropriate BAM tags to be written.
 
 .. code-block:: text
 
@@ -181,6 +181,4 @@ To perform statistical correction of unlabeled and unlabeled RNA counts, one cru
 
 The :code:`--control` flag indicates the input BAM is a control sample. This will calculate the background conversion rate of unlabeled RNA to the file :code:`3_estimation/p_e.csv` relative to the output directory. Simultaneously, the :code:`--snp-threshold` can be provided, which will output SNP calls to the file :code:`0_snp/snps.csv`. These file can then be used as the input to the :code:`--p-e` and/or :code:`--snp-csv` arguments, respectively, when running the test sample(s).
 
-.. _AnnData: https://anndata.readthedocs.io/en/latest/
-.. _Cell Ranger: https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger
 .. [Dobin2013] https://doi.org/10.1093/bioinformatics/bts635

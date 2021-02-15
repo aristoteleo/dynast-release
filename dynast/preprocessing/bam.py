@@ -195,7 +195,7 @@ def parse_read_contig(
     # Can't use enumerate because n needs to be access outside from
     # the for loop.
     n = 0
-    with pysam.AlignmentFile(bam_path, 'rb') as bam, \
+    with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
         open(conversions_path, 'w') as conversions_out, \
         open(no_conversions_path, 'w') as no_conversions_out:
         for read in bam.fetch(contig):
