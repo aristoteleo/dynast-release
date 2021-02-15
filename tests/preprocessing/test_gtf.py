@@ -179,6 +179,12 @@ class TestSegmentCollection(mixins.TestMixin, TestCase):
         self.assertEqual(1, len(collection))
         self.assertEqual(gtf.Segment(0, 15), collection.segments[0])
 
+    def test_bool(self):
+        collection1 = gtf.SegmentCollection()
+        collection2 = gtf.SegmentCollection(segments=[gtf.Segment(0, 10)])
+        self.assertFalse(bool(collection1))
+        self.assertTrue(bool(collection2))
+
     def test_add_segment(self):
         segment1 = gtf.Segment(0, 5)
         segment2 = gtf.Segment(5, 10)
