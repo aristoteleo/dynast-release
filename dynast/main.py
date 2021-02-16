@@ -217,7 +217,7 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--gene-tag',
         metavar='TAG',
-        help=('BAM tag to use as gene assignments (default: GX)'),
+        help='BAM tag to use as gene assignments (default: GX)',
         type=str,
         default='GX',
     )
@@ -286,11 +286,11 @@ def setup_count_args(parser, parent):
         default=16,
     )
     parser_count.add_argument(
-        '--no-velocity',
+        '--no-splicing',
         '--transcriptome-only',
         help=(
-            'Do not prepare matrices for RNA velocity estimation and ignore reads that '
-            'are not assigned to the transcriptome.'
+            'Do not assign reads a splicing status (spliced, unspliced, ambiguous) '
+            'and ignore reads that are not assigned to the transcriptome.'
         ),
         action='store_true'
     )
@@ -466,9 +466,9 @@ def parse_count(parser, args, temp_dir=None):
 
     if not args.correct:
         logger.warning('No statistical correction will be performed because `--correct` is not provided.')
-    elif 'total' in args.correct and args.no_velocity:
+    elif 'total' in args.correct and args.no_splicing:
         parser.error(
-            '`--no-velocity` or `--transcriptome-only` can not be used with `--correct total`. '
+            '`--no-splicing` or `--transcriptome-only` can not be used with `--correct total`. '
             'Use `--correct transcriptome` instead.'
         )
 
@@ -511,7 +511,7 @@ def parse_count(parser, args, temp_dir=None):
         temp_dir=temp_dir,
         nasc=args.nasc,
         subset_threshold=args.subset_threshold,
-        velocity=not args.no_velocity,
+        velocity=not args.no_splicing,
         seed=args.seed,
     )
 

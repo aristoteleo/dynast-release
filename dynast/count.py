@@ -21,7 +21,6 @@ def count(
     gene_tag='GX',
     barcodes=None,
     control=False,
-    filtered_only=False,
     quality=27,
     conversions=[['TC']],
     snp_threshold=0.5,
@@ -376,7 +375,7 @@ def count(
                 join = '_'.join(convs)
 
                 # Counts for transcriptome reads (i.e. X_unlabeled + X_labeled = X)
-                layers[f'X_unlabeled_{join}'], layers[f'X_labeled_{join}'] = preprocessing.split_counts(
+                layers[f'X_n_{join}'], layers[f'X_l_{join}'] = preprocessing.split_counts(
                     df_counts_transcriptome[(df_counts_transcriptome[other_convs] == 0).all(axis=1)],
                     barcodes,
                     features,
@@ -385,12 +384,10 @@ def count(
                 if 'transcriptome' in correct:
                     pis = estimation.read_pi(pi_paths['transcriptome'][tuple(convs)])
                     (
-                        layers[f'X_pi_{join}'],
-                        layers[f'X_unlabeled_{join}_corrected'],
-                        layers[f'X_labeled_{join}_corrected'],
-                    ) = estimation.split_matrix(
-                        layers[f'X_unlabeled_{join}'] + layers[f'X_labeled_{join}'], pis, barcodes, features
-                    )
+                        _,
+                        layers[f'X_n_{join}_est'],
+                        layers[f'X_l_{join}_est'],
+                    ) = estimation.split_matrix(layers[f'X_n_{join}'] + layers[f'X_l_{join}'], pis, barcodes, features)
 
                 if velocity:
                     logger.info('Loading results for `total` reads')
@@ -402,9 +399,9 @@ def count(
                     if 'total' in correct:
                         pis = estimation.read_pi(pi_paths['total'][tuple(convs)])
                         (
-                            layers[f'pi_{join}'],
-                            layers[f'unlabeled_{join}_corrected'],
-                            layers[f'labeled_{join}_corrected'],
+                            _,
+                            layers[f'unlabeled_{join}_est'],
+                            layers[f'labeled_{join}_est'],
                         ) = estimation.split_matrix(
                             layers[f'unlabeled_{join}'] + layers[f'labeled_{join}'], pis, barcodes, features
                         )
@@ -419,7 +416,7 @@ def count(
                 for convs in conversions:
                     other_convs = list(set(all_conversions) - set(convs))
                     join = '_'.join(convs)
-                    layers[f'{key}_unlabeled_{join}'], layers[f'{key}_labeled_{join}'] = preprocessing.split_counts(
+                    layers[f'{key[0]}n_{join}'], layers[f'{key[0]}l_{join}'] = preprocessing.split_counts(
                         df_counts_velocity[(df_counts_velocity[other_convs] == 0).all(axis=1)],
                         barcodes,
                         features,
@@ -428,11 +425,11 @@ def count(
                     if key in correct:
                         pis = estimation.read_pi(pi_paths[key][tuple(convs)])
                         (
-                            layers[f'{key}_pi_{join}'],
-                            layers[f'{key}_unlabeled_{join}_corrected'],
-                            layers[f'{key}_labeled_{join}_corrected'],
+                            _,
+                            layers[f'{key[0]}n_{join}_est'],
+                            layers[f'{key[0]}l_{join}_est'],
                         ) = estimation.split_matrix(
-                            layers[f'{key}_unlabeled_{join}'] + layers[f'{key}_labeled_{join}'], pis, barcodes, features
+                            layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pis, barcodes, features
                         )
 
             # Construct adata with umi counts as layers

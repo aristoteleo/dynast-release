@@ -33,7 +33,7 @@ The input BAM is indexed, if it does not exist. The BAM index will be generated 
 All files generated during this step is output to the :code:`0_parse` directory in the output directory (:code:`-o`).
 
 1. All gene and transcript information are parsed from the gene annotation GTF (:code:`-g`) and saved as Python pickles :code:`genes.pkl.gz` and :code:`transcripts.pkl.gz`, respectively.
-2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`no_conversions.csv`. The former contains a line for every conversion, and the latter contains a line for every read that does not have any conversions. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. RNA velocity types are also assigned in this step if :code:`--no-velocity` was not provided.
+2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`no_conversions.csv`. The former contains a line for every conversion, and the latter contains a line for every read that does not have any conversions. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. Splicing types are also assigned in this step if :code:`--no-splicing` was not provided.
 
 .. _snp:
 
@@ -79,10 +79,14 @@ All files generated during this step is output to the :code:`3_estimate` directo
 '''''''''''''
 All files generated during this step is output to the output directory (:code:`-o`). This step is skipped if :code:`--control` is specified. All results are compiled into a single AnnData :code:`H5AD` file. The AnnData object contains the following:
 
-* The transcriptome read counts in :code:`.X`.
-* Unlabeled and labeled transcriptome read counts in :code:`.layers['X_unlabeled_{conversion}']` and :code:`.layers['X_labeled_{conversion}']`. If :code:`--correct transcriptome` was specified, the corrected counts are in :code:`.layers['X_unlabeled_{conversion}_corrected']` and :code:`.layers['X_labeled_{conversion}_corrected']`. :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`. In addition, the actual estimated fractions of labeled RNA :math:`\pi` are in :code:`.layers['X_pi_{conversion}']`.
-* **[Only if :code:`--no-velocity` or :code:`--transcriptome-only` was not specified]** Unlabeled and labeled total read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--correct total` is specified, the corrected counts are in :code:`.layers['unlabeled_{conversion}_corrected']` and :code:`.layers['labeled_{conversion}_corrected']`. In addition, the actual estimated fractions of labeled RNA :math:`\pi` are in :code:`.layers['pi_{conversion}']`.
-* **[Only if :code:`--no-velocity` or :code:`--transcriptome-only` was not specified]** Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`. If :code:`--correct` was specified, layers analogous to total read counts are added, with the exception of ambiguous read counts (i.e. no correction is ever performed on ambiguous reads).
+* The *transcriptome* read counts in :code:`.X`. Here, *transcriptome* reads are the mRNA read counts that are usually output from conventional scRNA-seq quantification pipelines. In technical terms, these are reads that contain the BAM tag provided with the :code:`--gene-tag` (default is :code:`GX`).
+* Unlabeled and labeled *transcriptome* read counts in :code:`.layers['X_n_{conversion}']` and :code:`.layers['X_l_{conversion}']`. If :code:`--correct transcriptome` was specified, the corrected counts are in :code:`.layers['X_n_{conversion}_est']` and :code:`.layers['X_l_{conversion}_est']`. :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`.
+
+The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified.
+
+* Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--correct total` is specified, the corrected counts are in :code:`.layers['unlabeled_{conversion}_est']` and :code:`.layers['labeled_{conversion}_est']`.
+* Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
+* Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively. If :code:`--correct` was specified, layers with corrected counts are added. These layers are suffixed with :code:`_est`, analogous to *total* counts above.
 
 .. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
 
@@ -92,8 +96,8 @@ Read groups
 ^^^^^^^^^^^
 Dynast separates reads into read groups, and each of these groups are processed together.
 
-* :code:`total`: All reads. Used only when :code:`--no-velocity` or :code:`--transcriptome-only` is not used.
-* :code:`transcriptome`: Reads that map to the transcriptome. These are reads that have the :code:`GX` tag in the BAM (or whatever you provide for the :code:`--gene-tag` argument). This group also represents all reads when :code:`--no-velocity` or :code:`--transcriptome-only` is used.
+* :code:`total`: All reads. Used only when :code:`--no-splicing` or :code:`--transcriptome-only` is not used.
+* :code:`transcriptome`: Reads that map to the transcriptome. These are reads that have the :code:`GX` tag in the BAM (or whatever you provide for the :code:`--gene-tag` argument). This group also represents all reads when :code:`--no-splicing` or :code:`--transcriptome-only` is used.
 * :code:`spliced`: Spliced reads
 * :code:`unspliced`: Unspliced reads
 * :code:`ambiguous`: Ambiguous reads

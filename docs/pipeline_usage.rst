@@ -103,7 +103,7 @@ Quantifying counts with :code:`count`
 	usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
 	                    [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
 	                    [--quality QUALITY] [--re RE] [--snp-threshold THRESHOLD] [--snp-csv CSV] [--barcodes BARCODES]
-	                    [--read-threshold THRESHOLD] [--no-velocity] [--control]
+	                    [--read-threshold THRESHOLD] [--no-splicing] [--control]
 	                    [--correct {total,transcriptome,spliced,unspliced}] [--p-e P_E]
 	                    bam
 
@@ -138,9 +138,9 @@ Quantifying counts with :code:`count`
 	  --barcodes BARCODES   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
 	  --read-threshold THRESHOLD
 	                        Do not attempt statistical correction if there are less than this many reads. (default: 16)
-	  --no-velocity, --transcriptome-only
-	                        Do not prepare matrices for RNA velocity estimation and ignore reads that are not assigned to
-	                        the transcriptome.
+	  --no-splicing, --transcriptome-only
+	                        Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
+	                        are not assigned to the transcriptome.
 	  --control             Indicate this is a control sample, which is used to estimate the background mutation rate
 	                        and/or detect SNPs. The estimated background mutation rate and/or detected SNPs can be used
 	                        when running subsequent test samples.

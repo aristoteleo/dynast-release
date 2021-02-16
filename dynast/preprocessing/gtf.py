@@ -321,7 +321,8 @@ def parse_gtf(gtf_path):
         attributes['transcripts'] = cleaned
         if not cleaned:
             logger.warning(
-                f'Gene {gene_id} has no transcripts. The entire gene will be marked as a transcript and an exon.'
+                f'Gene `{gene_id}` has no transcripts. '
+                f'The entire gene will be marked as a transcript with ID `{gene_id}` and an exon.'
             )
             attributes['transcripts'].append(gene_id)
             transcript_infos[gene_id] = {
@@ -349,7 +350,8 @@ def parse_gtf(gtf_path):
                 introns.add_segment(Segment(exons[-1].end, transcript_interval.end))
         else:
             logger.warning(
-                f'Transcript {transcript_id} has no exons. The entire transcript will be marked as an intron.'
+                f'Gene `{attributes["gene_id"]}` transcript `{transcript_id}` has no exons. '
+                'The entire transcript will be marked as an intron.'
             )
             introns.add_segment(transcript_interval)
 
