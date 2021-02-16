@@ -54,11 +54,18 @@ class TestGtf(mixins.TestMixin, TestCase):
 
     def test_entries(self):
         g = gtf.GTF(self.gtf_path)
-        self.assertEqual(8, len(list(g.entries())))
+        self.assertEqual(9, len(list(g.entries())))
 
     def test_parse_gtf(self):
         gene_infos, transcript_infos = gtf.parse_gtf(self.gtf_path)
         self.assertEqual({
+            'GENE_D': {
+                'transcripts': ['GENE_D'],
+                'segment': gtf.Segment(0, 2),
+                'chr': '1',
+                'strand': '+',
+                'gene_name': 'GENE_D_NAME'
+            },
             'GENE_C': {
                 'transcripts': ['TRANSCRIPT_C'],
                 'segment': gtf.Segment(1, 14),
@@ -82,6 +89,14 @@ class TestGtf(mixins.TestMixin, TestCase):
             }
         }, gene_infos)
         self.assertEqual({
+            'GENE_D': {
+                'gene_id': 'GENE_D',
+                'chr': '1',
+                'segment': gtf.Segment(0, 2),
+                'strand': '+',
+                'exons': gtf.SegmentCollection([gtf.Segment(0, 2)]),
+                'introns': gtf.SegmentCollection()
+            },
             'TRANSCRIPT_C': {
                 'gene_id': 'GENE_C',
                 'chr': '2',

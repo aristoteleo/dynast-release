@@ -419,6 +419,7 @@ def parse_align(parser, args, temp_dir=None):
         args.o,
         technology,
         whitelist_path=args.w,
+        strand=args.strand,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
