@@ -216,7 +216,9 @@ def parse_read_contig(
                 # When there are unmatched paired reads, we need to select the minimum start position
                 # among those reads.
                 if velocity:
-                    start = read.reference_start if not paired else min(values[4] for values in paired.values())
+                    start = read.reference_start if not paired else min(
+                        read.reference_start for read in paired.values()
+                    )
                     to_remove = 0
                     for gene in gene_order:
                         if gene_infos[gene]['segment'].end <= start:
@@ -235,16 +237,8 @@ def parse_read_contig(
             if barcodes and barcode not in barcodes:
                 continue
 
-            umi = read.get_tag(umi_tag) if umi_tag else 'NA'
-            gx_assigned = read.has_tag(gene_tag)
-            gx = read.get_tag(gene_tag) if gx_assigned else ''
-            sequence = read.seq.upper()
-            qualities = read.query_qualities
-            reference = read.get_reference_sequence().upper()
             reference_positions = read.get_reference_positions()
-
-            # Count number of nucleotides in the region this read mapped to
-            counts = Counter(reference)
+            counts = Counter()
 
             # Used exclusively for paired reads. So that we don't count conversions
             # in overlapping regions twice.
@@ -257,44 +251,33 @@ def parse_read_contig(
                 # Use HI tag, which is the multiple alignment index
                 key = (read_id, read.get_tag('HI'))
                 if key not in paired:
-                    paired[key] = (
-                        set(reference_positions),
-                        reference,
-                        sequence,
-                        qualities,
-                        read.reference_start,
-                        read.get_aligned_pairs(matches_only=True, with_seq=True),
-                    )
+                    paired[key] = read
                     continue
 
-                (
-                    mate_reference_positions,  # Note that this is a set, not a list
-                    mate_reference,
-                    mate_sequence,
-                    mate_qualities,
-                    mate_reference_start,
-                    aligned_pairs,
-                ) = paired[key]
+                mate = paired[key]
+                mate_sequence = mate.seq.upper()
+                mate_qualities = mate.query_qualities
+                mate_reference = mate.get_reference_sequence().upper()
+                mate_reference_positions = mate.get_reference_positions()
                 del paired[key]
 
                 # Update counts. union(A, B) = A + B - intersection(A, B)
                 counts += Counter(mate_reference)
-                overlap_pos = list(mate_reference_positions.intersection(reference_positions))
+                overlap_pos = list(set(mate_reference_positions).intersection(reference_positions))
                 overlap = Counter()
-                for base, i in zip(reference, reference_positions):
-                    if i in overlap_pos:
-                        overlap[base] += 1
-                counts -= overlap
 
                 # Iterate through all aligned bases, but don't immediately write
                 # to output. Instead, save the information in the conversions
                 # dictionary because we need to combine this information with
                 # the mate.
-                for read_i, genome_i, _genome_base in aligned_pairs:
+                for read_i, genome_i, _genome_base in mate.get_aligned_pairs(matches_only=True, with_seq=True):
                     read_base = mate_sequence[read_i]
                     genome_base = _genome_base.upper()
                     if 'N' in (genome_base, read_base):
                         continue
+
+                    if genome_i in overlap_pos:
+                        overlap[genome_base] += 1
 
                     if genome_base != read_base and (not nasc or genome_i not in overlap_pos):
                         # Add this conversion to the conversions dictionary.
@@ -303,11 +286,21 @@ def parse_read_contig(
                         # if conversions exist in same positions in overlapping
                         # segments.
                         conversions[genome_i] = (mate_qualities[read_i], genome_base, read_base)
+                counts -= overlap
+                del mate
 
                 # Update positions to be the union of the aligned position of the
                 # mates. This is considered as one "read" to assign velocity.
                 if velocity:
-                    reference_positions = sorted(mate_reference_positions.union(reference_positions))
+                    reference_positions += mate_reference_positions
+
+            umi = read.get_tag(umi_tag) if umi_tag else 'NA'
+            gx_assigned = read.has_tag(gene_tag)
+            gx = read.get_tag(gene_tag) if gx_assigned else ''
+            sequence = read.seq.upper()
+            qualities = read.query_qualities
+            reference = read.get_reference_sequence().upper()
+            counts += Counter(reference)
 
             # Assign velocity
             assignment = 'unassigned'
@@ -334,6 +327,8 @@ def parse_read_contig(
                 if genome_i in conversions:
                     if not nasc:
                         mate_quality, _, mate_read_base = conversions[genome_i]
+                        # The mate's conversion has higher quality, so replace
+                        # output with that of this mate.
                         if mate_quality > quality:
                             read_base = mate_read_base
                             quality = mate_quality
