@@ -191,6 +191,7 @@ def count(
                 no_conversions_path,
                 no_index_path,
                 counts_path,
+                barcodes=barcodes,
                 snps=snps,
                 quality=quality,
                 conversions=all_conversions,

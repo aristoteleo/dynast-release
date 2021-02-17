@@ -278,6 +278,7 @@ def count_no_conversions_part(
     lock,
     pos,
     n_lines,
+    barcodes=None,
     temp_dir=None,
     update_every=10000,
 ):
@@ -295,6 +296,9 @@ def count_no_conversions_part(
     :param n_lines: number of lines to parse from the conversions CSV, starting
                     from position `pos`
     :type n_lines: int
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
     :param update_every: update the counter every this many reads, defaults to `5000`
@@ -307,16 +311,19 @@ def count_no_conversions_part(
     with open(no_conversions_path, 'r') as f, open(count_path, 'w') as out:
         f.seek(pos)
         for i in range(n_lines):
-            line = f.readline()
-            groups = NO_CONVERSIONS_PARSER.match(line).groupdict()
-            out.write(
-                f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
-                f'{",".join(groups.get(key, "0") for key in COLUMNS)},{groups["velocity"]},{groups["transcriptome"]}\n'
-            )
             if (i + 1) % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+
+            line = f.readline()
+            groups = NO_CONVERSIONS_PARSER.match(line).groupdict()
+            if barcodes and groups['barcode'] not in barcodes:
+                continue
+            out.write(
+                f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
+                f'{",".join(groups.get(key, "0") for key in COLUMNS)},{groups["velocity"]},{groups["transcriptome"]}\n'
+            )
     lock.acquire()
     counter.value += n_lines % update_every
     lock.release()
@@ -330,6 +337,7 @@ def count_conversions_part(
     lock,
     pos,
     n_lines,
+    barcodes=None,
     snps=None,
     quality=27,
     temp_dir=None,
@@ -351,6 +359,9 @@ def count_conversions_part(
     :param n_lines: number of lines to parse from the conversions CSV, starting
                     from position `pos`
     :type n_lines: int
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
     :param snps: dictionary of contig as keys and list of genomic positions as
                  values that indicate SNP locations, defaults to `None`
     :type snps: dictionary, optional
@@ -382,12 +393,17 @@ def count_conversions_part(
         groups = None
         prev_groups = None
         for i in range(n_lines):
+            if (i + 1) % update_every == 0:
+                lock.acquire()
+                counter.value += update_every
+                lock.release()
+
             line = f.readline()
             prev_groups = groups
             groups = CONVERSIONS_PARSER.match(line).groupdict()
 
             if read_id != groups['read_id']:
-                if read_id is not None:
+                if read_id is not None and (not barcodes or prev_groups['barcode'] in barcodes):
                     out.write(
                         f'{prev_groups["read_id"]},{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)},{prev_groups["velocity"]},{prev_groups["transcriptome"]}\n'
@@ -402,13 +418,8 @@ def count_conversions_part(
                     counts[j] = int(groups[base])
                 count_base = False
 
-            if (i + 1) % update_every == 0:
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
-
         # Add last record
-        if read_id is not None:
+        if read_id is not None and (not barcodes or groups['barcode'] in barcodes):
             out.write(
                 f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
                 f'{",".join(str(c) for c in counts)},{groups["velocity"]},{groups["transcriptome"]}\n'
@@ -427,6 +438,7 @@ def count_conversions(
     no_conversions_path,
     no_index_path,
     counts_path,
+    barcodes=None,
     snps=None,
     quality=27,
     conversions=None,
@@ -448,6 +460,9 @@ def count_conversions(
     :type no_index_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
+    :param barcodes: list of barcodes to be considered. All barcodes are considered
+                     if not provided, defaults to `None`
+    :type barcodes: list, optional
     :param snps: dictionary of contig as keys and list of genomic positions as
                  values that indicate SNP locations, defaults to `None`
     :type snps: dictionary, optional
@@ -487,14 +502,21 @@ def count_conversions(
             conversions_path,
             counter,
             lock,
+            barcodes=barcodes,
             snps=snps,
             quality=quality,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
         ), parts
     )
     no_async_result = pool.starmap_async(
-        partial(count_no_conversions_part, no_conversions_path, counter, lock, temp_dir=tempfile.mkdtemp(dir=temp_dir)),
-        no_parts
+        partial(
+            count_no_conversions_part,
+            no_conversions_path,
+            counter,
+            lock,
+            barcodes=barcodes,
+            temp_dir=tempfile.mkdtemp(dir=temp_dir)
+        ), no_parts
     )
     pool.close()
 
