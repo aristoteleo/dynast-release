@@ -216,9 +216,10 @@ def parse_read_contig(
                 # When there are unmatched paired reads, we need to select the minimum start position
                 # among those reads.
                 if velocity:
-                    start = read.reference_start if not paired else min(
-                        read.reference_start for read in paired.values()
-                    )
+                    # IMPORTANT: as of Python 3.7, dictionary order is guaranteed to be
+                    # insertion order.
+                    # https://docs.python.org/3.7/library/stdtypes.html#dict
+                    start = read.reference_start if not paired else next(iter(paired.values())).reference_start
                     to_remove = 0
                     for gene in gene_order:
                         if gene_infos[gene]['segment'].end <= start:
