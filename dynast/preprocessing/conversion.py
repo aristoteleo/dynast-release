@@ -191,17 +191,23 @@ def deduplicate_counts(df_counts, conversions=None):
     return df_deduplicated
 
 
-def drop_multimappers_part(split_path, out_path):
+def drop_multimappers_part(counter, lock, split_path, out_path):
     drop_multimappers(read_counts(split_path)).drop(columns='read_id').to_csv(out_path, header=None, index=None)
+    lock.acquire()
+    counter.value += 1
+    lock.release()
     return out_path
 
 
-def deduplicate_counts_part(split_path, out_path, conversions=None):
+def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None):
     deduplicate_counts(
         read_counts(split_path), conversions=conversions
     ).drop(columns='read_id').to_csv(
         out_path, header=None, index=None
     )
+    lock.acquire()
+    counter.value += 1
+    lock.release()
     return out_path
 
 
@@ -573,6 +579,7 @@ def count_conversions(
         logger.debug(f'Splitting remaining for {len(residual_barcodes)} barcodes to {split_path}')
         df_counts[barcode_categories.isin(residual_barcodes)].to_csv(split_path, index=False)
         split_paths.append(split_path)
+    del df_counts
 
     logger.debug(f'Spawning {n_threads} processes')
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
@@ -580,8 +587,10 @@ def count_conversions(
     async_result = pool.starmap_async(
         partial(
             deduplicate_counts_part,
+            counter,
+            lock,
             conversions=conversions,
-        ) if umi else drop_multimappers_part, paths
+        ) if umi else partial(drop_multimappers_part, counter, lock), paths
     )
     pool.close()
 
