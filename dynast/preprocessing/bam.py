@@ -28,8 +28,8 @@ def read_conversions(conversions_path, *args, **kwargs):
         conversions_path,
         dtype={
             'read_id': 'string',
-            'barcode': 'category',
-            'umi': 'category',
+            'barcode': 'string',
+            'umi': 'string',
             'contig': 'category',
             'genome_i': np.uint32,
             'original': 'category',

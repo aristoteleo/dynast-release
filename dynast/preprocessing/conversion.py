@@ -83,8 +83,8 @@ def read_counts(counts_path, *args, **kwargs):
     """
     dtypes = {
         'read_id': 'string',
-        'barcode': 'category',
-        'umi': 'category',
+        'barcode': 'string',
+        'umi': 'string',
         'GX': 'category',
         'velocity': 'category',
         'transcriptome': bool,
@@ -540,13 +540,14 @@ def count_conversions(
 
     df_counts = read_counts(combined_path)
     umi = all(df_counts['umi'] != 'NA')
-    barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
+    barcode_categories = df_counts['barcode'].astype('category')
+    barcode_counts = dict(barcode_categories.value_counts(sort=False))
     residual_barcodes = []
     with open(counts_path, 'w') as f:
         f.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n')
         for barcode in sorted(barcode_counts.keys()):
             if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
-                df_split = df_counts[df_counts['barcode'] == barcode]
+                df_split = df_counts[barcode_categories == barcode]
                 if umi:
                     logger.debug(f'Deduplicating barcode {barcode} based on UMI')
                     df_to_write = deduplicate_counts(df_split, conversions=conversions)
@@ -557,7 +558,7 @@ def count_conversions(
             else:
                 residual_barcodes.append(barcode)
         if residual_barcodes:
-            df_split = df_counts[df_counts['barcode'].isin(residual_barcodes)]
+            df_split = df_counts[barcode_categories.isin(residual_barcodes)]
             if umi:
                 logger.debug(f'Deduplicating remaining {len(residual_barcodes)} barcodes based on UMI')
                 df_to_write = deduplicate_counts(df_split, conversions=conversions)
