@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from .. import utils
+from .. import config, utils
 from ..logging import logger
 
 CONVERSIONS_PARSER = re.compile(
@@ -83,9 +83,9 @@ def read_counts(counts_path, *args, **kwargs):
     """
     dtypes = {
         'read_id': 'string',
-        'barcode': 'string',
-        'umi': 'string',
-        'GX': 'string',
+        'barcode': 'category',
+        'umi': 'category',
+        'GX': 'category',
         'velocity': 'category',
         'transcriptome': bool,
         **{column: np.uint8
@@ -118,7 +118,7 @@ def complement_counts(df_counts, gene_infos):
     return pd.concat((df_forward, df_reverse)).reset_index()
 
 
-def drop_multimappers(df_counts):
+def drop_multimappers(df_counts, conversions=None):
     """Drop multimappings that have the same read ID where
     * some map to the transcriptome while some do not -- drop non-transcriptome alignments
     * none map to the transcriptome AND aligned to multiple genes -- drop all
@@ -126,6 +126,8 @@ def drop_multimappers(df_counts):
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
+    :param conversions: conversions to prioritize, defaults to `None`
+    :type conversions: list, optional
 
     :return: counts dataframe with multimappers appropriately filtered
     :rtype: pandas.DataFrame
@@ -481,12 +483,12 @@ def count_conversions(
     :rtype: str
     """
     # Load index
-    logger.debug(f'Loading index {index_path} for {conversions_path}')
+    logger.debug(f'Loading indices {index_path} and {no_index_path}')
     idx = utils.read_pickle(index_path)
     no_idx = utils.read_pickle(no_index_path)
 
     # Split index into n contiguous pieces
-    logger.debug(f'Splitting index into {n_threads} parts')
+    logger.debug(f'Splitting indices into {n_threads} parts')
     parts = utils.split_index(idx, n=n_threads)
     no_parts = []
     for i in range(0, len(no_idx), (len(no_idx) // n_threads) + 1):
@@ -536,13 +538,32 @@ def count_conversions(
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
 
-    # Deduplicate using UMIs if possible, otherwise use read id
     df_counts = read_counts(combined_path)
-    if all(df_counts['umi'] != 'NA'):
-        logger.debug(f'Deduplicating reads based on barcode and UMI to {counts_path}')
-        deduplicate_counts(df_counts, conversions=conversions).drop(columns='read_id').to_csv(counts_path, index=False)
-    else:
-        logger.debug(f'Filtering multimappers to {counts_path}')
-        drop_multimappers(df_counts).drop(columns='read_id').to_csv(counts_path, index=False)
+    umi = all(df_counts['umi'] != 'NA')
+    barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
+    residual_barcodes = []
+    with open(counts_path, 'w') as f:
+        f.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n')
+        for barcode in sorted(barcode_counts.keys()):
+            if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
+                df_split = df_counts[df_counts['barcode'] == barcode]
+                if umi:
+                    logger.debug(f'Deduplicating barcode {barcode} based on UMI')
+                    df_to_write = deduplicate_counts(df_split, conversions=conversions)
+                else:
+                    logger.debug(f'Filtering multimappers for barcode {barcode}')
+                    df_to_write = drop_multimappers(df_split)
+                f.write(df_to_write.drop(columns='read_id').to_csv(index=False, header=False))
+            else:
+                residual_barcodes.append(barcode)
+        if residual_barcodes:
+            df_split = df_counts[df_counts['barcode'].isin(residual_barcodes)]
+            if umi:
+                logger.debug(f'Deduplicating remaining {len(residual_barcodes)} barcodes based on UMI')
+                df_to_write = deduplicate_counts(df_split, conversions=conversions)
+            else:
+                logger.debug(f'Filtering multimappers for remaining {len(residual_barcodes)} barcodes')
+                df_to_write = drop_multimappers(df_split)
+            f.write(df_to_write.drop(columns='read_id').to_csv(index=False, header=False))
 
     return counts_path

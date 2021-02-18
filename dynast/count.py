@@ -200,6 +200,16 @@ def count(
             )
         else:
             logger.info('Skipped')
+    if barcodes:
+        count_barcodes = set(preprocessing.read_counts(counts_path, usecols=['barcode'])['barcode'])
+        extra_barcodes = count_barcodes - set(barcodes)
+        if extra_barcodes:
+            logger.warning(
+                f'{counts_path} has {len(extra_barcodes)} barcodes not in the filter list provided with `--barcodes`. '
+                'Re-run dynast with `--re count` to fix this inconsistency. '
+                'Otherwise, all of these extra barcodes will be included in following steps.'
+            )
+            barcodes = sorted(count_barcodes.union(barcodes))
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)

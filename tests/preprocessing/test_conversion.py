@@ -40,29 +40,29 @@ class TestConversion(mixins.TestMixin, TestCase):
 
     def test_drop_multimappers_transcriptome(self):
         rows = [
-            ['read1', 'GX', True],
-            ['read1', 'GX', False],
+            ['read1', 'GX', True] + [0] * len(conversion.COLUMNS),
+            ['read1', 'GX', False] + [0] * len(conversion.COLUMNS),
         ]
-        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'])
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'] + conversion.COLUMNS)
         df_dropped = conversion.drop_multimappers(df)
         self.assertEqual(1, df_dropped.shape[0])
         self.assertTrue(df_dropped.iloc[0]['transcriptome'])
 
     def test_drop_multimappers_multiple_genes(self):
         rows = [
-            ['read1', 'GX1', False],
-            ['read1', 'GX2', False],
+            ['read1', 'GX1', False] + [0] * len(conversion.COLUMNS),
+            ['read1', 'GX2', False] + [0] * len(conversion.COLUMNS),
         ]
-        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'])
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'transcriptome'] + conversion.COLUMNS)
         df_dropped = conversion.drop_multimappers(df)
         self.assertEqual(0, df_dropped.shape[0])
 
     def test_drop_multimappers_multiple_velocity(self):
         rows = [
-            ['read1', 'GX1', 'spliced', False],
-            ['read1', 'GX1', 'unspliced', False],
+            ['read1', 'GX1', 'spliced', False] + [0] * len(conversion.COLUMNS),
+            ['read1', 'GX1', 'unspliced', False] + [0] * len(conversion.COLUMNS),
         ]
-        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'velocity', 'transcriptome'])
+        df = pd.DataFrame(rows, columns=['read_id', 'GX', 'velocity', 'transcriptome'] + conversion.COLUMNS)
         df_dropped = conversion.drop_multimappers(df)
         self.assertEqual(1, df_dropped.shape[0])
         self.assertEqual('ambiguous', df_dropped.iloc[0]['velocity'])
