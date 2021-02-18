@@ -191,6 +191,20 @@ def deduplicate_counts(df_counts, conversions=None):
     return df_deduplicated
 
 
+def drop_multimappers_part(split_path, out_path):
+    drop_multimappers(read_counts(split_path)).drop(columns='read_id').to_csv(out_path, header=None, index=None)
+    return out_path
+
+
+def deduplicate_counts_part(split_path, out_path, conversions=None):
+    deduplicate_counts(
+        read_counts(split_path), conversions=conversions
+    ).drop(columns='read_id').to_csv(
+        out_path, header=None, index=None
+    )
+    return out_path
+
+
 def split_counts_by_velocity(df_counts):
     """Split the given counts dataframe by the `velocity` column.
 
@@ -538,33 +552,47 @@ def count_conversions(
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
 
+    # Filter counts dataframe
+    logger.debug(f'Loading combined counts from {combined_path}')
     df_counts = read_counts(combined_path)
     umi = all(df_counts['umi'] != 'NA')
     barcode_categories = df_counts['barcode'].astype('category')
     barcode_counts = dict(barcode_categories.value_counts(sort=False))
+    split_paths = []
     residual_barcodes = []
-    with open(counts_path, 'w') as f:
-        f.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n')
-        for barcode in sorted(barcode_counts.keys()):
-            if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
-                df_split = df_counts[barcode_categories == barcode]
-                if umi:
-                    logger.debug(f'Deduplicating barcode {barcode} based on UMI')
-                    df_to_write = deduplicate_counts(df_split, conversions=conversions)
-                else:
-                    logger.debug(f'Filtering multimappers for barcode {barcode}')
-                    df_to_write = drop_multimappers(df_split)
-                f.write(df_to_write.drop(columns='read_id').to_csv(index=False, header=False))
-            else:
-                residual_barcodes.append(barcode)
-        if residual_barcodes:
-            df_split = df_counts[barcode_categories.isin(residual_barcodes)]
-            if umi:
-                logger.debug(f'Deduplicating remaining {len(residual_barcodes)} barcodes based on UMI')
-                df_to_write = deduplicate_counts(df_split, conversions=conversions)
-            else:
-                logger.debug(f'Filtering multimappers for remaining {len(residual_barcodes)} barcodes')
-                df_to_write = drop_multimappers(df_split)
-            f.write(df_to_write.drop(columns='read_id').to_csv(index=False, header=False))
+    for barcode in sorted(barcode_counts.keys()):
+        if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
+            split_path = utils.mkstemp(dir=temp_dir)
+            logger.debug(f'Splitting counts for barcode {barcode} to {split_path}')
+            df_counts[barcode_categories == barcode].to_csv(split_path, index=False)
+            split_paths.append(split_path)
+        else:
+            residual_barcodes.append(barcode)
+    if residual_barcodes:
+        split_path = utils.mkstemp(dir=temp_dir)
+        logger.debug(f'Splitting remaining for {len(residual_barcodes)} barcodes to {split_path}')
+        df_counts[barcode_categories.isin(residual_barcodes)].to_csv(split_path, index=False)
+        split_paths.append(split_path)
+
+    logger.debug(f'Spawning {n_threads} processes')
+    pool, counter, lock = utils.make_pool_with_counter(n_threads)
+    paths = [(split_path, utils.mkstemp(dir=temp_dir)) for split_path in split_paths]
+    async_result = pool.starmap_async(
+        partial(
+            deduplicate_counts_part,
+            conversions=conversions,
+        ) if umi else drop_multimappers_part, paths
+    )
+    pool.close()
+
+    # Display progres bar
+    utils.display_progress_with_counter(counter, len(split_paths), async_result)
+    pool.join()
+
+    with open(counts_path, 'wb') as out:
+        out.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
+        for counts_part_path in async_result.get():
+            with open(counts_part_path, 'rb') as f:
+                shutil.copyfileobj(f, out)
 
     return counts_path
