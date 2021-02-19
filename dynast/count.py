@@ -236,27 +236,35 @@ def count(
                 df_counts_uncomplemented if nasc else df_counts_complemented, rates_path, group_by=p_group_by
             )
 
-            dfs = {'transcriptome': df_counts_complemented[df_counts_complemented['transcriptome']]}
-            if velocity:
-                dfs.update({'total': df_counts_complemented})
-                dfs.update(preprocessing.split_counts_by_velocity(df_counts_complemented))
-            missing_keys = set(correct) - set(dfs.keys())
-            if missing_keys:
-                logger.warning(
-                    f'The following RNA species are missing and no correction will be done for them: {missing_keys}'
-                )
+            if correct:
+                # Total/transcriptome reads are required to calculate p_e/p_c later on
+                dfs = {
+                    'total': df_counts_complemented
+                } if velocity else {
+                    'transcriptome': df_counts_complemented[df_counts_complemented['transcriptome']]
+                }
+                for key in correct:
+                    if key in ('total', 'transcriptome', 'ambiguous'):
+                        continue
+                    df_key = df_counts_complemented[df_counts_complemented['velocity'] == key]
+                    if df_key.shape[0] == 0:
+                        logger.warning(f'No reads were assigned to `{key}`. No correction can be done.')
+                    else:
+                        dfs.update({key: df_key})
 
-            for key, df in dfs.items():
-                for convs in conversions:
-                    aggregates_path = aggregates_paths[key][tuple(convs)]
-                    logger.info(f'Aggregating counts for `{key}` reads for conversions {convs} to {aggregates_path}')
-                    # Ignore reads that have more than one conversion of interest
-                    other_convs = list(set(all_conversions) - set(convs))
-                    aggregates_paths[key][tuple(convs)] = preprocessing.aggregate_counts(
-                        df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
-                        aggregates_path,
-                        conversions=convs
-                    )
+                for key, df in dfs.items():
+                    for convs in conversions:
+                        aggregates_path = aggregates_paths[key][tuple(convs)]
+                        logger.info(
+                            f'Aggregating counts for `{key}` reads for conversions {convs} to {aggregates_path}'
+                        )
+                        # Ignore reads that have more than one conversion of interest
+                        other_convs = list(set(all_conversions) - set(convs))
+                        aggregates_paths[key][tuple(convs)] = preprocessing.aggregate_counts(
+                            df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
+                            aggregates_path,
+                            conversions=convs
+                        )
         else:
             logger.info('Skipped')
 
