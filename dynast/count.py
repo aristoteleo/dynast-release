@@ -220,7 +220,7 @@ def count(
               for convs in conversions}
         for key in set(correct).intersection(velocities + ['total', 'transcriptome']
                                              ).union({'total'} if velocity else {'transcriptome'})
-    }
+    } if correct else {}
     aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
     df_counts_uncomplemented = None
     df_counts_complemented = None
