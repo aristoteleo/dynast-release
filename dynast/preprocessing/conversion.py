@@ -83,8 +83,8 @@ def read_counts(counts_path, *args, **kwargs):
     """
     dtypes = {
         'read_id': 'string',
-        'barcode': 'string',
-        'umi': 'string',
+        'barcode': 'category',
+        'umi': 'category',
         'GX': 'category',
         'velocity': 'category',
         'transcriptome': bool,
@@ -140,7 +140,7 @@ def drop_multimappers(df_counts, conversions=None):
     df_multi = df_counts[duplicated_mask]
 
     filtered = []
-    for read_id, df_read in df_multi.groupby('read_id'):
+    for read_id, df_read in df_multi.groupby('read_id', sort=False):
         transcriptome = list(df_read['transcriptome'])
         # Rule 1
         if True in transcriptome and False in transcriptome:
@@ -222,7 +222,7 @@ def split_counts_by_velocity(df_counts):
     :rtype: dictionary
     """
     dfs = {}
-    for velocity, df_part in df_counts.groupby('velocity'):
+    for velocity, df_part in df_counts.groupby('velocity', sort=False, observed=True):
         dfs[velocity] = df_part.reset_index(drop=True)
     logger.debug(f'Found the following velocity assignments: {", ".join(dfs.keys())}')
     return dfs
@@ -252,7 +252,8 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
     feature_indices = {feature: i for i, feature in enumerate(features)}
 
     matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.uint32)
-    for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column]).size().items():
+    for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column], sort=False,
+                                                       observed=True).size().items():
         matrix[barcode_indices[barcode], feature_indices[feature]] = count
 
     return matrix.tocsr()
@@ -543,7 +544,7 @@ def count_conversions(
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result)
+    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result, desc='counting')
     pool.join()
 
     # Combine csvs
@@ -562,22 +563,21 @@ def count_conversions(
     logger.debug(f'Loading combined counts from {combined_path}')
     df_counts = read_counts(combined_path)
     umi = all(df_counts['umi'] != 'NA')
-    barcode_categories = df_counts['barcode'].astype('category')
-    barcode_counts = dict(barcode_categories.value_counts(sort=False))
+    barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
     split_paths = []
     residual_barcodes = []
     for barcode in sorted(barcode_counts.keys()):
         if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
             split_path = utils.mkstemp(dir=temp_dir)
             logger.debug(f'Splitting counts for barcode {barcode} to {split_path}')
-            df_counts[barcode_categories == barcode].to_csv(split_path, index=False)
+            df_counts[df_counts['barcode'] == barcode].to_csv(split_path, index=False)
             split_paths.append(split_path)
         else:
             residual_barcodes.append(barcode)
     if residual_barcodes:
         split_path = utils.mkstemp(dir=temp_dir)
         logger.debug(f'Splitting remaining for {len(residual_barcodes)} barcodes to {split_path}')
-        df_counts[barcode_categories.isin(residual_barcodes)].to_csv(split_path, index=False)
+        df_counts[df_counts['barcode'].isin(residual_barcodes)].to_csv(split_path, index=False)
         split_paths.append(split_path)
     del df_counts
 
@@ -595,7 +595,7 @@ def count_conversions(
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, len(split_paths), async_result)
+    utils.display_progress_with_counter(counter, len(split_paths), async_result, desc='filtering')
     pool.join()
 
     with open(counts_path, 'wb') as out:

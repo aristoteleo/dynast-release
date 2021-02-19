@@ -67,7 +67,7 @@ def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     flattened = list(utils.flatten_list(conversions))
     bases = list(set(f[0] for f in flattened))
     if group_by is not None:
-        df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
+        df_sum = df_counts.groupby(group_by, sort=False, observed=True).sum(numeric_only=True).astype(np.uint32)
     else:
         df_sum = pd.DataFrame(df_counts.sum(numeric_only=True).astype(np.uint32)).T
 

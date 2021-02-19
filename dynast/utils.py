@@ -381,7 +381,7 @@ def make_pool_with_counter(n_threads):
     return pool, counter, lock
 
 
-def display_progress_with_counter(counter, total, *async_results):
+def display_progress_with_counter(counter, total, *async_results, desc=None):
     """Display TQDM progress bar for displaying multiprocessing progress.
 
     :param counter: progress counter
@@ -391,8 +391,10 @@ def display_progress_with_counter(counter, total, *async_results):
     :param *async_results: multiprocessing results to monitor. These are used to
                            determine when all processes are done.
     :type *async_results: multiprocessing.pool.AsyncResult
+    :param desc: progress bar description, defaults to `None`
+    :type desc: str, optional
     """
-    with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1) as pbar:
+    with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1, desc=desc) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
             time.sleep(0.1)

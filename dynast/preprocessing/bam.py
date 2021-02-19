@@ -28,8 +28,8 @@ def read_conversions(conversions_path, *args, **kwargs):
         conversions_path,
         dtype={
             'read_id': 'string',
-            'barcode': 'string',
-            'umi': 'string',
+            'barcode': 'category',
+            'umi': 'category',
             'contig': 'category',
             'genome_i': np.uint32,
             'original': 'category',
@@ -531,7 +531,7 @@ def parse_all_reads(
 
     # Display progres bar
     logger.debug(f'Processing contigs {contigs} from BAM')
-    utils.display_progress_with_counter(counter, n_reads, async_result)
+    utils.display_progress_with_counter(counter, n_reads, async_result, desc='parsing')
     pool.join()
 
     # Combine csvs

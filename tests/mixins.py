@@ -4,6 +4,8 @@ import shutil
 import tempfile
 from unittest import TestCase
 
+import pandas as pd
+
 from dynast.technology import Technology
 
 
@@ -23,6 +25,15 @@ def files_equal(file1, file2, gzipped=False):
     open_f = gzip.open if gzipped else open
     with open_f(file1, 'r') as f1, open_f(file2, 'r') as f2:
         return f1.read() == f2.read()
+
+
+def dataframes_equal(file1, file2, sort_by=None):
+    df1 = pd.read_csv(file1)
+    df2 = pd.read_csv(file2)
+    if sort_by:
+        df1 = df1.sort_values(sort_by).reset_index(drop=True)
+        df2 = df2.sort_values(sort_by).reset_index(drop=True)
+    return df1.equals(df2)
 
 
 class TestMixin(TestCase):

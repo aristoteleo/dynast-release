@@ -143,7 +143,7 @@ def count(
                     contig: set(df_part['genome_i'])
                     for contig, df_part in preprocessing.read_conversions(
                         conversions_path, usecols=['contig', 'genome_i']
-                    ).drop_duplicates().groupby('contig')
+                    ).drop_duplicates().groupby('contig', sort=False, observed=True)
                 },
                 coverage_path,
                 coverage_index_path,
@@ -213,13 +213,13 @@ def count(
 
     aggregates_dir = os.path.join(out_dir, constants.AGGREGATES_DIR)
     rates_path = os.path.join(aggregates_dir, constants.RATES_FILENAME)
-    transcriptome = preprocessing.read_counts(counts_path, usecols=['transcriptome'])['transcriptome'].any()
     velocities = list(preprocessing.read_counts(counts_path, usecols=['velocity'])['velocity'].unique()
                       ) if velocity else []
     aggregates_paths = {
         key: {tuple(convs): os.path.join(aggregates_dir, f'{key}_{"_".join(convs)}.csv')
               for convs in conversions}
-        for key in (['total'] if velocity else []) + (['transcriptome'] if transcriptome else []) + velocities
+        for key in set(correct).intersection(velocities + ['total', 'transcriptome']
+                                             ).union({'total'} if velocity else {'transcriptome'})
     }
     aggregates_required = utils.flatten_dict_values(aggregates_paths) + [rates_path]
     df_counts_uncomplemented = None

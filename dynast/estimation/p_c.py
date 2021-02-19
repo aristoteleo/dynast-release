@@ -97,7 +97,7 @@ def filter_aggregates(df_aggregates, p_e, group_by=None, n_threads=8):
     if group_by is None:
         return filter_aggregates_part(values, p_e)
 
-    groups = df_aggregates.groupby(group_by).indices
+    groups = df_aggregates.groupby(group_by, sort=False, observed=True).indices
     filtered = {}
     with ProcessPoolExecutor(max_workers=n_threads) as executor:
         futures = {}

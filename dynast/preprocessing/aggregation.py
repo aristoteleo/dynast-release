@@ -27,7 +27,13 @@ def read_aggregates(aggregates_path):
     :return: aggregates dataframe
     :rtype: pandas.DataFrame
     """
-    dtypes = {'barcode': 'string', 'GX': 'string', 'count': np.uint16, **{column: np.uint8 for column in COLUMNS}}
+    dtypes = {
+        'barcode': 'category',
+        'GX': 'category',
+        'count': np.uint16,
+        **{column: np.uint8
+           for column in COLUMNS},
+    }
     df = pd.read_csv(aggregates_path, dtype=dtypes)
     return df
 
@@ -41,7 +47,7 @@ def merge_aggregates(*dfs):
     :return: merged dataframe
     :rtype: pandas.DataFrame
     """
-    df = pd.concat(dfs).groupby(['barcode', 'GX', 'conversion', 'base']).sum().reset_index()
+    df = pd.concat(dfs).groupby(['barcode', 'GX', 'conversion', 'base'], sort=False, observed=True).sum().reset_index()
     df['conversion'] = df['conversion'].astype(np.uint8)
     df['base'] = df['base'].astype(np.uint8)
     df['count'] = df['count'].astype(np.uint16)
@@ -65,7 +71,7 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     logger.debug(f'Mutation rates will be grouped by {group_by}')
 
     if group_by is not None:
-        df_sum = df_counts.groupby(group_by).sum(numeric_only=True).astype(np.uint32)
+        df_sum = df_counts.groupby(group_by, sort=False, observed=True).sum(numeric_only=True).astype(np.uint32)
     else:
         df_sum = pd.DataFrame(df_counts.sum(numeric_only=True).astype(np.uint32)).T
 
@@ -101,7 +107,12 @@ def aggregate_counts(df_counts, aggregates_path, conversions=['TC']):
     df_combined['conversion'] = df_counts[flattened].sum(axis=1)
     df_combined['base'] = df_counts[bases].sum(axis=1)
     pd.DataFrame(
-        df_combined.groupby(['barcode', 'GX', 'conversion', 'base']).size(), columns=['count']
+        df_combined.groupby(
+            ['barcode', 'GX', 'conversion', 'base'],
+            sort=False,
+            observed=True,
+        ).size(),
+        columns=['count']
     ).reset_index().to_csv(
         aggregates_path, index=False
     )

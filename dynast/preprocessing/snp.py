@@ -49,12 +49,12 @@ def read_snps(snps_path):
     """
     df = pd.read_csv(
         snps_path, dtype={
-            'barcode': 'string',
+            'barcode': 'category',
             'contig': 'category',
             'genome_i': np.uint32,
         }
     )
-    return dict(df.groupby('contig').agg(set)['genome_i'])
+    return dict(df.groupby('contig', sort=False, observed=True).agg(set)['genome_i'])
 
 
 def read_snp_csv(snp_csv):
@@ -75,8 +75,16 @@ def read_snp_csv(snp_csv):
         except ValueError:
             header = True
 
-    df = pd.read_csv(snp_csv, names=['contig', 'genome_i'], skiprows=1 if header else None)
-    return dict(df.groupby('contig').agg(set)['genome_i'])
+    df = pd.read_csv(
+        snp_csv,
+        names=['contig', 'genome_i'],
+        skiprows=1 if header else None,
+        dtype={
+            'contig': 'category',
+            'genome_i': np.uint32
+        }
+    )
+    return dict(df.groupby('contig', sort=False, observed=True).agg(set)['genome_i'])
 
 
 def extract_conversions_part(conversions_path, counter, lock, pos, n_lines, quality=27, update_every=10000):

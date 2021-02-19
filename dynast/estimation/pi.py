@@ -256,7 +256,7 @@ def estimate_pi(
     values = df_full[['conversion', 'base', 'count']].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
-    groups = df_full.groupby(['barcode', 'GX']).indices
+    groups = df_full.groupby(['barcode', 'GX'], sort=False, observed=True).indices
     pis = {}
     skipped = 0
     failed = 0
