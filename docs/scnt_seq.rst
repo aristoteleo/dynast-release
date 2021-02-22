@@ -24,6 +24,3 @@ The alignment BAM is generated at :code:`path/to/align/output/Aligned.sortedByCo
 	dynast count -g path/to/GTF.gtf --barcode-tag CB --umi-tag UB path/to/align/output/Aligned.sortedByCoord.out.bam -o path/to/count/output --conversion TC
 
 This will quantify all RNA species and write the count matrices to :code:`path/to/count/output/adata.h5ad`.
-
-.. [Macosko2015] https://doi.org/10.1016/j.cell.2015.05.002
-.. [Qiu2020] https://doi.org/10.1038/s41592-020-0935-4

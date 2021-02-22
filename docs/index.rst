@@ -22,13 +22,15 @@ Dynast: Complete splicing and labeling quantification from metabolic labeling sc
 
    pipeline_usage
    technical_information
-   API Reference <autoapi/dynast/index>
+   API <autoapi/dynast/index>
+   references
 
 .. toctree::
   :maxdepth: 1
   :caption: Tutorials:
 
   nasc_seq
+  scslam_seq
   scnt_seq
   sci_fate
 

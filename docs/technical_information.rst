@@ -184,6 +184,3 @@ The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference u
 	\end{cases}
 
 This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
-
-.. [Jürges2018] https://doi.org/10.1093/bioinformatics/bty256
-.. [Hendriks2019] https://doi.org/10.1038/s41467-019-11028-9

@@ -180,5 +180,3 @@ Control samples
 To perform statistical correction of unlabeled and unlabeled RNA counts, one crucial piece of information is the background conversion rate of unlabeled RNA (see [LINK] for more details). Normally, :code:`count` estimates this value using the reads directly. However, it is possible to use a control sample (prepared in absence of the experimental introduction of conversions) to calculate this value directly. In addition, SNPs can be called in the control sample, and these called SNPs can be used when running the test sample(s) (see :ref:`snps` for SNP arguments).
 
 The :code:`--control` flag indicates the input BAM is a control sample. This will calculate the background conversion rate of unlabeled RNA to the file :code:`3_estimation/p_e.csv` relative to the output directory. Simultaneously, the :code:`--snp-threshold` can be provided, which will output SNP calls to the file :code:`0_snp/snps.csv`. These file can then be used as the input to the :code:`--p-e` and/or :code:`--snp-csv` arguments, respectively, when running the test sample(s).
-
-.. [Dobin2013] https://doi.org/10.1093/bioinformatics/bts635

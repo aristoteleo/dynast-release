@@ -1,6 +1,8 @@
+.. _nasc_seq:
+
 NASC-seq
 =========
-The new transcriptome alkylation-dependent scRNA-seq (NASC-seq) was developed by [Hendriks2019]_. It uses Smart-seq, which is a plate-based scRNA-seq method that provides great read coverage, compared to droplet-based methods [Picelli2014]_. Smart-seq experiments generate single or pairs of FASTQs for each cell sequenced, which dynast processes simultaneously.
+The new transcriptome alkylation-dependent scRNA-seq (NASC-seq) was developed by [Hendriks2019]_. It uses Smart-seq, which is a plate-based scRNA-seq method that provides great read coverage, compared to droplet-based methods [Picelli2013]_. Smart-seq experiments generate single or pairs of FASTQs for each cell sequenced, which dynast processes simultaneously.
 
 * Sequencing technology: Smart-Seq2
 * Induced conversion: T>C
@@ -31,6 +33,3 @@ The alignment BAM is generated at :code:`path/to/align/output/Aligned.sortedByCo
 	dynast count -g path/to/GTF.gtf --barcode-tag RG path/to/align/output/Aligned.sortedByCoord.out.bam -o path/to/count/output --conversion TC
 
 This will quantify all RNA species and write the count matrices to :code:`path/to/count/output/adata.h5ad`.
-
-.. [Hendriks2019] https://doi.org/10.1038/s41467-019-11028-9
-.. [Picelli2014] https://doi.org/10.1038/nprot.2014.006
