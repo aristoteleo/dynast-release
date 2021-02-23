@@ -16,7 +16,7 @@ class TestCoverage(mixins.TestMixin, TestCase):
         index_path = os.path.join(self.temp_dir, 'coverage.idx')
         conversions = {
             contig: set(df_part['genome_i'])
-            for contig, df_part in pd.read_csv(self.umi_conversions_path, usecols=['contig', 'genome_i']
+            for contig, df_part in pd.read_csv(self.control_conversions_path, usecols=['contig', 'genome_i']
                                                ).drop_duplicates().groupby('contig')
         }
         with mock.patch('dynast.preprocessing.coverage.utils.display_progress_with_counter'):
@@ -33,5 +33,5 @@ class TestCoverage(mixins.TestMixin, TestCase):
                                  temp_dir=self.temp_dir,
                                  velocity=True,
                              ))
-            self.assertTrue(mixins.files_equal(self.umi_coverage_path, coverage_path))
-            self.assertEqual(utils.read_pickle(self.umi_coverage_index_path), utils.read_pickle(index_path))
+            self.assertTrue(mixins.files_equal(self.control_coverage_path, coverage_path))
+            self.assertEqual(utils.read_pickle(self.control_coverage_index_path), utils.read_pickle(index_path))

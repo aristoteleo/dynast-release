@@ -14,7 +14,7 @@ from .. import mixins
 class TestPi(mixins.TestMixin, TestCase):
 
     def test_read_pi(self):
-        pi.read_pi(self.umi_pi_paths['transcriptome'])
+        pi.read_pi(self.umi_pi_path)
 
     def test_beta_mean(self):
         self.assertAlmostEqual(stats.beta.mean(1, 1), pi.beta_mean(1, 1))
@@ -33,12 +33,12 @@ class TestPi(mixins.TestMixin, TestCase):
             mock.patch('dynast.estimation.pi.utils.as_completed_with_progress', mixins.tqdm_mock):
             model = mock.MagicMock()
             StanModel.return_value = model
-            model.sampling.return_value.extract.return_value = {'alpha': [2], 'beta': [2]}
+            model.sampling.return_value.extract.return_value = {'alpha': [2], 'beta': [2], 'pi_g': [0.5]}
 
             self.assertEqual(
                 pi_path,
                 pi.estimate_pi(
-                    aggregation.read_aggregates(self.umi_aggregates_paths['transcriptome']),
+                    aggregation.read_aggregates(self.umi_aggregates_path),
                     p_e.read_p_e(self.umi_p_e_path, group_by=['barcode']),
                     p_c.read_p_c(self.umi_p_c_path, group_by=['barcode']),
                     pi_path,

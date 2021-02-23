@@ -121,7 +121,6 @@ def count(
                 n_threads=n_threads,
                 temp_dir=temp_dir,
                 nasc=nasc,
-                control=control,
                 velocity=velocity
             )
         else:
@@ -278,8 +277,10 @@ def count(
         for key in aggregates_paths.keys()
         if key not in velocity_blacklist
     }
-    estimates_paths = [p_e_path] + utils.flatten_dict_values(p_c_paths) + utils.flatten_dict_values(pi_paths)
-    skip = not correct or (utils.all_exists(estimates_paths) and not redo('estimate'))
+    estimates_paths = [p_e_path] + (
+        utils.flatten_dict_values(p_c_paths) + utils.flatten_dict_values(pi_paths) if not control else []
+    )
+    skip = (not control and not correct) or (utils.all_exists(estimates_paths) and not redo('estimate'))
     with stats.step('estimate', skipped=skip), logger.namespaced_context('estimate'):
         if not skip:
             os.makedirs(estimates_dir, exist_ok=True)
@@ -354,21 +355,13 @@ def count(
                             threshold=read_threshold,
                             subset_threshold=subset_threshold,
                             seed=seed,
+                            nasc=nasc
                         )
         else:
             logger.info('Skipped')
 
-    if control:
-        logger.info('Downstream processing skipped for controls')
-        if snp_threshold:
-            logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
-        logger.info(f'Use `--p-e {p_e_path}` for test samples')
-        stats.end()
-        stats.save(stats_path)
-        return
-
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
-    skip = utils.all_exists([adata_path]) and not redo('split')
+    skip = control or (utils.all_exists([adata_path]) and not redo('split'))
     with stats.step('split', skipped=skip), logger.namespaced_context('split'):
         if not skip:
             logger.info(f'Combining results into an Anndata object at {adata_path}')
@@ -461,5 +454,11 @@ def count(
             adata.write(adata_path, compression='gzip')
         else:
             logger.info('Skipped')
+
+    if control:
+        logger.info('Downstream processing skipped for controls')
+        if snp_threshold:
+            logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
+        logger.info(f'Use `--p-e {p_e_path}` for test samples')
     stats.end()
     stats.save(stats_path)

@@ -135,7 +135,7 @@ class TestConversion(mixins.TestMixin, TestCase):
                     self.umi_no_conversions_index_path,
                     counts_path,
                     snps=None,
-                    quality=20,
+                    quality=27,
                     conversions=['TC'],
                     n_threads=2,
                     temp_dir=self.temp_dir

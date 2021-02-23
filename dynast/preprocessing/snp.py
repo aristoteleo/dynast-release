@@ -11,6 +11,7 @@ from ..logging import logger
 CONVERSIONS_PARSER = re.compile(
     r'''^
     ([^,]*),
+    ([^,]*),
     (?P<barcode>[^,]*),
     ([^,]*),
     ([^,]*),

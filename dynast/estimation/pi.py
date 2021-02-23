@@ -110,7 +110,6 @@ def fit_stan_mcmc(
     p_c,
     guess=0.5,
     model=None,
-    pi_func=(lambda alpha, beta: None),
     n_chains=1,
     n_warmup=500,
     n_iters=1000,
@@ -135,10 +134,6 @@ def fit_stan_mcmc(
     :param model: pyStan model to run MCMC with, defaults to `None`
                   if not provided, will try to use the `_model` global variable
     :type model: pystan.StanModel, optional
-    :param pi_func: a function that produces the estimation of pi given the
-                    beta distribution parameters (alpha, beta), defaults to
-                    a function that always returns `None`
-    :type pi_func: callable, optional
     :param n_chains: number of MCMC chains, defaults to `1`
     :type n_chains: int, optional
     :param n_warmup: number of warmup iterations, defaults to `500`
@@ -157,18 +152,6 @@ def fit_stan_mcmc(
     :rtype: (float, float, float, float)
     """
     model = model or _model
-    conversions = []
-    contents = []
-    for k, n, count in values:
-        conversions.extend([k] * count)
-        contents.extend([n] * count)
-
-    # If we have many conversions, randomly select a subset. This keeps runtimes
-    # down while minimally impacting accuracy.
-    if len(conversions) > subset_threshold:
-        choices = np.random.RandomState(subset_seed).choice(len(conversions), subset_threshold, replace=False)
-        conversions = list(np.array(conversions)[choices])
-        contents = list(np.array(contents)[choices])
 
     # Skew beta distribution toward the guess.
     alpha_guess, beta_guess = guess_beta_parameters(guess)
@@ -176,9 +159,10 @@ def fit_stan_mcmc(
     beta_guess_log = np.log(beta_guess)
 
     data = {
-        'N': len(conversions),
-        'contents': contents,
-        'conversions': conversions,
+        'N': len(values),
+        'conversions': list(values[:, 0]),
+        'contents': list(values[:, 1]),
+        'counts': list(values[:, 2]),
         'p_c': p_c,
         'p_e': p_e,
     }
@@ -187,7 +171,7 @@ def fit_stan_mcmc(
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
             data=data,
-            pars=['alpha', 'beta'],
+            pars=['alpha', 'beta', 'pi_g'],
             n_jobs=1,
             chains=n_chains,
             warmup=n_warmup,
@@ -196,9 +180,8 @@ def fit_stan_mcmc(
             control={'adapt_delta': 0.99},
             seed=seed,
         )
-    samples = fit.extract(('alpha', 'beta'))
-    alpha, beta = np.mean(samples['alpha']), np.mean(samples['beta'])
-    pi = pi_func(alpha, beta)
+    samples = fit.extract(('alpha', 'beta', 'pi_g'))
+    alpha, beta, pi = np.mean(samples['alpha']), np.mean(samples['beta']), np.mean(samples['pi_g'])
     return guess, alpha, beta, pi
 
 
@@ -212,6 +195,7 @@ def estimate_pi(
     threshold=16,
     subset_threshold=8000,
     seed=None,
+    nasc=False,
 ):
     """Estimate the fraction of labeled RNA.
 
@@ -233,6 +217,9 @@ def estimate_pi(
     :param subset_threshold: any conversion-content pairs that have greater than
                              this many reads will be subset randomly, defaults to `8000`
     :type subset_threshold: int, optional
+    :param nasc: flag to change behavior to match NASC-seq pipeline. Specifically,
+                 the mode of the estimated Beta distribution is used as pi, defaults to `False`
+    :type nasc: bool, optional
     :param seed: random seed, defaults to `None`
     :type seed: int, optional
 
@@ -264,7 +251,7 @@ def estimate_pi(
     with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
         futures = {}
         # Run larger groups first
-        for key in sorted(groups.keys(), key=lambda key: sum(values[groups[key]][:, 2]), reverse=True):
+        for key in sorted(groups.keys(), key=lambda key: len(groups[key]), reverse=True):
             idx = groups[key]
             p_e_unique = np.unique(p_es[idx])
             p_c_unique = np.unique(p_cs[idx])
@@ -295,7 +282,6 @@ def estimate_pi(
                 p_e,
                 p_c,
                 guess=guess,
-                pi_func=beta_mode,
                 subset_threshold=subset_threshold,
                 seed=seed,
                 subset_seed=seed,
@@ -305,7 +291,7 @@ def estimate_pi(
             key = futures[future]
             try:
                 guess, alpha, beta, pi = future.result()
-                pis[key] = (guess, alpha, beta, pi)
+                pis[key] = (guess, alpha, beta, beta_mode(alpha, beta) if nasc else pi)
             except RuntimeError:
                 failed += 1
 

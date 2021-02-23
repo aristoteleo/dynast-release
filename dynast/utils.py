@@ -485,7 +485,7 @@ def merge_dictionaries(d1, d2, f=add, default=0):
         inner = d
         for k in t[:-1]:
             inner = inner.get(k, {})
-        return inner.get(t[-1], default)
+        return inner.get(t[-1], default() if callable(default) else default)
 
     # Extract all keys
     d1_keys = [key for key, value in flatten_dictionary(d1)]

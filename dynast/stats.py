@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import os
 import sys
 from contextlib import contextmanager
 
@@ -48,6 +49,7 @@ class Stats:
     """
 
     def __init__(self):
+        self.workdir = os.path.abspath(os.getcwd())
         self.call = None
 
         self.start_time = None
@@ -112,6 +114,7 @@ class Stats:
         """
         return {
             'version': self.version,
+            'workdir': self.workdir,
             'call': self.call,
             'start_time': self.start_time.isoformat(),
             'end_time': self.end_time.isoformat(),

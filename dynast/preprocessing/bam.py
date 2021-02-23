@@ -28,6 +28,7 @@ def read_conversions(conversions_path, *args, **kwargs):
         conversions_path,
         dtype={
             'read_id': 'string',
+            'index': np.uint8,
             'barcode': 'category',
             'umi': 'category',
             'contig': 'category',
@@ -62,7 +63,6 @@ def parse_read_contig(
     temp_dir=None,
     update_every=2000,
     nasc=False,
-    control=False,
     velocity=True
 ):
     """Parse all reads mapped to a contig, outputing conversion
@@ -106,8 +106,6 @@ def parse_read_contig(
     :type update_every: int, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
     :type nasc: bool, optional
-    :param control: whether this is a control sample, defaults to `False`
-    :type control: bool, optional
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
@@ -201,7 +199,6 @@ def parse_read_contig(
         for read in bam.fetch(contig):
             n_lines = 0
             pos = conversions_out.tell()
-            read_id = read.query_name
 
             # Update every some interval. Updating every loop is very slow.
             n += 1
@@ -238,6 +235,8 @@ def parse_read_contig(
             if barcodes and barcode not in barcodes:
                 continue
 
+            read_id = read.query_name
+            alignment_index = read.get_tag('HI')
             reference_positions = read.get_reference_positions()
             counts = Counter()
 
@@ -250,7 +249,7 @@ def parse_read_contig(
             # overlaps.
             if read.is_paired:
                 # Use HI tag, which is the multiple alignment index
-                key = (read_id, read.get_tag('HI'))
+                key = (read_id, alignment_index)
                 if key not in paired:
                     paired[key] = read
                     continue
@@ -305,7 +304,7 @@ def parse_read_contig(
 
             # Assign velocity
             assignment = 'unassigned'
-            if velocity and not control:
+            if velocity:
                 read_strand = None
                 if strand == 'forward':
                     read_strand = '-' if read.is_reverse else '+'
@@ -339,7 +338,7 @@ def parse_read_contig(
                     n_lines += 1
 
                     conversions_out.write(
-                        f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},'
+                        f'{read_id},{alignment_index},{barcode},{umi},{gx},{contig},{genome_i},'
                         f'{genome_base},{read_base},{quality},'
                         f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
                         f'{assignment},{gx_assigned}\n'
@@ -349,7 +348,7 @@ def parse_read_contig(
             for genome_i, (quality, genome_base, read_base) in conversions.items():
                 n_lines += 1
                 conversions_out.write(
-                    f'{read_id},{barcode},{umi},{gx},{contig},{genome_i},'
+                    f'{read_id},{alignment_index},{barcode},{umi},{gx},{contig},{genome_i},'
                     f'{genome_base},{read_base},{quality},'
                     f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
                     f'{assignment},{gx_assigned}\n'
@@ -362,7 +361,7 @@ def parse_read_contig(
                 no_index.append(no_conversions_out.tell())
                 # Otherwise, this read did not contain any conversions.
                 no_conversions_out.write(
-                    f'{read_id},{barcode},{umi},{gx},'
+                    f'{read_id},{alignment_index},{barcode},{umi},{gx},'
                     f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
                     f'{assignment},{gx_assigned}\n'
                 )
@@ -467,8 +466,6 @@ def parse_all_reads(
     :type temp_dir: str, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
     :type nasc: bool, optional
-    :param control: whether this is a control sample, defaults to `False`
-    :type control: bool, optional
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
@@ -523,7 +520,6 @@ def parse_all_reads(
             barcodes=barcodes,
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             nasc=nasc,
-            control=control,
             velocity=velocity,
         ), args
     )
@@ -541,9 +537,9 @@ def parse_all_reads(
     with open(conversions_path, 'wb') as conversions_out, \
         open(no_conversions_path, 'wb') as no_conversions_out:
         conversions_out.write(
-            b'read_id,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T,velocity,transcriptome\n'
+            b'read_id,index,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T,velocity,transcriptome\n'
         )
-        no_conversions_out.write(b'read_id,barcode,umi,GX,A,C,G,T,velocity,transcriptome\n')
+        no_conversions_out.write(b'read_id,index,barcode,umi,GX,A,C,G,T,velocity,transcriptome\n')
 
         pos = conversions_out.tell()
         no_pos = no_conversions_out.tell()

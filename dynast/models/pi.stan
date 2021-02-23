@@ -5,6 +5,7 @@ data {
   int<lower=0> N;
   int<lower=0> contents[N];
   int<lower=0> conversions[N];
+  int<lower=0> counts[N];
   real<lower=0, upper=1> p_c;
   real<lower=0, upper=1> p_e;
 }
@@ -24,7 +25,10 @@ transformed parameters{
 
 model {
     pi_g ~ beta(alpha, beta);
-    for (i in 1:N){
-        target += log_sum_exp(binomial_lpmf(conversions[i] | contents[i], p_c) + bernoulli_lpmf(1|pi_g),binomial_lpmf(conversions[i] | contents[i],p_e) + bernoulli_lpmf(0|pi_g));
+    for (i in 1:N) {
+        target += counts[i] * log_sum_exp(
+          binomial_lpmf(conversions[i] | contents[i], p_c) + log(pi_g),
+          binomial_lpmf(conversions[i] | contents[i], p_e) + log(1 - pi_g)
+        );
     }
 }

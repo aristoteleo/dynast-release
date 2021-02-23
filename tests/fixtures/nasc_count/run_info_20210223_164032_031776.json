@@ -1,0 +1,68 @@
+{
+    "version": "0.0.1",
+    "workdir": "/mnt/e/scratch/nasc",
+    "call": "/home/lioscro/miniconda3/bin/dynast count -g /mnt/e/references/human/ensembl/Homo_sapiens.GRCh38.101.gtf --barcode-tag RG nasc_align/Aligned.sortedByCoord.out.bam -o nasc_count -t 1 --verbose --read-threshold 2 --transcriptome-only --nasc --correct transcriptome --conversion TC --tmp tmp2",
+    "start_time": "2021-02-23T16:40:32.031776",
+    "end_time": "2021-02-23T16:43:26.440168",
+    "elapsed": 174.408392,
+    "step_order": [
+        "sort",
+        "index",
+        "parse",
+        "snp",
+        "count",
+        "aggregate",
+        "estimate",
+        "split"
+    ],
+    "steps": {
+        "sort": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "index": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "parse": {
+            "start_time": "2021-02-23T16:40:32.064648",
+            "end_time": "2021-02-23T16:42:17.161553",
+            "elapsed": 105.096905,
+            "skipped": false
+        },
+        "snp": {
+            "start_time": null,
+            "end_time": null,
+            "elapsed": null,
+            "skipped": true
+        },
+        "count": {
+            "start_time": "2021-02-23T16:42:17.162446",
+            "end_time": "2021-02-23T16:42:17.490291",
+            "elapsed": 0.327845,
+            "skipped": false
+        },
+        "aggregate": {
+            "start_time": "2021-02-23T16:42:17.491079",
+            "end_time": "2021-02-23T16:42:17.537153",
+            "elapsed": 0.046074,
+            "skipped": false
+        },
+        "estimate": {
+            "start_time": "2021-02-23T16:42:17.537841",
+            "end_time": "2021-02-23T16:43:26.391112",
+            "elapsed": 68.853271,
+            "skipped": false
+        },
+        "split": {
+            "start_time": "2021-02-23T16:43:26.391795",
+            "end_time": "2021-02-23T16:43:26.440160",
+            "elapsed": 0.048365,
+            "skipped": false
+        }
+    }
+}

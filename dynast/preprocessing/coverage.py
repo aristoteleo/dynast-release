@@ -102,18 +102,20 @@ def calculate_coverage_contig(
                 continue
 
             read_id = read.query_name
+            alignment_index = read.get_tag('HI')
             reference_positions = read.get_reference_positions()
 
             # For paired end reads, don't count overlap twice
             if read.is_paired:
-                if read_id not in paired:
-                    paired[read_id] = set(reference_positions)
+                key = (read_id, alignment_index)
+                if key not in paired:
+                    paired[key] = reference_positions
                     continue
 
-                reference_positions = list(paired[read_id].union(reference_positions))
+                reference_positions += paired[key]
                 del paired[read_id]
 
-            for genome_i in reference_positions:
+            for genome_i in list(set(reference_positions)):
                 if genome_i in indices:
                     key = (barcode, genome_i)
                     coverage.setdefault(key, 0)

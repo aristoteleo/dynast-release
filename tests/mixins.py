@@ -68,7 +68,6 @@ class TestMixin(TestCase):
         # Count
         cls.umi_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count')
         cls.umi_count_parse_dir = os.path.join(cls.umi_count_dir, '0_parse')
-        cls.umi_count_snp_dir = os.path.join(cls.umi_count_dir, '0_snp')
         cls.umi_count_count_dir = os.path.join(cls.umi_count_dir, '1_count')
         cls.umi_count_aggregate_dir = os.path.join(cls.umi_count_dir, '2_aggregate')
         cls.umi_count_estimate_dir = os.path.join(cls.umi_count_dir, '3_estimate')
@@ -80,18 +79,12 @@ class TestMixin(TestCase):
         cls.umi_no_conversions_index_path = os.path.join(cls.umi_count_parse_dir, 'no_conversions.idx')
         cls.umi_genes_path = os.path.join(cls.umi_count_parse_dir, 'genes.pkl.gz')
         cls.umi_transcripts_path = os.path.join(cls.umi_count_parse_dir, 'transcripts.pkl.gz')
-        cls.umi_coverage_path = os.path.join(cls.umi_count_snp_dir, 'coverage.csv')
-        cls.umi_coverage_index_path = os.path.join(cls.umi_count_snp_dir, 'coverage.idx')
-        cls.umi_snps_path = os.path.join(cls.umi_count_snp_dir, 'snps.csv')
         cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts_TC.csv')
         cls.umi_rates_path = os.path.join(cls.umi_count_aggregate_dir, 'rates.csv')
-        cls.umi_aggregates_paths = {
-            key: os.path.join(cls.umi_count_aggregate_dir, f'{key}_TC.csv')
-            for key in cls.types
-        }
+        cls.umi_aggregates_path = os.path.join(cls.umi_count_aggregate_dir, 'total_TC.csv')
         cls.umi_p_e_path = os.path.join(cls.umi_count_estimate_dir, 'p_e.csv')
         cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c_TC.csv')
-        cls.umi_pi_paths = {key: os.path.join(cls.umi_count_estimate_dir, f'{key}_TC.csv') for key in cls.types}
+        cls.umi_pi_path = os.path.join(cls.umi_count_estimate_dir, 'total_TC.csv')
 
         #########
         # Control
@@ -114,12 +107,8 @@ class TestMixin(TestCase):
         cls.control_coverage_path = os.path.join(cls.control_count_snp_dir, 'coverage.csv')
         cls.control_coverage_index_path = os.path.join(cls.control_count_snp_dir, 'coverage.idx')
         cls.control_snps_path = os.path.join(cls.control_count_snp_dir, 'snps.csv')
-        cls.control_counts_path = os.path.join(cls.control_count_count_dir, 'counts.csv')
+        cls.control_counts_path = os.path.join(cls.control_count_count_dir, 'counts_TC.csv')
         cls.control_rates_path = os.path.join(cls.control_count_aggregate_dir, 'rates.csv')
-        cls.control_aggregates_paths = {
-            key: os.path.join(cls.control_count_aggregate_dir, f'{key}_TC.csv')
-            for key in cls.types
-        }
         cls.control_p_e_path = os.path.join(cls.control_count_estimate_dir, 'p_e.csv')
 
         ################################
@@ -150,14 +139,12 @@ class TestMixin(TestCase):
         cls.paired_no_conversions_index_path = os.path.join(cls.paired_count_parse_dir, 'no_conversions.idx')
         cls.paired_genes_path = os.path.join(cls.paired_count_parse_dir, 'genes.pkl.gz')
         cls.paired_transcripts_path = os.path.join(cls.paired_count_parse_dir, 'transcripts.pkl.gz')
-        cls.paired_counts_path = os.path.join(cls.paired_count_count_dir, 'counts.csv')
+        cls.paired_counts_path = os.path.join(cls.paired_count_count_dir, 'counts_TC.csv')
         cls.paired_rates_path = os.path.join(cls.paired_count_aggregate_dir, 'rates.csv')
-        cls.paired_aggregates_paths = {
-            'transcriptome': os.path.join(cls.paired_count_aggregate_dir, 'transcriptome.csv')
-        }
+        cls.paired_aggregates_path = os.path.join(cls.paired_count_aggregate_dir, 'transcriptome_TC.csv')
         cls.paired_p_e_path = os.path.join(cls.paired_count_estimate_dir, 'p_e.csv')
         cls.paired_p_c_path = os.path.join(cls.paired_count_estimate_dir, 'p_c.csv')
-        cls.paired_pi_paths = {'transcriptome': os.path.join(cls.paired_count_estimate_dir, 'transcriptome.csv')}
+        cls.paired_pi_path = os.path.join(cls.paired_count_estimate_dir, 'transcriptome_TC.csv')
 
         ######################################
         # Paired (smartseq, no velocity, nasc)
@@ -180,12 +167,12 @@ class TestMixin(TestCase):
         cls.nasc_no_conversions_index_path = os.path.join(cls.nasc_count_parse_dir, 'no_conversions.idx')
         cls.nasc_genes_path = os.path.join(cls.nasc_count_parse_dir, 'genes.pkl.gz')
         cls.nasc_transcripts_path = os.path.join(cls.nasc_count_parse_dir, 'transcripts.pkl.gz')
-        cls.nasc_counts_path = os.path.join(cls.nasc_count_count_dir, 'counts.csv')
+        cls.nasc_counts_path = os.path.join(cls.nasc_count_count_dir, 'counts_TC.csv')
         cls.nasc_rates_path = os.path.join(cls.nasc_count_aggregate_dir, 'rates.csv')
-        cls.nasc_aggregates_paths = {'transcriptome': os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome.csv')}
+        cls.nasc_aggregates_path = os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome_TC.csv')
         cls.nasc_p_e_path = os.path.join(cls.nasc_count_estimate_dir, 'p_e.csv')
         cls.nasc_p_c_path = os.path.join(cls.nasc_count_estimate_dir, 'p_c.csv')
-        cls.nasc_pi_paths = {'transcriptome': os.path.join(cls.nasc_count_estimate_dir, 'transcriptome.csv')}
+        cls.nasc_pi_path = os.path.join(cls.nasc_count_estimate_dir, 'transcriptome_TC.csv')
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()

@@ -13,6 +13,7 @@ from ..logging import logger
 CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
+    (?P<index>[^,]*),
     (?P<barcode>[^,]*),
     (?P<umi>[^,]*),
     (?P<GX>[^,]*),
@@ -33,6 +34,7 @@ CONVERSIONS_PARSER = re.compile(
 NO_CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
+    (?P<index>[^,]*),
     (?P<barcode>[^,]*),
     (?P<umi>[^,]*),
     (?P<GX>[^,]*),
@@ -408,7 +410,7 @@ def count_conversions_part(
     count_path = utils.mkstemp(dir=temp_dir)
 
     counts = None
-    read_id = None
+    key = None
     count_base = True
     with open(conversions_path, 'r') as f, open(count_path, 'w') as out:
         f.seek(pos)
@@ -425,14 +427,15 @@ def count_conversions_part(
             prev_groups = groups
             groups = CONVERSIONS_PARSER.match(line).groupdict()
 
-            if read_id != groups['read_id']:
-                if read_id is not None and (not barcodes or prev_groups['barcode'] in barcodes):
+            new_key = (groups['read_id'], groups['index'])
+            if key != new_key:
+                if key is not None and (not barcodes or prev_groups['barcode'] in barcodes):
                     out.write(
                         f'{prev_groups["read_id"]},{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
                         f'{",".join(str(c) for c in counts)},{prev_groups["velocity"]},{prev_groups["transcriptome"]}\n'
                     )
                 counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
-                read_id = groups['read_id']
+                key = new_key
                 count_base = True
             if int(groups['quality']) > quality and not is_snp(groups):
                 counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
@@ -442,7 +445,7 @@ def count_conversions_part(
                 count_base = False
 
         # Add last record
-        if read_id is not None and (not barcodes or groups['barcode'] in barcodes):
+        if key is not None and (not barcodes or groups['barcode'] in barcodes):
             out.write(
                 f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
                 f'{",".join(str(c) for c in counts)},{groups["velocity"]},{groups["transcriptome"]}\n'
@@ -576,7 +579,7 @@ def count_conversions(
             residual_barcodes.append(barcode)
     if residual_barcodes:
         split_path = utils.mkstemp(dir=temp_dir)
-        logger.debug(f'Splitting remaining for {len(residual_barcodes)} barcodes to {split_path}')
+        logger.debug(f'Splitting remaining {len(residual_barcodes)} barcodes to {split_path}')
         df_counts[df_counts['barcode'].isin(residual_barcodes)].to_csv(split_path, index=False)
         split_paths.append(split_path)
     del df_counts
