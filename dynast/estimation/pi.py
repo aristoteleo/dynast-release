@@ -155,18 +155,16 @@ def fit_stan_mcmc(
 
     # Skew beta distribution toward the guess.
     alpha_guess, beta_guess = guess_beta_parameters(guess)
-    alpha_guess_log = np.log(alpha_guess)
-    beta_guess_log = np.log(beta_guess)
 
     data = {
         'N': len(values),
-        'conversions': list(values[:, 0]),
-        'contents': list(values[:, 1]),
-        'counts': list(values[:, 2]),
+        'conversions': values[:, 0],
+        'contents': values[:, 1],
+        'counts': values[:, 2],
         'p_c': p_c,
         'p_e': p_e,
     }
-    init = [{'log_alpha': alpha_guess_log, 'log_beta': beta_guess_log, 'pi_g': guess}] * n_chains
+    init = [{'log_alpha': np.log(alpha_guess), 'log_beta': np.log(beta_guess), 'pi_g': guess}] * n_chains
 
     with utils.suppress_stdout_stderr():
         fit = model.sampling(
@@ -295,7 +293,8 @@ def estimate_pi(
             except RuntimeError:
                 failed += 1
 
-    logger.warning(f'Estimation skipped {skipped} times and failed {failed} times')
+    if skipped > 0 or failed > 0:
+        logger.warning(f'Estimation skipped {skipped} times and failed {failed} times')
 
     with open(pi_path, 'w') as f:
         f.write('barcode,GX,guess,alpha,beta,pi\n')

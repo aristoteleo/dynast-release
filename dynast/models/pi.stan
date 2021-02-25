@@ -16,11 +16,9 @@ parameters {
   real<lower=0, upper=1> pi_g;
 }
 
-transformed parameters{
-    real alpha;
-    real beta;
-    alpha = exp(log_alpha);
-    beta = exp(log_beta);
+transformed parameters {
+    real alpha = exp(log_alpha);
+    real beta = exp(log_beta);
 }
 
 model {

@@ -16,12 +16,11 @@ def generate_sequence(k, seed=None):
     return ''.join(random.choices(conversion.BASE_COLUMNS, k=k))
 
 
-def simulate_reads(sequence, p_e, p_c, pi, l=100, n=100, m=0, seed=None):  # noqa
+def simulate_reads(sequence, p_e, p_c, pi, l=100, n=100, seed=None):  # noqa
     generator = np.random.RandomState(seed)
 
-    n_reads = n + m
-    n_new = int(n_reads * pi)
-    n_old = n_reads - n_new
+    n_new = int(n * pi)
+    n_old = n - n_new
     contents = []
     convs = []
 
@@ -63,14 +62,15 @@ def simulate_reads(sequence, p_e, p_c, pi, l=100, n=100, m=0, seed=None):  # noq
 
     df_contents = pd.DataFrame(contents)
     df_conversions = pd.DataFrame(convs)
-    df_counts = pd.concat((df_contents, df_conversions), axis=1)[conversion.COLUMNS].iloc[
-        generator.choice(np.arange(n_reads), size=n_reads, replace=False)].reset_index()
-    df_counts['subset'] = [True] * n + [False] * m
+    df_counts = pd.concat((df_contents, df_conversions),
+                          axis=1)[conversion.COLUMNS].iloc[generator.choice(np.arange(n), size=n,
+                                                                            replace=False)].reset_index(drop=True)
 
     return df_counts
 
 
-_model = None
+__model = None
+_pi_model = None
 
 
 def initializer(model):
@@ -87,8 +87,6 @@ def estimate(
     estimate_pi=True,
     model=None,
 ):
-    model = model or _model
-
     # p_e
     if estimate_p_e:
         with tempfile.NamedTemporaryFile() as tf:
@@ -103,7 +101,6 @@ def estimate(
         df_aggregates.columns = ['count']
         df_aggregates.reset_index(inplace=True)
         df_aggregates.rename(columns={'TC': 'conversion', 'T': 'base'}, inplace=True)
-
         with tempfile.NamedTemporaryFile() as tf:
             p_c_path = estimation.estimate_p_c(df_aggregates, p_e_estimate, tf.name)
             p_c_estimate = estimation.read_p_c(p_c_path)
@@ -113,20 +110,19 @@ def estimate(
     # pi
     if estimate_pi:
         df_aggregates = pd.DataFrame(
-            df_counts[df_counts['subset']].groupby(['TC', 'T'], sort=False, observed=True).size()
+            df_counts[df_counts['GX'] == 'gene_0'].groupby(['TC', 'T'], sort=False, observed=True).size()
         )
         df_aggregates.columns = ['count']
         df_aggregates.reset_index(inplace=True)
         df_aggregates = df_aggregates[(df_aggregates[['T', 'count']] > 0).all(axis=1)]
         vals = df_aggregates.values
         guess = min(max((sum(vals[vals[:, 0] > 0][:, 2]) / sum(vals[:, 2])), 0.01), 0.99)
-        p_c_estimate, guess, alpha, beta, pi = estimation.pi.fit_stan_mcmc(
+        guess, alpha, beta, pi = estimation.pi.fit_stan_mcmc(
             vals,
             p_e_estimate,
             p_c_estimate,
             guess=guess,
             model=model,
-            pi_func=estimation.pi.beta_mean,
         )
     else:
         guess, alpha, beta, pi = None, None, None, None
@@ -142,16 +138,33 @@ def _simulate(
     k=10000,
     l=100,  # noqa
     n=100,
-    m=0,
     estimate_p_e=False,
     estimate_p_c=False,
     estimate_pi=True,
-    model=None,
     seed=None,
+    model=None,
 ):
     model = model or _model
-    sequence = sequence or generate_sequence(k, seed=seed)
-    df_counts = simulate_reads(sequence, p_e, p_c, pi, l=l, n=n, m=m, seed=seed)
+
+    if isinstance(pi, list) and not isinstance(n, list):
+        pis = pi
+        ns = [n] * len(pis)
+    elif not isinstance(pi, list) and isinstance(n, list):
+        ns = n
+        pis = [pi] * len(ns)
+    elif not isinstance(pi, list) and not isinstance(n, list):
+        raise Exception()
+
+    assert len(pis) == len(ns)
+
+    dfs = []
+    for i, (pi, n) in enumerate(zip(pis, ns)):
+        sequence = sequence or generate_sequence(k, seed=seed)
+
+        df_counts = simulate_reads(sequence, p_e, p_c, pi, l=l, n=n, seed=seed)
+        df_counts['GX'] = f'gene_{i}'
+        dfs.append(df_counts)
+    df_counts = pd.concat(dfs, ignore_index=True)
 
     return estimate(
         df_counts,
@@ -172,7 +185,6 @@ def simulate(
     k=10000,
     l=100,  # noqa
     n=100,
-    m=0,
     n_runs=16,
     n_threads=8,
     estimate_p_e=False,
@@ -199,7 +211,6 @@ def simulate(
                 k=k,
                 l=l,
                 n=n,
-                m=m,
                 estimate_p_e=estimate_p_e,
                 estimate_p_c=estimate_p_c,
                 estimate_pi=estimate_pi,

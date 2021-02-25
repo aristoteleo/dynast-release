@@ -15,7 +15,10 @@ def read_rates(rates_path):
     :return: rates dataframe
     :rtype: pandas.DataFrame
     """
-    return pd.read_csv(rates_path, index_col=None)
+    df = pd.read_csv(rates_path, index_col=None)
+    if df.shape[0] == 1:
+        return df.iloc[0]
+    return df
 
 
 def read_aggregates(aggregates_path):

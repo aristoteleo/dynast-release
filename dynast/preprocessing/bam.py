@@ -527,7 +527,7 @@ def parse_all_reads(
 
     # Display progres bar
     logger.debug(f'Processing contigs {contigs} from BAM')
-    utils.display_progress_with_counter(counter, n_reads, async_result, desc='parsing')
+    utils.display_progress_with_counter(counter, n_reads, async_result)
     pool.join()
 
     # Combine csvs

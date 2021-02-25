@@ -278,12 +278,18 @@ def setup_count_args(parser, parent):
         type=str,
     )
     parser_count.add_argument(
-        '--read-threshold',
-        metavar='THRESHOLD',
-        help=('Do not attempt statistical correction if there are less than this '
-              'many reads. (default: 16)'),
+        '--cell-threshold',
+        metavar='COUNT',
+        help='A cell must have at least this many reads for correction. (default: 1000)',
         type=int,
-        default=16,
+        default=1000,
+    )
+    parser_count.add_argument(
+        '--cell-gene-threshold',
+        metavar='COUNT',
+        help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
+        type=int,
+        default=16
     )
     parser_count.add_argument(
         '--no-splicing',
@@ -503,7 +509,8 @@ def parse_count(parser, args, temp_dir=None):
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
         correct=args.correct,
-        read_threshold=args.read_threshold,
+        cell_threshold=args.cell_threshold,
+        cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,
         p_group_by=args.p_group_by,
         n_threads=args.t,

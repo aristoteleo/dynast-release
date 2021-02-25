@@ -547,7 +547,7 @@ def count_conversions(
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result, desc='counting')
+    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result)
     pool.join()
 
     # Combine csvs
@@ -598,7 +598,7 @@ def count_conversions(
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, len(split_paths), async_result, desc='filtering')
+    utils.display_progress_with_counter(counter, len(split_paths), async_result)
     pool.join()
 
     with open(counts_path, 'wb') as out:

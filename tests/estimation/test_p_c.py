@@ -31,7 +31,27 @@ class TestPC(mixins.TestMixin, TestCase):
                     p_e.read_p_e(self.umi_p_e_path, group_by=['barcode']),
                     p_c_path,
                     group_by=['barcode'],
+                    threshold=0,
                     n_threads=2
                 )
             )
             self.assertTrue(mixins.files_equal(self.umi_p_c_path, p_c_path))
+
+    def test_estimate_p_c_nasc(self):
+        p_c_path = os.path.join(self.temp_dir, 'p_c.csv')
+        df_aggregates = aggregation.read_aggregates(self.nasc_aggregates_path)
+        with mock.patch('dynast.estimation.p_c.utils.as_completed_with_progress', mixins.tqdm_mock):
+            self.assertEqual(
+                p_c_path,
+                p_c.estimate_p_c(
+                    df_aggregates,
+                    p_e.read_p_e(self.nasc_p_e_path, group_by=['barcode']),
+                    p_c_path,
+                    group_by=['barcode'],
+                    threshold=0,
+                    n_threads=2,
+                    nasc=True,
+                )
+            )
+            # import pdb; pdb.set_trace()
+            self.assertTrue(mixins.files_equal(self.nasc_p_c_path, p_c_path))

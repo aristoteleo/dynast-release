@@ -171,7 +171,7 @@ class TestMixin(TestCase):
         cls.nasc_rates_path = os.path.join(cls.nasc_count_aggregate_dir, 'rates.csv')
         cls.nasc_aggregates_path = os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome_TC.csv')
         cls.nasc_p_e_path = os.path.join(cls.nasc_count_estimate_dir, 'p_e.csv')
-        cls.nasc_p_c_path = os.path.join(cls.nasc_count_estimate_dir, 'p_c.csv')
+        cls.nasc_p_c_path = os.path.join(cls.nasc_count_estimate_dir, 'p_c_TC.csv')
         cls.nasc_pi_path = os.path.join(cls.nasc_count_estimate_dir, 'transcriptome_TC.csv')
 
     def setUp(self):

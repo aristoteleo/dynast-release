@@ -26,7 +26,8 @@ def count(
     snp_threshold=0.5,
     snp_csv=None,
     correct=None,
-    read_threshold=16,
+    cell_threshold=1000,
+    cell_gene_threshold=16,
     control_p_e=None,
     p_group_by=None,
     whitelist_path=None,
@@ -337,7 +338,9 @@ def count(
                         estimation.read_p_e(p_e_path, group_by=p_group_by),
                         p_c_path,
                         group_by=p_group_by,
+                        threshold=cell_threshold,
                         n_threads=n_threads,
+                        nasc=nasc
                     )
 
                     for key, paths in aggregates_paths.items():
@@ -352,7 +355,7 @@ def count(
                             pi_path,
                             p_group_by=p_group_by,
                             n_threads=n_threads,
-                            threshold=read_threshold,
+                            threshold=cell_gene_threshold,
                             subset_threshold=subset_threshold,
                             seed=seed,
                             nasc=nasc
