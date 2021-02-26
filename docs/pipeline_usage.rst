@@ -103,7 +103,7 @@ Quantifying counts with :code:`count`
 	usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
 	                    [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
 	                    [--quality QUALITY] [--re RE] [--snp-threshold THRESHOLD] [--snp-csv CSV] [--barcodes BARCODES]
-	                    [--read-threshold THRESHOLD] [--no-splicing] [--control]
+	                    [--cell-threshold COUNT] [--cell-gene-threshold COUNT] [--no-splicing] [--control]
 	                    [--correct {total,transcriptome,spliced,unspliced}] [--p-e P_E]
 	                    bam
 
@@ -136,8 +136,10 @@ Quantifying counts with :code:`count`
 	                        SNP and ignored. (default: no SNP detection)
 	  --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
 	  --barcodes BARCODES   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
-	  --read-threshold THRESHOLD
-	                        Do not attempt statistical correction if there are less than this many reads. (default: 16)
+	  --cell-threshold COUNT
+	                        A cell must have at least this many reads for correction. (default: 1000)
+	  --cell-gene-threshold COUNT
+	                        A cell-gene pair must have at least this many reads for correction. (default: 16)
 	  --no-splicing, --transcriptome-only
 	                        Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
 	                        are not assigned to the transcriptome.
@@ -173,7 +175,7 @@ Detecting and filtering SNPs
 
 Statistical correction
 ''''''''''''''''''''''
-The :code:`--correct` argument enables statistical correction of unlabeled and labeled RNA counts. This argument can take on the following values: :code:`total`, :code:`transcriptome`, :code:`spliced`, :code:`unspliced` (see :ref:`read_groups`). The value of this argument specifies which group of unlabeled/labeled RNA counts will be corrected. For instance, :code:`--correct spliced` will run statistical correction on unlabeled/labeled spliced reads. This option may be provided multiple times to run correction on multiple groups. The procedure involves estimating the conversion rate of unlabeled and labeled RNA, and modeling the fraction of new RNA as a binomial mixture model (see :ref:`statistical_correction`). The :code:`--read-threshold` argument controls the minimum number of reads required to attempt statistical correction, as too few reads can result in noisy results. Note that statistical correction takes significantly longer than simply counting reads, so no correction is performed when :code:`--correct` is not provided.
+The :code:`--correct` argument enables statistical correction of unlabeled and labeled RNA counts. This argument can take on the following values: :code:`total`, :code:`transcriptome`, :code:`spliced`, :code:`unspliced` (see :ref:`read_groups`). The value of this argument specifies which group of unlabeled/labeled RNA counts will be corrected. For instance, :code:`--correct spliced` will run statistical correction on unlabeled/labeled spliced reads. This option may be provided multiple times to run correction on multiple groups. The procedure involves estimating the conversion rate of unlabeled and labeled RNA, and modeling the fraction of new RNA as a binomial mixture model (see :ref:`statistical_correction`). The :code:`--cell-threshold` and :code:`--cell-gene-threshold` arguments control the minimum number of reads required to attempt statistical correction, as too few reads can result in noisy results. The former is the number of reads that a cell must contain, and the latter is the number of reads a gene in a single cell must contain to perform statistical correction. Internally, :code:`--cell-threshold` is used to filter cells before estimating the average conversion rate in labeled RNA (see :ref:`induced_rate_estimation`), and :code:`--cell-gene-threshold` is used to filter cell-gene combinations before estimating the fraction of new RNA (see :ref:`bayesian_inference`). Note that statistical correction takes significantly longer than simply counting reads, so no correction is performed when :code:`--correct` is not provided.
 
 Control samples
 '''''''''''''''

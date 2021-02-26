@@ -332,7 +332,6 @@ def setup_count_args(parser, parent):
         type=str,
         default=None,
     )
-    parser_count.add_argument('--subset-threshold', help=argparse.SUPPRESS, type=int, default=8000)
     parser_count.add_argument(
         'bam',
         help=(
@@ -517,7 +516,6 @@ def parse_count(parser, args, temp_dir=None):
         re=args.re,
         temp_dir=temp_dir,
         nasc=args.nasc,
-        subset_threshold=args.subset_threshold,
         velocity=not args.no_splicing,
         seed=args.seed,
     )

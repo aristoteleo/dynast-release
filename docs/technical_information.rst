@@ -124,13 +124,13 @@ First, we define the following model parameters. For the remainder of this secti
 		n &: \text{number of T bases in the genomic region (a read maps to)}
 	\end{align*}
 
-Then, the probability of observing :math:`y` conversions given the above parameters is
+Then, the probability of observing :math:`k` conversions given the above parameters is
 
 .. math::
 
-	\mathbb{P}(y;p_e,p_c,n,\pi) = (1-\pi_g) B(y;n,p_e) + \pi_g B(y;n,p_c)
+	\mathbb{P}(k;p_e,p_c,n,\pi) = (1-\pi_g) B(k;n,p_e) + \pi_g B(k;n,p_c)
 
-where :math:`B(k,n,p)` is the binomial PMF. The goal is to calculate :math:`\pi_g`, which can be used the split the raw counts to get the corrected counts. We can extract :math:`y` and :math:`n` directly from the read alignments, while calculating :math:`p_e` and :math:`p_c` is more complicated (detailed below).
+where :math:`B(k,n,p)` is the binomial PMF. The goal is to calculate :math:`\pi_g`, which can be used the split the raw counts to get the corrected counts. We can extract :math:`k` and :math:`n` directly from the read alignments, while calculating :math:`p_e` and :math:`p_c` is more complicated (detailed below).
 
 .. _background_estimation:
 
@@ -138,13 +138,13 @@ Background estimation (:math:`p_e`)
 '''''''''''''''''''''''''''''''''''
 If we have control samples (i.e. samples without the conversion-introducing treatment), we can calculate :math:`p_e` directly by simply calculating the mutation rate of T to C. This is exactly what dynast does for :code:`--control` samples. All cells are aggregated when calculating :math:`p_e` for control samples.
 
-Otherwise, we need to use other mutation rates as a proxy for the real T>C background mutation rate. In this case, :math:`p_e` is calculated as the mutation rate of all non-T bases to any other base. Mathematically,
+Otherwise, we need to use other mutation rates as a proxy for the real T>C background mutation rate. In this case, :math:`p_e` is calculated as the average conversion rate of all non-T bases to any other base. Mathematically,
 
 .. math::
 
-	p_e = \frac{n(A,C)+n(A,G)+n(A,T)+n(C,A)+\cdots+n(G,T)}{n(A)+n(C)+n(G)}
+	p_e = average(r(A,C), r(A,G), \cdots, r(G,T))
 
-where :math:`n(X)` is the number of :math:`X` bases and :math:`n(X,Y)` is the number of observed :math:`X` > :math:`Y` conversions.
+where :math:`r(X,Y)` is the observed conversion rate from X to Y, and :math:`average` is the function that calculates the average of its arguments. Note that we do not use the conversion rates of conversions that start with a T. This is because T>C is our induced mutation, and this artificially deflates the T>A, T>G mutation rates (which can skew our :math:`p_e` estimation to be lower than it should). In the event that multiple conversions are of interest, and they span all four bases as the initial base, then :math:`p_e` estimation falls back to using all other conversions (regardless of start base).
 
 .. _induced_rate_estimation:
 
@@ -154,13 +154,13 @@ Induced rate estimation (:math:`p_c`)
 
 .. math::
 
-	e_{k,n}=B(k;n,p_e) \cdot \sum_{k'>k} a_{k',n} > 0.01 a_{k,n}
+	e_{k,n}=B(k,n,p_e) \cdot \sum_{k' \geq k} a_{k',n} > 0.01 a_{k,n}
 
 Let :math:`X=\{(k_1,n_1),\cdots\}` be the excluded data. The E step fills in the excluded data by their expected values given the current estimate :math:`p_c^{(t)}`,
 
 .. math::
 
-	a_{k,n}^{(t+1)} = \frac{\sum_{(k',n) \not\in X} B(k;n,p_c^{(t)}) \cdot a_{k',n}}{\sum_{(k',n) \not\in X} B(k';n,p_c^{(t)})}
+	a_{k,n}^{(t+1)} = \frac{\sum_{(k',n) \not\in X} B(k,n,p_c^{(t)}) \cdot a_{k',n}}{\sum_{(k',n) \not\in X} B(k',n,p_c^{(t)})}
 
 The M step updates the estiamte for :math:`p_c`
 
@@ -168,19 +168,8 @@ The M step updates the estiamte for :math:`p_c`
 
 	p_c^{(t+1)} = \frac{\sum_{k,n} ka_{k,n}^{(t+1)}}{\sum_{k,n} na_{k,n}^{(t+1)}}
 
-To speed up convergence, the dissection algorithm from [Jürges2018]_ is used.
+.. _bayesian_inference:
 
 Bayesian inference (:math:`\pi_g`)
 ''''''''''''''''''''''''''''''''''
-The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. :math:`\pi_g` is modeled as a :math:`Beta(\alpha,\beta)` random variable. Estimates of :math:`\alpha` and :math:`\beta` are calculated as the mean of the drawn samples from the model for each parameter. The final :math:`\pi_g` is estimated to be the *mode* of the :math:`Beta(\alpha,\beta)` distribution, as was done in [Hendriks2019]_. Mathematically,
-
-.. math::
-
-	\pi_g = \begin{cases}
-	  \frac{\alpha - 1}{\alpha + \beta - 2} & \alpha,\beta > 1 \\
-		0 & \alpha \leq 1, \beta > 1 \\
-		1 & \alpha > 1, \beta \leq 1 \\
-		\text{estimation failure} & \text{else}
-	\end{cases}
-
-This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
+The fraction of labeled RNA :math:`\pi_g` is estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.

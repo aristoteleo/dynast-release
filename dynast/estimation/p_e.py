@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from .. import utils
+from ..logging import logger
 from ..preprocessing.conversion import BASE_COLUMNS, CONVERSION_COLUMNS
 
 
@@ -65,17 +66,34 @@ def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     :rtype: str
     """
     flattened = list(utils.flatten_list(conversions))
-    bases = list(set(f[0] for f in flattened))
+    bases = sorted(set(f[0] for f in flattened))
     if group_by is not None:
         df_sum = df_counts.groupby(group_by, sort=False, observed=True).sum(numeric_only=True).astype(np.uint32)
     else:
         df_sum = pd.DataFrame(df_counts.sum(numeric_only=True).astype(np.uint32)).T
 
-    # Filter for columns not starting with the conversion base.
-    # If conversion='TC', then select columns that don't start with 'T'
-    base_columns = [base for base in BASE_COLUMNS if base not in bases]
+    # It's best to use conversions that don't start with a conversion base.
+    # For example, if the conversion is TC, don't use conversions starting with a T.
+    # However, if multiple conversions are provided, and they span all bases,
+    # we have no choice but to use them.
     conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv[0] not in bases]
-    p_e = df_sum[conversion_columns].sum(axis=1) / df_sum[base_columns].sum(axis=1)
+    if bases == BASE_COLUMNS:
+        logger.warning(
+            'All four bases have conversions, so background estimation will fall back to '
+            'using ALL non-induced conversions.'
+        )
+        conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv not in flattened]
+
+    for conversion in conversion_columns:
+        df_sum[conversion] /= df_sum[conversion[0]]
+    p_e = df_sum[conversion_columns].mean(axis=1)
+
+    # # Filter for columns not starting with the conversion base.
+    # # If conversion='TC', then select columns that don't start with 'T'
+    # base_columns = [base for base in BASE_COLUMNS if base not in bases]
+    # conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv[0] not in bases]
+    # p_e = df_sum[conversion_columns].sum(axis=1) / df_sum[base_columns].sum(axis=1)
+
     if group_by is not None:
         p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
     else:
@@ -102,14 +120,12 @@ def estimate_p_e_nasc(df_rates, p_e_path, group_by=None):
     :return: path to output CSV containing p_e estimates
     :rtype: str
     """
-
     if group_by is not None:
         df_rates = df_rates.set_index(group_by)
     p_e = (df_rates['CT'] + df_rates['GA']) / 2
     if group_by is not None:
         p_e.reset_index().to_csv(p_e_path, header=group_by + ['p_e'], index=False)
     else:
-        p_e = p_e[0]
         with open(p_e_path, 'w') as f:
             f.write(str(p_e))
 

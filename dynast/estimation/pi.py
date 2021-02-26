@@ -111,11 +111,9 @@ def fit_stan_mcmc(
     guess=0.5,
     model=None,
     n_chains=1,
-    n_warmup=500,
+    n_warmup=1000,
     n_iters=1000,
     seed=None,
-    subset_threshold=8000,
-    subset_seed=None,
 ):
     """Run MCMC to estimate the fraction of labeled RNA.
 
@@ -136,17 +134,12 @@ def fit_stan_mcmc(
     :type model: pystan.StanModel, optional
     :param n_chains: number of MCMC chains, defaults to `1`
     :type n_chains: int, optional
-    :param n_warmup: number of warmup iterations, defaults to `500`
+    :param n_warmup: number of warmup iterations, defaults to `1000`
     :type n_warmup: int, optional
     :param n_iters: number of MCMC iterations, excluding any warmups, defaults to `1000`
     :type n_iters: int, optional
     :param seed: random seed used for MCMC, defaults to `None`
     :type seed: int, optional
-    :param subset_threshold: any conversion-content pairs that have greater than
-                             this many reads will be subset randomly, defaults to `8000`
-    :type subset_threshold: int, optional
-    :param subset_seed: random seed used for subsetting reads, defaults to `None`
-    :type subset_seed: int, optional
 
     :return: (guess, alpha, beta, pi)
     :rtype: (float, float, float, float)
@@ -191,7 +184,6 @@ def estimate_pi(
     p_group_by=None,
     n_threads=8,
     threshold=16,
-    subset_threshold=8000,
     seed=None,
     nasc=False,
 ):
@@ -212,9 +204,6 @@ def estimate_pi(
     :param threshold: any conversion-content pairs with fewer than this many reads
                       will not be processed, defaults to `16`
     :type threshold: int, optional
-    :param subset_threshold: any conversion-content pairs that have greater than
-                             this many reads will be subset randomly, defaults to `8000`
-    :type subset_threshold: int, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline. Specifically,
                  the mode of the estimated Beta distribution is used as pi, defaults to `False`
     :type nasc: bool, optional
@@ -238,6 +227,7 @@ def estimate_pi(
         df_full = df_aggregates
         df_full['p_e'] = p_e
         df_full['p_c'] = p_c
+    df_full.dropna(subset=['p_c'], inplace=True)  # Drop NA values due to p_c
     values = df_full[['conversion', 'base', 'count']].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
@@ -280,9 +270,7 @@ def estimate_pi(
                 p_e,
                 p_c,
                 guess=guess,
-                subset_threshold=subset_threshold,
                 seed=seed,
-                subset_seed=seed,
             )] = key
 
         for future in utils.as_completed_with_progress(futures):
@@ -293,8 +281,13 @@ def estimate_pi(
             except RuntimeError:
                 failed += 1
 
-    if skipped > 0 or failed > 0:
-        logger.warning(f'Estimation skipped {skipped} times and failed {failed} times')
+    if skipped > 0:
+        logger.warning(
+            f'Estimation skipped for {skipped} cell-genes because they have less than '
+            f'{threshold} reads. Use `--cell-gene-threshold` to change.'
+        )
+    if failed > 0:
+        logger.warning(f'Estimation failed {failed} times.')
 
     with open(pi_path, 'w') as f:
         f.write('barcode,GX,guess,alpha,beta,pi\n')

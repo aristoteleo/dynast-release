@@ -44,13 +44,12 @@ class TestPi(mixins.TestMixin, TestCase):
                     pi_path,
                     p_group_by=['barcode'],
                     n_threads=2,
-                    threshold=2,
-                    subset_threshold=8000,
+                    threshold=1,
                     seed=None,
                 )
             )
-
             with open(pi_path, 'r') as f:
-                self.assertEqual(
-                    'barcode,GX,guess,alpha,beta,pi\nCATTTCGGCTTA,ENSG00000198888,0.01,2.0,2.0,0.5\n', f.read()
+                self.assertTrue(
+                    f.read().
+                    startswith('barcode,GX,guess,alpha,beta,pi\nAAACCCAACGTA,ENSG00000172009,0.99,2.0,2.0,0.5\n')
                 )

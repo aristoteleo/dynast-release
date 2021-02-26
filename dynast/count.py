@@ -35,7 +35,6 @@ def count(
     temp_dir=None,
     re=None,
     nasc=False,
-    subset_threshold=8000,
     velocity=True,
     seed=None,
 ):
@@ -356,7 +355,6 @@ def count(
                             p_group_by=p_group_by,
                             n_threads=n_threads,
                             threshold=cell_gene_threshold,
-                            subset_threshold=subset_threshold,
                             seed=seed,
                             nasc=nasc
                         )

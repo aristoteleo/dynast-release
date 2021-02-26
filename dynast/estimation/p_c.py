@@ -47,7 +47,7 @@ def binomial_pmf(k, n, p):
     return coef * (p**k) * ((1 - p)**(n - k))
 
 
-def expectation_maximization_nasc(values, p_e, threshold=0.01, max_iters=300):
+def expectation_maximization_nasc(values, p_e, threshold=0.01):
     """NASC-seq pipeline variant of the EM algorithm to estimate average
     conversion rate in labeled RNA.
 
@@ -61,8 +61,6 @@ def expectation_maximization_nasc(values, p_e, threshold=0.01, max_iters=300):
     :type p_e: float
     :param threshold: filter threshold, defaults to `0.01`
     :type threshold: float, optional
-    :param max_iters: maximum number of EM iterations, defaults to `300`
-    :type max_iters: int, optional
 
     :return: estimated conversion rate
     :rtype: float
@@ -178,6 +176,9 @@ def expectation_maximization(values, p_e, p_c=0.1, threshold=0.01, max_iters=300
         if prev_p_c == p_c:
             break
 
+    if p_c <= p_e:
+        raise ValueError('p_c <= p_e')
+
     return p_c
 
 
@@ -203,10 +204,11 @@ def estimate_p_c(df_aggregates, p_e, p_c_path, group_by=None, threshold=1000, n_
     :return: path to output CSV containing p_c estimates
     :rtype: str
     """
+    em_func = expectation_maximization_nasc if nasc else expectation_maximization
     values = df_aggregates[['conversion', 'base', 'count']].values
     logger.debug('Running EM algorithm')
     if group_by is None:
-        p_c = expectation_maximization(values, p_e)
+        p_c = em_func(values, p_e)
     else:
         groups = df_aggregates.groupby(group_by, sort=False, observed=True).indices
         p_cs = {}
@@ -220,9 +222,7 @@ def estimate_p_c(df_aggregates, p_e, p_c_path, group_by=None, threshold=1000, n_
                 if sum(vals[:, 2]) < threshold:
                     skipped += 1
                     continue
-                futures[executor.submit(
-                    expectation_maximization if not nasc else expectation_maximization_nasc, vals, p_e[key]
-                )] = key
+                futures[executor.submit(em_func, vals, p_e[key])] = key
 
             for future in utils.as_completed_with_progress(futures):
                 key = futures[future]
@@ -230,8 +230,13 @@ def estimate_p_c(df_aggregates, p_e, p_c_path, group_by=None, threshold=1000, n_
                     p_cs[key] = future.result()
                 except Exception:
                     failed += 1
-        if skipped > 0 or failed > 0:
-            logger.warning(f'Estimation skipped {skipped} times and failed {failed} times')
+        if skipped > 0:
+            logger.warning(
+                f'Estimation skipped for {skipped} barcodes because they contain less than '
+                f'{threshold} reads. Use `--cell-threshold` to change.'
+            )
+        if failed > 0:
+            logger.warning(f'Estimation failed {failed} times.')
 
     logger.debug(f'Writing p_c estimates to {p_c_path}')
     with open(p_c_path, 'w') as p_c_out:

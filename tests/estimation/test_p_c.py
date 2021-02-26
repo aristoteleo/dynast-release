@@ -53,5 +53,4 @@ class TestPC(mixins.TestMixin, TestCase):
                     nasc=True,
                 )
             )
-            # import pdb; pdb.set_trace()
             self.assertTrue(mixins.files_equal(self.nasc_p_c_path, p_c_path))
