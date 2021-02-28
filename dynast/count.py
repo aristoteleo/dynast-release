@@ -240,6 +240,14 @@ def count(
             )
 
             if correct:
+                # Check there are transcriptome reads if not velocity
+                if not velocity and sum(df_counts_complemented['transcriptome']) == 0:
+                    raise Exception(
+                        'No reads were assigned to `transcriptome`, which are required when using '
+                        '`--no-splicing` or `--transcriptome-only`. This is most likely caused by '
+                        'missing `--gene-tag` tag in the BAM.'
+                    )
+
                 # Total/transcriptome reads are required to calculate p_e/p_c later on
                 dfs = {
                     'total': df_counts_complemented
@@ -247,13 +255,21 @@ def count(
                     'transcriptome': df_counts_complemented[df_counts_complemented['transcriptome']]
                 }
                 for key in correct:
-                    if key in ('total', 'transcriptome', 'ambiguous'):
+                    if key in dfs or key == 'ambiguous':
                         continue
-                    df_key = df_counts_complemented[df_counts_complemented['velocity'] == key]
-                    if df_key.shape[0] == 0:
-                        logger.warning(f'No reads were assigned to `{key}`. No correction can be done.')
+
+                    if key == 'total':
+                        dfs.update({'total': df_counts_complemented})
+                    elif key == 'transcriptome':
+                        dfs.update({'transcriptome': df_counts_complemented[df_counts_complemented['transcriptome']]})
                     else:
-                        dfs.update({key: df_key})
+                        df_key = df_counts_complemented[df_counts_complemented['velocity'] == key]
+                        if df_key.shape[0] == 0:
+                            logger.warning(
+                                f'No reads were assigned to `{key}`. No correction can be done for this group.'
+                            )
+                        else:
+                            dfs.update({key: df_key})
 
                 for key, df in dfs.items():
                     for convs in conversions:

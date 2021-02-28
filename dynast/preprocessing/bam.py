@@ -390,8 +390,8 @@ def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
 
-    :return: `True` if all tags were found, `False` otherwise
-    :rtype: bool
+    :return: (whether all tags were found, list of not found tags)
+    :rtype: (bool, list)
     """
     tags_found = {tag: False for tag in tags}
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
@@ -401,10 +401,10 @@ def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
                     tags_found[tag] = True
 
             if all(tags_found.values()):
-                return True
+                return True, []
             if i + 1 >= n_reads:
                 break
-    return False
+    return False, [tag for tag in tags_found if not tags_found[tag]]
 
 
 def parse_all_reads(
@@ -475,10 +475,18 @@ def parse_all_reads(
     :rtype: (str, str, str, str)
     """
     logger.debug('Checking if BAM has required tags')
-    if not check_bam_tags_exist(bam_path, config.BAM_REQUIRED_TAGS, config.BAM_PEEK_READS, n_threads=n_threads):
+    tags = config.BAM_REQUIRED_TAGS.copy()
+    if barcode_tag:
+        tags.append(barcode_tag)
+    if umi_tag:
+        tags.append(umi_tag)
+    if gene_tag:
+        tags.append(gene_tag)
+    all_exists, not_found = check_bam_tags_exist(bam_path, tags, config.BAM_PEEK_READS, n_threads=n_threads)
+    if not all_exists:
         raise Exception(
-            f'BAM does not contain required tags: {", ".join(config.BAM_REQUIRED_TAGS)}. '
-            f'Please rerun alignment with at least `--outSAMattributes {" ".join(config.BAM_REQUIRED_TAGS)}`.'
+            f'First {config.BAM_PEEK_READS} reads in the BAM do not contain the following required tags: '
+            f'{", ".join(not_found)}. '
         )
 
     logger.debug(f'Extracting contigs from BAM {bam_path}')
