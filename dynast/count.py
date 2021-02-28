@@ -98,6 +98,7 @@ def count(
     skip = utils.all_exists(conversions_required) and not redo('parse')
     with stats.step('parse', skipped=skip), logger.namespaced_context('parse'):
         if not skip:
+            re = 'parse'
             os.makedirs(parse_dir, exist_ok=True)
             logger.info('Parsing gene and transcript information from GTF')
             gene_infos, transcript_infos = preprocessing.parse_gtf(gtf_path)
@@ -135,6 +136,7 @@ def count(
     skip = not snp_threshold or (utils.all_exists(snps_required) and not redo('snp'))
     with stats.step('snp', skipped=skip), logger.namespaced_context('snp'):
         if not skip:
+            re = 'snp'
             logger.info(f'Calculating coverage and outputting to {coverage_path}')
             os.makedirs(snp_dir, exist_ok=True)
             coverage_path, coverage_index_path = preprocessing.calculate_coverage(
@@ -176,6 +178,7 @@ def count(
     skip = utils.all_exists(count_required) and not redo('count')
     with stats.step('count', skipped=skip), logger.namespaced_context('count'):
         if not skip:
+            re = 'count'
             os.makedirs(count_dir, exist_ok=True)
             logger.info(f'Counting conversions to {conversions_path}')
             snps = utils.merge_dictionaries(
@@ -226,6 +229,7 @@ def count(
     skip = utils.all_exists(aggregates_required) and not redo('aggregate')
     with stats.step('aggregate', skipped=skip), logger.namespaced_context('aggregate'):
         if not skip:
+            re = 'aggregate'
             logger.info(f'Computing mutation rates and outputting to {rates_path}')
             os.makedirs(aggregates_dir, exist_ok=True)
             gene_infos = gene_infos or utils.read_pickle(genes_path)
@@ -283,8 +287,8 @@ def count(
     skip = (not control and not correct) or (utils.all_exists(estimates_paths) and not redo('estimate'))
     with stats.step('estimate', skipped=skip), logger.namespaced_context('estimate'):
         if not skip:
+            re = 'estimate'
             os.makedirs(estimates_dir, exist_ok=True)
-
             if control_p_e:
                 logger.info('`--p-e` provided. No background mutation rate estimation will be done.')
                 if p_group_by is not None:
@@ -365,6 +369,7 @@ def count(
     skip = control or (utils.all_exists([adata_path]) and not redo('split'))
     with stats.step('split', skipped=skip), logger.namespaced_context('split'):
         if not skip:
+            re = 'split'
             logger.info(f'Combining results into an Anndata object at {adata_path}')
             gene_infos = gene_infos or utils.read_pickle(genes_path)
 
