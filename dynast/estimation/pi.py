@@ -310,10 +310,12 @@ def split_matrix(matrix, pis, barcodes, features):
     :param features: all features (i.e. genes)
     :type features: list
 
-    :return: (pis as a matrix, matrix of unlabeled RNA, matrix of labeled RNA)
-    :rtype: (numpy.ndarray, numpy.ndarray, numpy.ndarray)
+    :return: (matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA)
+    :rtype: (scipy.sparse.spmatrix, scipy.sparse.spmatrix, scipy.sparse.spmatrix)
     """
-    pi_matrix = np.full((len(barcodes), len(features)), np.nan)
+    unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
+    labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
+    pi_mask = sparse.lil_matrix((len(barcodes), len(features)), dtype=bool)
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
     feature_indices = {feature: i for i, feature in enumerate(features)}
 
@@ -322,8 +324,10 @@ def split_matrix(matrix, pis, barcodes, features):
             pi = float(pi)
         except ValueError:
             continue
-        pi_matrix[barcode_indices[barcode], feature_indices[gx]] = pi
+        row, col = barcode_indices[barcode], feature_indices[gx]
+        val = matrix[row, col]
+        unlabeled_matrix[row, col] = val * (1 - pi)
+        labeled_matrix[row, col] = val * pi
+        pi_mask[row, col] = True
 
-    if sparse.issparse(matrix):
-        matrix = matrix.toarray()
-    return pi_matrix, matrix * (1 - pi_matrix), matrix * pi_matrix
+    return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
