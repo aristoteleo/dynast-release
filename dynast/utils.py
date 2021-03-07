@@ -10,7 +10,11 @@ from concurrent.futures import as_completed
 from contextlib import contextmanager
 from operator import add
 
+import anndata
+import numpy as np
 import psutil
+import pandas as pd
+from scipy import sparse
 from tqdm import tqdm
 
 from . import config
@@ -563,3 +567,194 @@ def split_index(index, n=8):
         parts.append((start_pos, current_size))
 
     return parts
+
+
+def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
+    """Convert a counts dataframe to a sparse counts matrix.
+
+    Counts are assumed to be appropriately deduplicated.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param barcodes: list of barcodes that will map to the rows
+    :type barcodes: list
+    :param features: list of features (i.e. genes) that will map to the columns
+    :type features: list
+    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
+    :type barcode_column: str
+    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
+    :type feature_column: str
+
+    :return: sparse counts matrix
+    :rtype: scipy.sparse.csrmatrix
+    """
+    # Transform to index for fast lookup
+    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
+    feature_indices = {feature: i for i, feature in enumerate(features)}
+
+    matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.uint32)
+    for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column], sort=False,
+                                                       observed=True).size().items():
+        matrix[barcode_indices[barcode], feature_indices[feature]] = count
+
+    return matrix.tocsr()
+
+
+def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=['TC']):
+    """Split counts dataframe into two count matrices by a column.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param barcodes: list of barcodes that will map to the rows
+    :type barcodes: list
+    :param features: list of features (i.e. genes) that will map to the columns
+    :type features: list
+    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
+    :type barcode_column: str, optional
+    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
+    :type feature_column: str, optional
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
+
+    :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
+    :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
+    """
+    matrix_unlabeled = counts_to_matrix(
+        df_counts[(df_counts[conversions] == 0).all(axis=1)],
+        barcodes,
+        features,
+        barcode_column=barcode_column,
+        feature_column=feature_column
+    )
+    matrix_labeled = counts_to_matrix(
+        df_counts[(df_counts[conversions] > 0).any(axis=1)],
+        barcodes,
+        features,
+        barcode_column=barcode_column,
+        feature_column=feature_column
+    )
+    return matrix_unlabeled, matrix_labeled
+
+
+def split_matrix(matrix, pis, barcodes, features):
+    """Split the given matrix based on provided fraction of new RNA.
+
+    :param matrix: matrix to split
+    :type matrix: numpy.ndarray or scipy.sparse.spmatrix
+    :param pis: dictionary containing pi estimates
+    :type pis: dictionary
+    :param barcodes: all barcodes
+    :type barcodes: list
+    :param features: all features (i.e. genes)
+    :type features: list
+
+    :return: (matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA)
+    :rtype: (scipy.sparse.spmatrix, scipy.sparse.spmatrix, scipy.sparse.spmatrix)
+    """
+    unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
+    labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
+    pi_mask = sparse.lil_matrix((len(barcodes), len(features)), dtype=bool)
+    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
+    feature_indices = {feature: i for i, feature in enumerate(features)}
+
+    for (barcode, gx), pi in pis.items():
+        try:
+            pi = float(pi)
+        except ValueError:
+            continue
+        row, col = barcode_indices[barcode], feature_indices[gx]
+        val = matrix[row, col]
+        unlabeled_matrix[row, col] = val * (1 - pi)
+        labeled_matrix[row, col] = val * pi
+        pi_mask[row, col] = True
+
+    return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
+
+
+def results_to_adata(df_counts, conversions, gene_infos=None, pis=None):
+    pis = pis or {}
+    gene_infos = gene_infos or {}
+    all_conversions = sorted(flatten_list(conversions))
+    transcriptome_exists = df_counts['transcriptome'].any()
+    transcriptome_only = df_counts['transcriptome'].all()
+    velocities = df_counts['velocity'].unique()
+    barcodes = sorted(df_counts['barcode'].unique())
+    features = sorted(df_counts['GX'].unique())
+    names = [gene_infos.get(feature, {}).get('gene_name') for feature in features]
+
+    df_counts_transcriptome = df_counts[df_counts['transcriptome']]
+    matrix = counts_to_matrix(df_counts_transcriptome, barcodes, features)
+    layers = {}
+
+    # Transcriptome reads
+    if transcriptome_exists:
+        for convs in conversions:
+            # Ignore reads that have other conversions
+            other_convs = list(set(all_conversions) - set(convs))
+            join = '_'.join(convs)
+            # Counts for transcriptome reads (i.e. X_unlabeled + X_labeled = X)
+            layers[f'X_n_{join}'], layers[f'X_l_{join}'] = split_counts(
+                df_counts_transcriptome[(df_counts_transcriptome[other_convs] == 0).all(axis=1)],
+                barcodes,
+                features,
+                conversions=convs
+            )
+            pi = pis.get('transcriptome', {}).get(tuple(convs))
+            if pi is not None:
+                (
+                    _,
+                    layers[f'X_n_{join}_est'],
+                    layers[f'X_l_{join}_est'],
+                ) = split_matrix(layers[f'X_n_{join}'] + layers[f'X_l_{join}'], pi, barcodes, features)
+    else:
+        logger.warning('No reads were assigned to `transcriptome`')
+
+    # Total reads
+    if not transcriptome_only:
+        for conv in conversions:
+            other_convs = list(set(all_conversions) - set(convs))
+            join = '_'.join(convs)
+            layers[f'unlabeled_{join}'], layers[f'labeled_{join}'] = split_counts(
+                df_counts[(df_counts[other_convs] == 0).all(axis=1)], barcodes, features, conversions=convs
+            )
+            pi = pis.get('total', {}).get(tuple(convs))
+            if pi is not None:
+                (
+                    _,
+                    layers[f'unlabeled_{join}_est'],
+                    layers[f'labeled_{join}_est'],
+                ) = split_matrix(layers[f'unlabeled_{join}'] + layers[f'labeled_{join}'], pi, barcodes, features)
+
+    # Velocity reads
+    for key in velocities:
+        if key == 'unassigned':
+            continue
+        df_counts_velocity = df_counts[df_counts['velocity'] == key]
+        layers[key] = counts_to_matrix(df_counts_velocity, barcodes, features)
+        if key in config.VELOCITY_BLACKLIST:
+            continue
+
+        for conv in conversions:
+            other_convs = list(set(all_conversions) - set(convs))
+            join = '_'.join(convs)
+            layers[f'{key[0]}n_{join}'], layers[f'{key[0]}l_{join}'] = split_counts(
+                df_counts_velocity[(df_counts_velocity[other_convs] == 0).all(axis=1)],
+                barcodes,
+                features,
+                conversions=convs
+            )
+            pi = pis.get(key, {}).get(tuple(convs))
+            if pi is not None:
+                (
+                    _,
+                    layers[f'{key[0]}n_{join}_est'],
+                    layers[f'{key[0]}l_{join}_est'],
+                ) = split_matrix(layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pi, barcodes, features)
+
+    # Construct anndata
+    return anndata.AnnData(
+        X=matrix,
+        obs=pd.DataFrame(index=pd.Series(barcodes, name='barcodes')),
+        var=pd.DataFrame(index=pd.Series(features, name='gene_id'), data={'gene_name': pd.Categorical(names)}),
+        layers=layers
+    )

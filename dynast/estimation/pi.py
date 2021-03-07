@@ -3,7 +3,6 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import pandas as pd
 import pystan
-from scipy import sparse
 
 from .. import config, utils
 from ..logging import logger
@@ -186,6 +185,7 @@ def estimate_pi(
     threshold=16,
     seed=None,
     nasc=False,
+    model=None,
 ):
     """Estimate the fraction of labeled RNA.
 
@@ -204,19 +204,21 @@ def estimate_pi(
     :param threshold: any conversion-content pairs with fewer than this many reads
                       will not be processed, defaults to `16`
     :type threshold: int, optional
+    :param seed: random seed, defaults to `None`
+    :type seed: int, optional
     :param nasc: flag to change behavior to match NASC-seq pipeline. Specifically,
                  the mode of the estimated Beta distribution is used as pi, defaults to `False`
     :type nasc: bool, optional
-    :param seed: random seed, defaults to `None`
-    :type seed: int, optional
+    :param model: pyStan model to run MCMC with, defaults to `None`
+                  if not provided, will try to compile the module manually
+    :type model: pystan.StanModel, optional
 
     :return: path to pi output
     :rtype: str
     """
     df_aggregates = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)]
 
-    logger.debug(f'Compiling STAN model from {config.MODEL_PATH}')
-    model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
+    model = model or pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
 
     if p_group_by is not None:
         df_full = df_aggregates.set_index(p_group_by, drop=True)
@@ -296,38 +298,3 @@ def estimate_pi(
             f.write(f'{barcode},{gx},{guess},{alpha},{beta},{pi}\n')
 
     return pi_path
-
-
-def split_matrix(matrix, pis, barcodes, features):
-    """Split the given matrix based on provided fraction of new RNA.
-
-    :param matrix: matrix to split
-    :type matrix: numpy.ndarray or scipy.sparse.spmatrix
-    :param pis: dictionary containing pi estimates
-    :type pis: dictionary
-    :param barcodes: all barcodes
-    :type barcodes: list
-    :param features: all features (i.e. genes)
-    :type features: list
-
-    :return: (matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA)
-    :rtype: (scipy.sparse.spmatrix, scipy.sparse.spmatrix, scipy.sparse.spmatrix)
-    """
-    unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
-    labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
-    pi_mask = sparse.lil_matrix((len(barcodes), len(features)), dtype=bool)
-    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
-    feature_indices = {feature: i for i, feature in enumerate(features)}
-
-    for (barcode, gx), pi in pis.items():
-        try:
-            pi = float(pi)
-        except ValueError:
-            continue
-        row, col = barcode_indices[barcode], feature_indices[gx]
-        val = matrix[row, col]
-        unlabeled_matrix[row, col] = val * (1 - pi)
-        labeled_matrix[row, col] = val * pi
-        pi_mask[row, col] = True
-
-    return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()

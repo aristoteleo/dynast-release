@@ -119,7 +119,4 @@ class Stats:
             'start_time': self.start_time.isoformat(),
             'end_time': self.end_time.isoformat(),
             'elapsed': self.elapsed,
-            'step_order': self.step_order,
-            'steps': {key: step.to_dict()
-                      for key, step in self.steps.items()}
         }

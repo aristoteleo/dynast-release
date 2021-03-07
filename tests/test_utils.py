@@ -6,6 +6,9 @@ import tempfile
 import uuid
 from unittest import mock, TestCase
 
+import numpy as np
+import pandas as pd
+
 import dynast.utils as utils
 from tests import mixins
 
@@ -209,3 +212,39 @@ class TestUtils(mixins.TestMixin, TestCase):
     def test_split_index(self):
         index = [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]
         self.assertEqual([(0, 15), (3, 10)], utils.split_index(index, n=2))
+
+    def test_counts_to_matrix(self):
+        rows = [
+            ['barcode1', 'GX1'],
+            ['barcode1', 'GX1'],
+            ['barcode2', 'GX2'],
+        ]
+        df = pd.DataFrame(rows, columns=['barcode', 'GX'])
+        barcodes = ['barcode1', 'barcode2']
+        features = ['GX1', 'GX2']
+        matrix = utils.counts_to_matrix(df, barcodes, features)
+        self.assertEqual([[2, 0], [0, 1]], matrix.toarray().tolist())
+
+    def test_split_counts(self):
+        rows = [
+            ['barcode1', 'GX1', 0],
+            ['barcode1', 'GX1', 1],
+            ['barcode2', 'GX2', 0],
+        ]
+        df = pd.DataFrame(rows, columns=['barcode', 'GX', 'TC'])
+        barcodes = ['barcode1', 'barcode2']
+        features = ['GX1', 'GX2']
+        with mock.patch('dynast.utils.counts_to_matrix') as counts_to_matrix:
+            self.assertEqual((counts_to_matrix.return_value, counts_to_matrix.return_value),
+                             utils.split_counts(df, barcodes, features))
+            self.assertEqual(2, counts_to_matrix.call_count)
+
+    def test_split_matrix(self):
+        matrix = np.array([[1, 2], [4, 5]])
+        barcodes = ['bc1', 'bc2']
+        features = ['gx1', 'gx2']
+        pis = {('bc1', 'gx1'): 0.5, ('bc2', 'gx1'): 0.25}
+        pi_mask, unlabeled_matrix, labeled_matrix = utils.split_matrix(matrix, pis, barcodes, features)
+        self.assertTrue(np.array_equal([[True, False], [True, False]], pi_mask.A))
+        self.assertTrue(np.array_equal([[0.5, 0], [1, 0]], labeled_matrix.A))
+        self.assertTrue(np.array_equal([[0.5, 0], [3, 0]], unlabeled_matrix.A))

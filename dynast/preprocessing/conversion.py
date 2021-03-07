@@ -5,7 +5,6 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 
 from .. import config, utils
 from ..logging import logger
@@ -228,73 +227,6 @@ def split_counts_by_velocity(df_counts):
         dfs[velocity] = df_part.reset_index(drop=True)
     logger.debug(f'Found the following velocity assignments: {", ".join(dfs.keys())}')
     return dfs
-
-
-def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
-    """Convert a counts dataframe to a sparse counts matrix.
-
-    Counts are assumed to be appropriately deduplicated.
-
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param barcodes: list of barcodes that will map to the rows
-    :type barcodes: list
-    :param features: list of features (i.e. genes) that will map to the columns
-    :type features: list
-    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
-    :type barcode_column: str
-    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
-    :type feature_column: str
-
-    :return: sparse counts matrix
-    :rtype: scipy.sparse.csrmatrix
-    """
-    # Transform to index for fast lookup
-    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
-    feature_indices = {feature: i for i, feature in enumerate(features)}
-
-    matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.uint32)
-    for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column], sort=False,
-                                                       observed=True).size().items():
-        matrix[barcode_indices[barcode], feature_indices[feature]] = count
-
-    return matrix.tocsr()
-
-
-def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=['TC']):
-    """Split counts dataframe into two count matrices by a column.
-
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param barcodes: list of barcodes that will map to the rows
-    :type barcodes: list
-    :param features: list of features (i.e. genes) that will map to the columns
-    :type features: list
-    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
-    :type barcode_column: str, optional
-    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
-    :type feature_column: str, optional
-    :param conversions: conversion(s) in question, defaults to `['TC']`
-    :type conversions: list, optional
-
-    :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
-    :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
-    """
-    matrix_unlabeled = counts_to_matrix(
-        df_counts[(df_counts[conversions] == 0).all(axis=1)],
-        barcodes,
-        features,
-        barcode_column=barcode_column,
-        feature_column=feature_column
-    )
-    matrix_labeled = counts_to_matrix(
-        df_counts[(df_counts[conversions] > 0).any(axis=1)],
-        barcodes,
-        features,
-        barcode_column=barcode_column,
-        feature_column=feature_column
-    )
-    return matrix_unlabeled, matrix_labeled
 
 
 def count_no_conversions_part(

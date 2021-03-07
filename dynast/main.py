@@ -6,7 +6,7 @@ import sys
 import warnings
 
 from . import __version__
-from .config import RE_CHOICES
+# from .config import RE_CHOICES
 from .logging import logger
 from .technology import BARCODE_UMI_TECHNOLOGIES, TECHNOLOGIES_MAP
 from .utils import flatten_list
@@ -238,21 +238,6 @@ def setup_count_args(parser, parent):
         default=27
     )
     parser_count.add_argument(
-        '--re',
-        metavar='RE',
-        help=(f'Re-do a step in the pipeline. Available choices are: {", ".join(RE_CHOICES)}.'),
-        type=str,
-        choices=RE_CHOICES,
-        default=None
-    )
-    parser_count.add_argument(
-        '--p-group-by',
-        metavar='GROUPBY',
-        help=argparse.SUPPRESS,
-        type=str,
-        default='barcode',
-    )
-    parser_count.add_argument(
         '--snp-threshold',
         metavar='THRESHOLD',
         help=(
@@ -278,20 +263,6 @@ def setup_count_args(parser, parent):
         type=str,
     )
     parser_count.add_argument(
-        '--cell-threshold',
-        metavar='COUNT',
-        help='A cell must have at least this many reads for correction. (default: 1000)',
-        type=int,
-        default=1000,
-    )
-    parser_count.add_argument(
-        '--cell-gene-threshold',
-        metavar='COUNT',
-        help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
-        type=int,
-        default=16
-    )
-    parser_count.add_argument(
         '--no-splicing',
         '--transcriptome-only',
         help=(
@@ -305,32 +276,15 @@ def setup_count_args(parser, parent):
         help=argparse.SUPPRESS,
         action='store_true',
     )
-    parser_count.add_argument('--seed', help=argparse.SUPPRESS, type=int, default=None)
     parser_count.add_argument(
         '--control',
-        help=(
-            'Indicate this is a control sample, which is used to estimate the background mutation rate '
-            'and/or detect SNPs. The estimated background mutation rate and/or detected SNPs can be '
-            'used when running subsequent test samples.'
-        ),
+        help='Indicate this is a control sample, which is used to detect SNPs.',
         action='store_true',
     )
     parser_count.add_argument(
-        '--correct',
-        help=(
-            'Perform statistical correction of unlabeled and labeled read counts. '
-            'This option can be used multiple times to correct multiple species. '
-            'By default, no correction is performed.'
-        ),
-        action='append',
-        default=None,
-        choices=['total', 'transcriptome', 'spliced', 'unspliced']
-    )
-    parser_count.add_argument(
-        '--p-e',
-        help='Textfile containing a single number, indicating the estimated background mutation rate',
-        type=str,
-        default=None,
+        '--overwrite',
+        help='',
+        action='store_true',
     )
     parser_count.add_argument(
         'bam',
@@ -342,6 +296,93 @@ def setup_count_args(parser, parent):
     )
 
     return parser_count
+
+
+def setup_estimate_args(parser, parent):
+    """Helper function to set up a subparser for the `estimate` command.
+
+    :param parser: argparse parser to add the `estimate` command to
+    :type args: argparse.ArgumentParser
+    :param parent: argparse parser parent of the newly added subcommand.
+                   used to inherit shared commands/flags
+    :type args: argparse.ArgumentParser
+
+    :return: the newly added parser
+    :rtype: argparse.ArgumentParser
+    """
+    parser_estimate = parser.add_parser(
+        'estimate',
+        description='Estimate fraction of labeled RNA',
+        help='Estimate fraction of labeled RNA',
+        parents=[parent],
+    )
+    parser_estimate._actions[0].help = parser_estimate._actions[0].help.capitalize()
+
+    parser_estimate.add_argument(
+        '--reads',
+        help=(
+            'Read groups to perform estimation on. '
+            'This option can be used multiple times to estimate multiple groups. '
+            'By default, all possible reads groups are used.'
+        ),
+        action='append',
+        choices=['total', 'transcriptome', 'spliced', 'unspliced'],
+        default=None
+    )
+
+    parser_estimate.add_argument(
+        '-o',
+        metavar='OUT',
+        help='Path to output directory (default: current directory)',
+        type=str,
+        default='.',
+    )
+    parser_estimate.add_argument(
+        '--groups',
+        metavar='CSV',
+        help=(
+            'CSV containing cell (barcode) groups, where the first column is the barcode '
+            'and the second is the group name the cell belongs to. Cells will be combined per '
+            'group for estimation.'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_estimate.add_argument(
+        '--cell-threshold',
+        metavar='COUNT',
+        help='A cell must have at least this many reads for correction. (default: 1000)',
+        type=int,
+        default=1000,
+    )
+    parser_estimate.add_argument(
+        '--cell-gene-threshold',
+        metavar='COUNT',
+        help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
+        type=int,
+        default=16
+    )
+    parser_estimate.add_argument(
+        '--nasc',
+        help=argparse.SUPPRESS,
+        action='store_true',
+    )
+    parser_estimate.add_argument('--seed', help=argparse.SUPPRESS, type=int, default=None)
+    parser_estimate.add_argument(
+        '--control',
+        help=('Indicate this is a control sample, only the background mutation rate '
+              'will be estimated.'),
+        action='store_true',
+    )
+    parser_estimate.add_argument(
+        '--p-e',
+        help='Textfile containing a single number, indicating the estimated background mutation rate',
+        type=str,
+        default=None,
+    )
+    parser_estimate.add_argument('count_dir', help='Path to directory that contains `dynast count` output.', type=str)
+
+    return parser_estimate
 
 
 def parse_ref(parser, args, temp_dir=None):
@@ -441,25 +482,6 @@ def parse_count(parser, args, temp_dir=None):
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
-    # Check control constraints
-    if args.control and args.p_e:
-        parser.error('`--control` and `--p-e` can not be used together')
-
-    # Check p_e is in correct format (only a single number)
-    control_p_e = None
-    if args.p_e:
-        with open(args.p_e, 'r') as f:
-            try:
-                control_p_e = float(f.read().strip())
-            except ValueError:
-                parser.error('`--p-e` must be a textfile containing a single decimal number')
-
-    # Check group by
-    if args.p_group_by.lower() == 'none':
-        args.p_group_by = None
-    else:
-        args.p_group_by = args.p_group_by.split(',')
-
     # Read barcodes
     barcodes = None
     if args.barcodes:
@@ -468,14 +490,6 @@ def parse_count(parser, args, temp_dir=None):
         logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
-
-    if not args.correct:
-        logger.warning('No statistical correction will be performed because `--correct` is not provided.')
-    elif 'total' in args.correct and args.no_splicing:
-        parser.error(
-            '`--no-splicing` or `--transcriptome-only` can not be used with `--correct total`. '
-            'Use `--correct transcriptome` instead.'
-        )
 
     if not args.gene_tag:
         parser.error('`--gene-tag` must be a valid tag')
@@ -489,8 +503,6 @@ def parse_count(parser, args, temp_dir=None):
     flattened = list(flatten_list(conversions))
     if len(set(flattened)) != len(flattened):
         parser.error('duplicate conversions are not allowed for `--conversion`')
-    if set(f[0] for f in flattened) == {'A', 'C', 'G', 'T'} and control_p_e is None:
-        parser.error('`--p-e` must be specified when conversions apply to all four nucleotides')
 
     from .count import count
     count(
@@ -507,17 +519,64 @@ def parse_count(parser, args, temp_dir=None):
         conversions=conversions,
         snp_threshold=args.snp_threshold,
         snp_csv=args.snp_csv,
-        correct=args.correct,
+        n_threads=args.t,
+        temp_dir=temp_dir,
+        nasc=args.nasc,
+        overwrite=args.overwrite,
+        velocity=not args.no_splicing,
+    )
+
+
+def parse_estimate(parser, args, temp_dir=None):
+    # Check control constraints
+    if args.control and args.p_e:
+        parser.error('`--control` and `--p-e` can not be used together')
+
+    # Check p_e is in correct format (only a single number)
+    control_p_e = None
+    if args.p_e:
+        with open(args.p_e, 'r') as f:
+            try:
+                control_p_e = float(f.read().strip())
+            except ValueError:
+                parser.error('`--p-e` must be a textfile containing a single decimal number')
+
+    # Parse cell groups csv
+    groups = {}
+    if args.groups:
+        with open(args.groups, 'r') as f:
+            for line in f:
+                if line.isspace():
+                    continue
+                barcode, group = line.strip().split(',')
+
+                if barcode in groups:
+                    parser.error(f'Found duplicate barcode {barcode} in {args.groups}')
+
+                groups[barcode] = group
+
+        logger.info(
+            f'Found {len(groups)} barcodes and {len(set(groups.values()))} groups found in {args.groups}. '
+            'All other barcodes will be ignored.'
+        )
+
+    if not args.reads:
+        args.reads = 'complete'
+
+    from .estimate import estimate
+    estimate(
+        args.count_dir,
+        args.o,
+        args.reads,
+        groups=groups,
         cell_threshold=args.cell_threshold,
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,
-        p_group_by=args.p_group_by,
+        control=args.control,
         n_threads=args.t,
-        re=args.re,
         temp_dir=temp_dir,
         nasc=args.nasc,
-        velocity=not args.no_splicing,
-        seed=args.seed,
+        seed=args.seed
     )
 
 
@@ -525,12 +584,15 @@ COMMAND_TO_FUNCTION = {
     'ref': parse_ref,
     'align': parse_align,
     'count': parse_count,
+    'estimate': parse_estimate,
 }
 
 
 @logger.namespaced('main')
 def main():
-    parser = argparse.ArgumentParser(description=f'{__version__}')
+    parser = argparse.ArgumentParser(
+        description=f'{__version__} Complete splicing and labeling quantification from metabolic labeling scRNA-seq'
+    )
     parser._actions[0].help = parser._actions[0].help.capitalize()
     parser.add_argument('--list', help='Display list of supported single-cell technologies', action='store_true')
     subparsers = parser.add_subparsers(
@@ -549,10 +611,12 @@ def main():
     parser_ref = setup_ref_args(subparsers, parent)
     parser_align = setup_align_args(subparsers, parent)
     parser_count = setup_count_args(subparsers, parent)
+    parser_estimate = setup_estimate_args(subparsers, parent)
     command_to_parser = {
         'ref': parser_ref,
         'align': parser_align,
         'count': parser_count,
+        'estimate': parser_estimate,
     }
     if '--list' in sys.argv:
         print_technologies()

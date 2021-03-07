@@ -10,10 +10,8 @@ from .bam import parse_all_reads, read_conversions
 from .conversion import (
     complement_counts,
     count_conversions,
-    counts_to_matrix,
     deduplicate_counts,
     read_counts,
-    split_counts,
     split_counts_by_velocity,
 )
 from .coverage import calculate_coverage

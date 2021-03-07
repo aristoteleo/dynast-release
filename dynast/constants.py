@@ -11,34 +11,25 @@ STAR_BARCODES_FILENAME = 'barcodes.tsv'
 STAR_FEATURES_FILENAME = 'features.tsv'
 STAR_MATRIX_FILENAME = 'matrix.mtx'
 
+COUNT_DIR = 'count'
 PARSE_DIR = '0_parse'
+CONVS_FILENAME = 'convs.pkl.gz'
 GENES_FILENAME = 'genes.pkl.gz'
-TRANSCRIPTS_FILENAME = 'transcripts.pkl.gz'
 CONVERSIONS_FILENAME = 'conversions.csv'
 CONVERSIONS_INDEX_FILENAME = 'conversions.idx'
 NO_CONVERSIONS_FILENAME = 'no_conversions.csv'
 NO_CONVERSIONS_INDEX_FILENAME = 'no_conversions.idx'
 
-SNP_DIR = '0_snp'
 COVERAGE_FILENAME = 'coverage.csv'
 COVERAGE_INDEX_FILENAME = 'coverage.idx'
 SNPS_FILENAME = 'snps.csv'
 
-COUNT_DIR = '1_count'
 COUNTS_PREFIX = 'counts'
 
-BARCODES_FILENAME = 'barcodes.csv'
-
-AGGREGATES_DIR = '2_aggregate'
-TRANSCRIPTOME_DIR = 'transcriptome'
-SPLICED_DIR = 'spliced'
-UNSPLICED_DIR = 'unspliced'
-AMBIGUOUS_DIR = 'ambiguous'
+ESTIMATE_DIR = 'estimate'
 RATES_FILENAME = 'rates.csv'
-
-ESTIMATES_DIR = '3_estimate'
 P_E_FILENAME = 'p_e.csv'
-P_C_FILENAME = 'p_c.csv'
+P_C_PREFIX = 'p_c'
 AGGREGATE_FILENAME = 'aggregate.csv'
 
 ADATA_FILENAME = 'adata.h5ad'

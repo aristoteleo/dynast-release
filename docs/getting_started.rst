@@ -2,7 +2,7 @@ Getting started
 ===============
 Welcome to dynast!
 
-Dynast is a command-line pipeline that preprocesses data from metabolic labeling scRNA-seq experiments and quantifies the following four mRNA species: unlabeled unspliced, unlabeled spliced, labeled unspliced and labeled spliced. In addition, dynast can perform statistical correction of these species through expectation maximization (EM) and Bayesian inference. Please see :ref:`statistical_correction` for more details on how the statistical correction is performed.
+Dynast is a command-line pipeline that preprocesses data from metabolic labeling scRNA-seq experiments and quantifies the following four mRNA species: unlabeled unspliced, unlabeled spliced, labeled unspliced and labeled spliced. In addition, dynast can perform statistical estimation of these species through expectation maximization (EM) and Bayesian inference. Please see :ref:`statistical_estimation` for more details on how the statistical estimation is performed.
 
 .. image:: _static/punnet_square.svg
 	:width: 500
@@ -26,17 +26,19 @@ Please note that not all features may be stable when using the development versi
 
 Command-line structure
 ^^^^^^^^^^^^^^^^^^^^^^
-Dynast consists of three commands that represent three steps of the pipeline: :code:`ref`, :code:`align`, :code:`count`. This modularity allows users to add additional preprocessing between steps as they see fit. For instance, a user may wish to run a custom step to mark and remove duplicates after the :code:`align` step.
+Dynast consists of four commands that represent four steps of the pipeline: :code:`ref`, :code:`align`, :code:`count`, :code:`estimate`. This modularity allows users to add additional preprocessing between steps as they see fit. For instance, a user may wish to run a custom step to mark and remove duplicates after the :code:`align` step.
 
-+---------------+-----------------------------------------------------------+
-| Command       | Description                                               |
-+===============+===========================================================+
-| :code:`ref`   | Build a STAR index from a reference genome FASTA and GTF. |
-+---------------+-----------------------------------------------------------+
-| :code:`align` | Align FASTQs into an alignment BAM.                       |
-+---------------+-----------------------------------------------------------+
-| :code:`count` | Quantify unlabeled and labeled RNA from an alignment BAM. |
-+---------------+-----------------------------------------------------------+
++------------------+-------------------------------------------------------------------+
+| Command          | Description                                                       |
++==================+===================================================================+
+| :code:`ref`      | Build a STAR index from a reference genome FASTA and GTF.         |
++------------------+-------------------------------------------------------------------+
+| :code:`align`    | Align FASTQs into an alignment BAM.                               |
++------------------+-------------------------------------------------------------------+
+| :code:`count`    | Quantify unlabeled and labeled RNA.                               |
++------------------+-------------------------------------------------------------------+
+| :code:`estimate` | Estimate the fraction of labeled RNA via statistical estimation.  |
++------------------+-------------------------------------------------------------------+
 
 
 Basic usage
@@ -82,3 +84,15 @@ Finally, we quantify the four RNA species of interest. Note that we re-use the g
 where :code:`count` is the directory to which to save RNA quantifications. We provide a filtered barcode list :code:`align/Solo.out/Gene/filtered/barcodes.tsv`, which was generated from the previous step, so that only these barcodes are processed during quantification. We specify the experimentally induced conversion with :code:`--conversion`. In this example, our experiment introduces T-to-C conversions.
 
 Once the above command finishes, the :code:`count` directory will contain an :code:`adata.h5ad` AnnData file containing all quantification results.
+
+[Optional] Estimate
+'''''''''''''''''''
+Optionally, we can estimate the unlabeled and labeled counts by statistically modelling the labeling dynamics (see :ref:`statistical_estimation`).
+
+.. code-block::
+
+	dynast estimate -o estimate count
+
+where :code:`estimate` is the directory to which to save RNA quantifications. We provide the directory that contains the quantification results (i.e. :code:`-o` option of :code:`dynast count`).
+
+Once the above command finishes, the :code:`estimate` directory will contain an :code:`adata.h5ad` AnnData file containing all quantification and estimation results.

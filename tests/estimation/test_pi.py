@@ -1,7 +1,6 @@
 import os
 from unittest import mock, TestCase
 
-import numpy as np
 from scipy import stats
 
 import dynast.estimation.p_c as p_c
@@ -54,13 +53,3 @@ class TestPi(mixins.TestMixin, TestCase):
                     f.read().
                     startswith('barcode,GX,guess,alpha,beta,pi\nAAACCCAACGTA,ENSG00000172009,0.99,2.0,2.0,0.5\n')
                 )
-
-    def test_split_matrix(self):
-        matrix = np.array([[1, 2], [4, 5]])
-        barcodes = ['bc1', 'bc2']
-        features = ['gx1', 'gx2']
-        pis = {('bc1', 'gx1'): 0.5, ('bc2', 'gx1'): 0.25}
-        pi_mask, unlabeled_matrix, labeled_matrix = pi.split_matrix(matrix, pis, barcodes, features)
-        self.assertTrue(np.array_equal([[True, False], [True, False]], pi_mask.A))
-        self.assertTrue(np.array_equal([[0.5, 0], [1, 0]], labeled_matrix.A))
-        self.assertTrue(np.array_equal([[0.5, 0], [3, 0]], unlabeled_matrix.A))

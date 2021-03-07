@@ -97,32 +97,6 @@ class TestConversion(mixins.TestMixin, TestCase):
         self.assertEqual((df['velocity'] == 'unspliced').sum(), dfs['unspliced'].shape[0])
         self.assertEqual((df['velocity'] == 'ambiguous').sum(), dfs['ambiguous'].shape[0])
 
-    def test_counts_to_matrix(self):
-        rows = [
-            ['barcode1', 'GX1'],
-            ['barcode1', 'GX1'],
-            ['barcode2', 'GX2'],
-        ]
-        df = pd.DataFrame(rows, columns=['barcode', 'GX'])
-        barcodes = ['barcode1', 'barcode2']
-        features = ['GX1', 'GX2']
-        matrix = conversion.counts_to_matrix(df, barcodes, features)
-        self.assertEqual([[2, 0], [0, 1]], matrix.toarray().tolist())
-
-    def test_split_counts(self):
-        rows = [
-            ['barcode1', 'GX1', 0],
-            ['barcode1', 'GX1', 1],
-            ['barcode2', 'GX2', 0],
-        ]
-        df = pd.DataFrame(rows, columns=['barcode', 'GX', 'TC'])
-        barcodes = ['barcode1', 'barcode2']
-        features = ['GX1', 'GX2']
-        with mock.patch('dynast.preprocessing.conversion.counts_to_matrix') as counts_to_matrix:
-            self.assertEqual((counts_to_matrix.return_value, counts_to_matrix.return_value),
-                             conversion.split_counts(df, barcodes, features))
-            self.assertEqual(2, counts_to_matrix.call_count)
-
     def test_conversions(self):
         counts_path = os.path.join(self.temp_dir, 'counts.csv')
         with mock.patch('dynast.preprocessing.conversion.utils.display_progress_with_counter'):

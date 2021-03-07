@@ -80,7 +80,8 @@ def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     if bases == BASE_COLUMNS:
         logger.warning(
             'All four bases have conversions, so background estimation will fall back to '
-            'using ALL non-induced conversions.'
+            'using ALL non-induced conversions. This may lead to an underestimate. '
+            'Please consider using a control sample with `--p-e`.'
         )
         conversion_columns = [conv for conv in CONVERSION_COLUMNS if conv not in flattened]
 

@@ -2,36 +2,24 @@
 
 Technical Information
 =====================
-This section details technical information of the quantification and statistical correction procedures of the dynast :code:`count` command. Descriptions of the :code:`ref` and :code:`align` commands are in :ref:`pipeline_usage`.
-
-Quantification procedure
-^^^^^^^^^^^^^^^^^^^^^^^^
-The dynast quantification procedure consists of six steps:
-
-1. :ref:`index`
-2. :ref:`parse`
-3. :ref:`snp`
-4. :ref:`count`
-5. :ref:`aggregate`
-6. :ref:`estimate`
-7. :ref:`split`
+This section details technical information of the quantification and statistical estimation procedures of the :code:`dynast count` and :code:`dynast estimate` commands. Descriptions of :code:`dynast ref` and :code:`dynast align` commands are in :ref:`pipeline_usage`.
 
 .. image:: _static/steps.svg
 	:width: 700
 	:align: center
 
-.. _index:
+Count procedure
+^^^^^^^^^^^^^^^
+:code:`dynast count` procedure consists of three steps:
 
-:code:`index`
-'''''''''''''
-The input BAM is indexed, if it does not exist. The BAM index will be generated at the same location and name as the input BAM, suffixed with :code:`.bai`.
+1. :ref:`parse`
+2. :ref:`snp`
+3. :ref:`quant`
 
 .. _parse:
 
 :code:`parse`
 '''''''''''''
-All files generated during this step is output to the :code:`0_parse` directory in the output directory (:code:`-o`).
-
 1. All gene and transcript information are parsed from the gene annotation GTF (:code:`-g`) and saved as Python pickles :code:`genes.pkl.gz` and :code:`transcripts.pkl.gz`, respectively.
 2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`no_conversions.csv`. The former contains a line for every conversion, and the latter contains a line for every read that does not have any conversions. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. Splicing types are also assigned in this step if :code:`--no-splicing` was not provided.
 
@@ -39,54 +27,67 @@ All files generated during this step is output to the :code:`0_parse` directory 
 
 :code:`snp`
 '''''''''''
-All files generated during this step is output to the :code:`0_snp` directory in the output directory (:code:`-o`). This step is skipped if :code:`--snp-threshold` is not specified.
+This step is skipped if :code:`--snp-threshold` is not specified.
 
 1. Read coverage of the genome is computed by parsing all aligned reads from the input BAM and output to :code:`coverage.csv`.
 2. SNPs are detected by calculating, for every genomic position, the fraction of reads with a conversion at that position over its coverage. If this fraction is greater than :code:`--snp-threshold`, then the genomic position is written to the output file :code:`snps.csv`. Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion.
 
-.. _count:
+.. _quant:
 
-:code:`count`
+:code:`quant`
 '''''''''''''
-All files generated during this step is output to the :code:`1_count` directory in the output directory (:code:`-o`).
-
 1. For every read, the numbers of each conversion (A>C, A>G, A>T, C>A, etc.) and nucleotide content (how many of A, C, G, T there are in the region that the read aligned to) are counted. Any SNPs provided with :code:`--snp-csv` or detected from the :ref:`snp` step are not counted. If both are present, the union is used. Additionally, Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion.
 2. For UMI-based technologies, reads are deduplicated by the following order of priority: 1) read that aligns to the transcriptome, 2) read with the most conversions specified with :code:`--conversion`. If multiple conversions are provided, the sum is used. Reads are considered duplicates if they share the same barcode, UMI, and gene assignment. For plate-based technologies, read deduplication should have been performed in the alignment step (in the case of STAR, with the :code:`--soloUMIdedup Exact`), but in the case of multimapping reads, it becomes a bit more tricky. If a read is multimapping such that some alignments map to the transcriptome while some do not, the transcriptome alignment is taken (there can not be multiple transcriptome alignments, as this is a constraint within STAR). If none align to the transcriptome and the alignments are assigned to multiple genes, the read is dropped, as it is impossible to assign the read with confidence. If none align to the transcriptome and the alignments are assigned multiple velocity types, the velocity type is manually set to :code:`ambiguous` and the first alignment is kept. If none of these cases are true, the first alignment is kept. The final deduplicated/de-multimapped counts are output to :code:`counts_{conversions}.csv`, where :code:`{conversions}` is an underscore-delimited list of all conversions provided with :code:`--conversion`.
 
 .. Note:: All bases in this file are relative to the forward genomic strand. For example, a read mapped to a gene on the reverse genomic strand should be complemented to get the actual bases.
 
+Output Anndata
+''''''''''''''
+All results are compiled into a single AnnData :code:`H5AD` file. The AnnData object contains the following:
+
+* The *transcriptome* read counts in :code:`.X`. Here, *transcriptome* reads are the mRNA read counts that are usually output from conventional scRNA-seq quantification pipelines. In technical terms, these are reads that contain the BAM tag provided with the :code:`--gene-tag` (default is :code:`GX`).
+* Unlabeled and labeled *transcriptome* read counts in :code:`.layers['X_n_{conversion}']` and :code:`.layers['X_l_{conversion}']`.
+
+The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified.
+
+* Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`.
+* Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
+* Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively.
+
+.. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
+
+Estimate procedure
+^^^^^^^^^^^^^^^^^^
+:code:`dynast estimate` procedure consists of two steps:
+
+1. :ref:`aggregate`
+2. :ref:`estimate`
+
 .. _aggregate:
 
 :code:`aggregate`
 '''''''''''''''''
-All files generated during this step is output to the :code:`2_aggregate` directory in the output directory (:code:`-o`).
-
-1. Mutation rates for each base is calculated for each cell and output to :code:`rates.csv`.
-2. For each cell and gene and for each conversion provided with :code:`--conversion`, the conversion counts are aggregated into a CSV file such that each row contains the following columns: cell barcode, gene, conversion count, nucleotide content of the original base (i.e. if the conversion is T>C, this would be T), and the number of reads that have this particular barcode-gene-conversion-content combination. This procedure is done for all read groups that exist (see :ref:`read_groups`).
+For each cell and gene and for each conversion provided with :code:`--conversion`, the conversion counts are aggregated into a CSV file such that each row contains the following columns: cell barcode, gene, conversion count, nucleotide content of the original base (i.e. if the conversion is T>C, this would be T), and the number of reads that have this particular barcode-gene-conversion-content combination. This procedure is done for all read groups that exist (see :ref:`read_groups`).
 
 .. _estimate:
 
 :code:`estimate`
 ''''''''''''''''
-All files generated during this step is output to the :code:`3_estimate` directory in the output directory (:code:`-o`). This step is skipped if :code:`--correct` is not specified.
-
 1. The background conversion rate :math:`p_e` is estimated, if :code:`--p-e` was not provided (see :ref:`background_estimation`). If :code:`--p-e` was provided, this value is used and estimation is skipped. :math:`p_e`s are written to :code:`p_e.csv`.
 2. The induced conversion rate :math:`p_c` is estimated using an expectation maximization (EM) approach, for each conversion provided with :code:`--conversion` (see :ref:`induced_rate_estimation`). :math:`p_c`s are written to :code:`p_c_{conversion}.csv` where :code:`{conversion}` is an underscore-delimited list of each conversion (because multiple conversions can be introduced in a single timepoint). This step is skipped for control samples with :code:`--control`.
 
-.. _split:
-
-:code:`split`
-'''''''''''''
-All files generated during this step is output to the output directory (:code:`-o`). This step is skipped if :code:`--control` is specified. All results are compiled into a single AnnData :code:`H5AD` file. The AnnData object contains the following:
+Output Anndata
+''''''''''''''
+All results are compiled into a single AnnData :code:`H5AD` file. The AnnData object contains the following:
 
 * The *transcriptome* read counts in :code:`.X`. Here, *transcriptome* reads are the mRNA read counts that are usually output from conventional scRNA-seq quantification pipelines. In technical terms, these are reads that contain the BAM tag provided with the :code:`--gene-tag` (default is :code:`GX`).
-* Unlabeled and labeled *transcriptome* read counts in :code:`.layers['X_n_{conversion}']` and :code:`.layers['X_l_{conversion}']`. If :code:`--correct transcriptome` was specified, the corrected counts are in :code:`.layers['X_n_{conversion}_est']` and :code:`.layers['X_l_{conversion}_est']`. :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion`.
+* Unlabeled and labeled *transcriptome* read counts in :code:`.layers['X_n_{conversion}']` and :code:`.layers['X_l_{conversion}']`. If :code:`--reads transcriptome` was specified, the estimated counts are in :code:`.layers['X_n_{conversion}_est']` and :code:`.layers['X_l_{conversion}_est']`. :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion` when running :code:`dynast count`.
 
-The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified.
+The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified when running :code:`dynast count`.
 
-* Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--correct total` is specified, the corrected counts are in :code:`.layers['unlabeled_{conversion}_est']` and :code:`.layers['labeled_{conversion}_est']`.
+* Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--reads total` is specified, the estimated counts are in :code:`.layers['unlabeled_{conversion}_est']` and :code:`.layers['labeled_{conversion}_est']`.
 * Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
-* Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively. If :code:`--correct` was specified, layers with corrected counts are added. These layers are suffixed with :code:`_est`, analogous to *total* counts above.
+* Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively. If :code:`--reads spliced` and/or :code:`--reads unspliced` was specified, layers with estimated counts are added. These layers are suffixed with :code:`_est`, analogous to *total* counts above.
 
 .. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
 
@@ -104,11 +105,11 @@ Dynast separates reads into read groups, and each of these groups are processed 
 
 The latter three groups are mutually exclusive.
 
-.. _statistical_correction:
+.. _statistical_estimation:
 
-Statistical correction
+Statistical estimation
 ^^^^^^^^^^^^^^^^^^^^^^
-Dynast can statistically correct unlabeled and labeled RNA counts by modeling the distribution as a binomial mixture model [Jürges2018]_. Statistical correction can be run by supplying the :code:`--correct` argument. Note that this procedure significantly increases the runtime.
+Dynast can statistically estimate unlabeled and labeled RNA counts by modeling the distribution as a binomial mixture model [Jürges2018]_. Statistical estimation can be run with :code:`dynast estimate` (see :ref:`estimate`).
 
 Overview
 ''''''''
@@ -130,7 +131,7 @@ Then, the probability of observing :math:`k` conversions given the above paramet
 
 	\mathbb{P}(k;p_e,p_c,n,\pi) = (1-\pi_g) B(k;n,p_e) + \pi_g B(k;n,p_c)
 
-where :math:`B(k,n,p)` is the binomial PMF. The goal is to calculate :math:`\pi_g`, which can be used the split the raw counts to get the corrected counts. We can extract :math:`k` and :math:`n` directly from the read alignments, while calculating :math:`p_e` and :math:`p_c` is more complicated (detailed below).
+where :math:`B(k,n,p)` is the binomial PMF. The goal is to calculate :math:`\pi_g`, which can be used the split the raw counts to get the estimated counts. We can extract :math:`k` and :math:`n` directly from the read alignments, while calculating :math:`p_e` and :math:`p_c` is more complicated (detailed below).
 
 .. _background_estimation:
 
