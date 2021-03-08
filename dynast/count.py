@@ -68,15 +68,9 @@ def count(
     conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
     no_conversions_path = os.path.join(out_dir, constants.NO_CONVERSIONS_FILENAME)
     no_index_path = os.path.join(out_dir, constants.NO_CONVERSIONS_INDEX_FILENAME)
-    convs_path = os.path.join(out_dir, constants.CONVS_FILENAME)
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
-    conversions_required = [
-        conversions_path, conversions_index_path, no_conversions_path, no_index_path, genes_path, convs_path
-    ]
+    conversions_required = [conversions_path, conversions_index_path, no_conversions_path, no_index_path, genes_path]
     if not utils.all_exists(conversions_required) or overwrite:
-        # Save conversions so that it can be used when estimating
-        utils.write_pickle(conversions, convs_path)
-
         logger.info('Parsing gene and transcript information from GTF')
         gene_infos, transcript_infos = preprocessing.parse_gtf(gtf_path)
         utils.write_pickle(gene_infos, genes_path)
@@ -140,9 +134,13 @@ def count(
             n_threads=n_threads,
         )
 
+    # Save conversions so that it can be used when estimating
+    convs_path = os.path.join(out_dir, constants.CONVS_FILENAME)
+    utils.write_pickle(conversions, convs_path)
+
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
-    logger.info(f'Counting conversions to {conversions_path}')
+    logger.info(f'Counting conversions to {counts_path}')
     snps = utils.merge_dictionaries(
         preprocessing.read_snps(snps_path) if snp_threshold else {},
         preprocessing.read_snp_csv(snp_csv) if snp_csv else {},
