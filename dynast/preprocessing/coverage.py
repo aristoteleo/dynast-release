@@ -94,7 +94,7 @@ def calculate_coverage_contig(
                 counter.value += update_every
                 lock.release()
 
-            if any(not read.has_tag(tag) for tag in required_tags):
+            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate or read.is_unmapped:
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'

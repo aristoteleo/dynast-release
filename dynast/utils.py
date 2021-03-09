@@ -671,7 +671,21 @@ def split_matrix(matrix, pis, barcodes, features):
     return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
 
 
-def results_to_adata(df_counts, conversions, gene_infos=None, pis=None):
+def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
+    """Compile all results to a single anndata.
+
+    :param df_counts: counts dataframe, with complemented reverse strand bases
+    :type df_counts: pandas.DataFrame
+    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :type conversions: list, optional
+    :param gene_infos: dictionary containing gene information, defaults to `None`
+    :type gene_infos: dict, optional
+    :param pis: dictionary of estimated pis, defaults to `None`
+    :type pis: dict, optional
+
+    :return: anndata containing all results
+    :rtype: anndata.AnnData
+    """
     pis = pis or {}
     gene_infos = gene_infos or {}
     all_conversions = sorted(flatten_list(conversions))

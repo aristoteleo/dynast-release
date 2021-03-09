@@ -178,7 +178,10 @@ def estimate(
     logger.info(f'Combining results into Anndata object at {adata_path}')
     df_counts = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
     adata = utils.results_to_adata(
-        df_counts[df_counts['barcode'].isin(groups.keys())], conversions, gene_infos=gene_infos, pis=pis
+        df_counts[df_counts['barcode'].isin(groups.keys())] if groups else df_counts,
+        conversions,
+        gene_infos=gene_infos,
+        pis=pis
     )
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')
