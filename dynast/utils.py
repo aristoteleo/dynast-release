@@ -725,6 +725,7 @@ def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
 
     # Total reads
     if not transcriptome_only:
+        layers['total'] = counts_to_matrix(df_counts, barcodes, features)
         for conv in conversions:
             other_convs = list(set(all_conversions) - set(convs))
             join = '_'.join(convs)

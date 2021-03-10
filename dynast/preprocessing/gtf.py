@@ -270,13 +270,14 @@ def parse_gtf(gtf_path):
     for gtf_entry in gtf.entries():
         count += 1
 
+        feature = gtf_entry['feature']
         start = gtf_entry['start'] - 1
         end = gtf_entry['end']
         strand = gtf_entry['strand']
         chrom = gtf_entry['seqname']
 
         # Extract gene info from gene and transcript features
-        if gtf_entry['feature'] in ('gene', 'transcript'):
+        if feature in ('exon', 'transcript', 'gene'):
             gene_id = gtf_entry['group']['gene_id']
             gene_name = gtf_entry['group'].get('gene_name')
 
@@ -294,26 +295,27 @@ def parse_gtf(gtf_path):
             gene_info['segment'] = Segment(min(segment.start, start), max(segment.end, end))
             gene_info['gene_name'] = gene_name or gene_info['gene_name']
 
-            # Update transcript info if this is a transcript feature
-            if gtf_entry['feature'] == 'transcript':
-                transcript_id = gtf_entry['group']['transcript_id']
+            # Update transcript info
+            transcript_id = gtf_entry['group'].get('transcript_id')
+            if transcript_id:
                 gene_info['transcripts'].append(transcript_id)
+                transcript_info = transcript_infos.setdefault(
+                    transcript_id, {
+                        'gene_id': gene_id,
+                        'chr': chrom,
+                        'segment': Segment(start, end),
+                        'strand': strand
+                    }
+                )
+                segment = transcript_info['segment']
+                transcript_info['segment'] = Segment(min(segment.start, start), max(segment.end, end))
 
-                if transcript_id in transcript_infos:
-                    logger.warning(
-                        f'Found multiple GTF entries for transcript {transcript_id}. Only the first will be used.'
-                    )
-                    continue
-                transcript_infos[transcript_id] = {
-                    'gene_id': gene_id,
-                    'chr': chrom,
-                    'segment': Segment(start, end),
-                    'strand': strand
-                }
+                if gene_id != transcript_info['gene_id']:
+                    raise Exception(f'Transcript `{transcript_id}` is assigned to multiple genes.')
 
-        elif gtf_entry['feature'] == 'exon':
-            transcript_id = gtf_entry['group']['transcript_id']
-            transcript_exons.setdefault(transcript_id, SegmentCollection()).add_segment(Segment(start, end))
+            if feature == 'exon':
+                transcript_id = gtf_entry['group']['transcript_id']
+                transcript_exons.setdefault(transcript_id, SegmentCollection()).add_segment(Segment(start, end))
 
     # Clean gene infos so that they link to only transcripts existing in transcript_infos
     for gene_id, attributes in gene_infos.items():

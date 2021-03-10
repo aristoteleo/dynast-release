@@ -205,6 +205,9 @@ Estimation on a subset of RNA species
 '''''''''''''''''''''''''''''''''''''
 The :code:`--reads` argument controls which RNA species to run the estimation procedure on. By default, all possible RNA species, minus :code:`ambiguous` reads, are used. This argument can take on the following values: :code:`total`, :code:`transcriptome`, :code:`spliced`, :code:`unspliced` (see :ref:`read_groups`). The value of this argument specifies which group of unlabeled/labeled RNA counts will be estimated. For instance, :code:`--reads spliced` will run statistical estimation on unlabeled/labeled spliced reads. This option may be provided multiple times to run estimation on multiple groups. The procedure involves estimating the conversion rate of unlabeled and labeled RNA, and modeling the fraction of new RNA as a binomial mixture model (see :ref:`statistical_estimation`).
 
+Grouping cells
+''''''''''''''
+Sometimes, grouping read counts across cells may provide better estimation results, especially in the case of droplet-based methods, which result in fewer reads per cell and gene compared to plate-based methods. The :code:`--groups` argument can be used to provide a CSV of two columns: the first containing the cell barcodes and the second containing group names that each cell belongs to. Estimation is then performed on a per-group basis by combining the read counts across all cells in each group. The output AnnData will still contain reads per cell.
 
 Control samples
 ^^^^^^^^^^^^^^^
