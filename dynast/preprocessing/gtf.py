@@ -276,8 +276,9 @@ def parse_gtf(gtf_path):
         strand = gtf_entry['strand']
         chrom = gtf_entry['seqname']
 
-        # Extract gene info from gene and transcript features
+        # Ignore any features that are not exon, transcript, or gene
         if feature in ('exon', 'transcript', 'gene'):
+            # IMPORTANT: every feature must have gene_id
             gene_id = gtf_entry['group']['gene_id']
             gene_name = gtf_entry['group'].get('gene_name')
 
@@ -295,9 +296,10 @@ def parse_gtf(gtf_path):
             gene_info['segment'] = Segment(min(segment.start, start), max(segment.end, end))
             gene_info['gene_name'] = gene_name or gene_info['gene_name']
 
-            # Update transcript info
-            transcript_id = gtf_entry['group'].get('transcript_id')
-            if transcript_id:
+            # Transcript and exon features
+            if feature != 'gene':
+                # IMPORTANT: every transcript, exon feature must have transcript_id
+                transcript_id = gtf_entry['group'].get('transcript_id')
                 if gene_id != transcript_infos.get(transcript_id, {}).get('gene_id', gene_id):
                     logger.warning(
                         f'Transcript `{transcript_id}` is assigned to multiple genes. '

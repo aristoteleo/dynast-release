@@ -50,6 +50,7 @@ All results are compiled into a single AnnData :code:`H5AD` file. The AnnData ob
 
 The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified.
 
+* The *total* read counts in :code:`.layers['total']`.
 * Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`.
 * Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
 * Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively.
@@ -85,6 +86,7 @@ All results are compiled into a single AnnData :code:`H5AD` file. The AnnData ob
 
 The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified when running :code:`dynast count`.
 
+* The *total* read counts in :code:`.layers['total']`.
 * Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--reads total` is specified, the estimated counts are in :code:`.layers['unlabeled_{conversion}_est']` and :code:`.layers['labeled_{conversion}_est']`.
 * Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
 * Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively. If :code:`--reads spliced` and/or :code:`--reads unspliced` was specified, layers with estimated counts are added. These layers are suffixed with :code:`_est`, analogous to *total* counts above.
