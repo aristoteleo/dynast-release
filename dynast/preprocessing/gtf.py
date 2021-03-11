@@ -297,6 +297,8 @@ def parse_gtf(gtf_path):
             gene_info['gene_name'] = gene_name or gene_info['gene_name']
 
             # Transcript and exon features
+            # Some GTFs (specifically gencode) add transcript_id to gene features,
+            # but in these cases gene_id = transcript_id, so we ignore these explicitly.
             if feature != 'gene':
                 # IMPORTANT: every transcript, exon feature must have transcript_id
                 transcript_id = gtf_entry['group'].get('transcript_id')

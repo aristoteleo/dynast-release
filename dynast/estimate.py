@@ -1,6 +1,7 @@
 import datetime as dt
 import os
 
+import pandas as pd
 import pystan
 
 from . import config, constants, estimation, preprocessing, utils
@@ -10,7 +11,7 @@ from .stats import Stats
 
 @logger.namespaced('estimate')
 def estimate(
-    count_dir,
+    count_dirs,
     out_dir,
     reads='complete',
     groups=None,
@@ -30,13 +31,31 @@ def estimate(
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    conversions = utils.read_pickle(os.path.join(count_dir, constants.CONVS_FILENAME))
+    # Check that all the conversions are the same if there are multiple count dirs
+    conversions = utils.read_pickle(os.path.join(count_dirs[0], constants.CONVS_FILENAME))
+    for count_dir in count_dirs[1:]:
+        _conversions = utils.read_pickle(os.path.join(count_dir, constants.CONVS_FILENAME))
+        if conversions != _conversions:
+            raise Exception(
+                f'Conversions for {count_dir} doesn\'t match conversions for {count_dirs[0]}. '
+                f'({_conversions} != {conversions}).'
+            )
     logger.info(f'Conversions: {" ".join(",".join(convs) for convs in conversions)}')
     all_conversions = sorted(utils.flatten_list(conversions))
 
-    counts_path = os.path.join(count_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
-    logger.info(f'Reading {counts_path}')
-    df_counts_uncomplemented = preprocessing.read_counts(counts_path)
+    # Read each counts dataframe and suffix bacrodes if needed
+    dfs = []
+    for i, count_dir in enumerate(count_dirs):
+        counts_path = os.path.join(count_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
+        logger.info(
+            f'Reading {counts_path}' + (f' and suffixing all barcodes with `-{i}`' if len(count_dirs) > 1 else '')
+        )
+        _df_counts = preprocessing.read_counts(counts_path)
+        if len(count_dirs) > 1:
+            _df_counts['barcode'] = _df_counts['barcode'].astype(str) + f'-{i}'
+        dfs.append(_df_counts)
+    df_counts_uncomplemented = pd.concat(dfs, ignore_index=True) if len(count_dirs) > 1 else dfs[0]
+    df_counts_uncomplemented['barcode'] = df_counts_uncomplemented['barcode'].astype('category')
 
     # Check that all requested read groups can be corrected.
     transcriptome_any = df_counts_uncomplemented['transcriptome'].any()
@@ -64,13 +83,24 @@ def estimate(
         reads += list(set(df_counts_uncomplemented['velocity'].unique()) - set(config.VELOCITY_BLACKLIST))
     logger.info(f'Estimation will be done on the following read groups: {reads}')
 
-    gene_infos = utils.read_pickle(os.path.join(count_dir, constants.GENES_FILENAME))
+    gene_infos = utils.read_pickle(os.path.join(count_dirs[0], constants.GENES_FILENAME))
     df_counts_complemented = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
 
-    # If cell groups are provided, change barcodes to cell groups
+    # Clean groups by combining multiple into one
+    if isinstance(groups, list):
+        if len(groups) == 1:
+            groups = groups[0]
+        else:
+            groups = {f'{barcode}-{i}': group for i, _groups in enumerate(groups) for barcode, group in _groups.items()}
+    # Change barcodes to cell groups
     if groups:
+        logger.warning(f'Barcodes that are not among the {len(groups)} barcodes with assigned groups will be ignored.')
         df_counts_complemented['barcode'] = df_counts_complemented['barcode'].map(groups)
         df_counts_complemented = df_counts_complemented.dropna(subset=['barcode'])
+    logger.info(
+        f'Final counts: {df_counts_complemented.shape[0]} reads '
+        f'across {len(df_counts_complemented["barcode"].unique())} {"groups" if groups else "barcodes"}.'
+    )
 
     # Aggregate counts to construct A matrix
     aggregates_paths = {}

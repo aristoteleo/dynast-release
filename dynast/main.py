@@ -345,7 +345,7 @@ def setup_estimate_args(parser, parent):
             'and the second is the group name the cell belongs to. Cells will be combined per '
             'group for estimation.'
         ),
-        type=str,
+        action='append',
         default=None,
     )
     parser_estimate.add_argument(
@@ -380,7 +380,12 @@ def setup_estimate_args(parser, parent):
         type=str,
         default=None,
     )
-    parser_estimate.add_argument('count_dir', help='Path to directory that contains `dynast count` output.', type=str)
+    parser_estimate.add_argument(
+        'count_dir',
+        help='Path to directory that contains `dynast count` output.',
+        type=str,
+        nargs='+',
+    )
 
     return parser_estimate
 
@@ -541,24 +546,30 @@ def parse_estimate(parser, args, temp_dir=None):
             except ValueError:
                 parser.error('`--p-e` must be a textfile containing a single decimal number')
 
-    # Parse cell groups csv
-    groups = {}
+    # If multiple group csvs are provided, multiple count dirs must also be provided.
+    if args.groups and len(args.groups) > 1 and len(args.groups) != len(args.count_dir):
+        parser.error('Number of inputs directories must match number of `--group` CSVs when ' 'multiple are provided.')
+
+    # Multiple count dirs can't be used with nasc
+    if len(args.count_dir) > 1 and args.nasc:
+        parser.error('`--nasc` does not support multiple input directories')
+
+    # Parse cell groups csv(s)
+    groups = []
     if args.groups:
-        with open(args.groups, 'r') as f:
-            for line in f:
-                if line.isspace():
-                    continue
-                barcode, group = line.strip().split(',')
+        for path in args.groups:
+            groups_part = {}
+            with open(path, 'r') as f:
+                for line in f:
+                    if line.isspace():
+                        continue
+                    barcode, group = line.strip().split(',')
 
-                if barcode in groups:
-                    parser.error(f'Found duplicate barcode {barcode} in {args.groups}')
+                    if barcode in groups_part:
+                        parser.error(f'Found duplicate barcode {barcode} in {args.groups}')
 
-                groups[barcode] = group
-
-        logger.info(
-            f'Found {len(groups)} barcodes and {len(set(groups.values()))} groups found in {args.groups}. '
-            'All other barcodes will be ignored.'
-        )
+                    groups_part[barcode] = group
+            groups.append(groups_part)
 
     if not args.reads:
         args.reads = 'complete'
