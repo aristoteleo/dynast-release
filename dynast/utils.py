@@ -769,7 +769,7 @@ def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
     # Construct anndata
     return anndata.AnnData(
         X=matrix,
-        obs=pd.DataFrame(index=pd.Series(barcodes, name='barcodes')),
+        obs=pd.DataFrame(index=pd.Series(barcodes, name='barcode')),
         var=pd.DataFrame(index=pd.Series(features, name='gene_id'), data={'gene_name': pd.Categorical(names)}),
         layers=layers
     )

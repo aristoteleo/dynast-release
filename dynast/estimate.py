@@ -200,9 +200,15 @@ def estimate(
         group_cells = {}
         for barcode, group in groups.items():
             group_cells.setdefault(group, []).append(barcode)
-        pis = {(barcode, gx): value
-               for key in pis for convs in pis[key] for (group, gx), value in pis[key][convs].items()
-               for barcode in group_cells[group]}
+        pis = {
+            key: {
+                convs: {(barcode, gx): value
+                        for (group, gx), value in pis[key][convs].items()
+                        for barcode in group_cells[group]}
+                for convs in pis[key]
+            }
+            for key in pis
+        }
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     logger.info(f'Combining results into Anndata object at {adata_path}')
@@ -215,6 +221,10 @@ def estimate(
     )
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')
+        adata.obs['count_dir'] = adata.obs.index.str.split('-').str[-1].astype(int).map({
+            i: count_dir
+            for i, count_dir in enumerate(count_dirs)
+        }).astype('category')
     p_es = estimation.read_p_e(p_e_path, group_by=['barcode'])
     adata.obs['p_e'] = adata.obs['group'].map(p_es) if groups else adata.obs.index.map(p_es)
     for convs in conversions:
