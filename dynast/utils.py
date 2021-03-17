@@ -592,7 +592,7 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
     feature_indices = {feature: i for i, feature in enumerate(features)}
 
-    matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.uint32)
+    matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
     for (barcode, feature), count in df_counts.groupby([barcode_column, feature_column], sort=False,
                                                        observed=True).size().items():
         matrix[barcode_indices[barcode], feature_indices[feature]] = count
@@ -651,8 +651,8 @@ def split_matrix(matrix, pis, barcodes, features):
     :return: (matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA)
     :rtype: (scipy.sparse.spmatrix, scipy.sparse.spmatrix, scipy.sparse.spmatrix)
     """
-    unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
-    labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)))
+    unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
+    labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
     pi_mask = sparse.lil_matrix((len(barcodes), len(features)), dtype=bool)
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
     feature_indices = {feature: i for i, feature in enumerate(features)}
