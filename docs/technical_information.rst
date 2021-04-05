@@ -55,6 +55,16 @@ The following layers are also present if :code:`--no-splicing` or :code:`--trans
 * Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
 * Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively.
 
+The following equalities always hold for the resulting Anndata.
+
+* :code:`.layers['total'] == .layers['spliced'] + .layers['unspliced'] + .layers['ambiguous']`
+
+The following additional equalities always hold for the resulting Anndata in the case of single labeling (:code:`--conversion` was specified once).
+
+* :code:`.X == .layers['X_n_{conversion}'] + .layers['X_l_{conversion}']`
+* :code:`.layers['spliced'] == .layers['sn_{conversion}'] + .layers['sl_{conversion}']`
+* :code:`.layers['unspliced'] == .layers['un_{conversion}'] + .layers['ul_{conversion}']`
+
 .. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
 
 Estimate procedure
@@ -90,6 +100,12 @@ The following layers are also present if :code:`--no-splicing` or :code:`--trans
 * Unlabeled and labeled *total* read counts in :code:`.layers['unlabeled_{conversion}']` and :code:`.layers['labeled_{conversion}']`. If :code:`--reads total` is specified, the estimated counts are in :code:`.layers['unlabeled_{conversion}_est']` and :code:`.layers['labeled_{conversion}_est']`.
 * Spliced, unspliced and ambiguous read counts in :code:`.layers['spliced']`, :code:`.layers['unspliced']` and :code:`.layers['ambiguous']`.
 * Unspliced unlabeled, unspliced labeled, spliced unlabeled, spliced labeled read counts in :code:`.layers['un_{conversion}']`, :code:`.layers['ul_{conversion}']`, :code:`.layers['sn_{conversion}']` and :code:`.layers['sl_{conversion}']` respectively. If :code:`--reads spliced` and/or :code:`--reads unspliced` was specified, layers with estimated counts are added. These layers are suffixed with :code:`_est`, analogous to *total* counts above.
+
+In addition to the equalities listed in the :ref:`quant` section, the following inequalities always hold for the resulting Anndata.
+
+* :code:`.X >= .layers['X_n_{conversion}_est'] + .layers['X_l_{conversion}_est']`
+* :code:`.layers['spliced'] >= .layers['sn_{conversion}_est'] + .layers['sl_{conversion}_est']`
+* :code:`.layers['unspliced'] >= .layers['un_{conversion}_est'] + .layers['ul_{conversion}_est']`
 
 .. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
 
@@ -165,7 +181,7 @@ Let :math:`X=\{(k_1,n_1),\cdots\}` be the excluded data. The E step fills in the
 
 	a_{k,n}^{(t+1)} = \frac{\sum_{(k',n) \not\in X} B(k,n,p_c^{(t)}) \cdot a_{k',n}}{\sum_{(k',n) \not\in X} B(k',n,p_c^{(t)})}
 
-The M step updates the estiamte for :math:`p_c`
+The M step updates the estimate for :math:`p_c`
 
 .. math::
 
