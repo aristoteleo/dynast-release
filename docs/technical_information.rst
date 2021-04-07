@@ -109,6 +109,31 @@ In addition to the equalities listed in the :ref:`quant` section, the following 
 
 .. Tip:: To quantify splicing data from conventional scRNA-seq experiments (experiments without metabolic labeling), we recommend using the `kallisto | bustools <https://www.kallistobus.tools/>`_ pipeline.
 
+Caveats
+'''''''
+The statistical estimation procedure described above comes with some caveats.
+
+* The induced conversion rate (:math:`p_c`) can not be estimated for cells with too few reads (defined by the option :code:`--cell-threshold`).
+* The fraction of labeled RNA (:math:`\pi_g`) can not be estimated for cell-gene combinations with too few reads (defined by the option :code:`--cell-gene-threshold`).
+
+For statistical definitions of these variables, see :ref:`statistical_estimation`.
+
+Therefore, for low coverage data, we expect many cell-gene combinations to not have any estimations in the Anndata layers prefixed with :code:`_est`, indicated with zeros. It is possible to construct a boolean mask that contains :code:`True` for cell-gene combinations that were successfully estimated and :code:`False` otherwise. Note that we are using *total* reads.
+
+.. code-block:: python
+
+  estimated_mask = ((adata.layers['labeled_{conversion}'] + adata.layers['unlabeled_{conversion}']) > 0) & \
+      ((adata.layers['labeled_{conversion}_est'] + adata.layers['unlabeled_{conversion}_est']) > 0)
+
+Similarly, it is possible to construct a boolean mask that contains :code:`True` for cell-gene combinations for which estimation failed (either due to having too few reads mapping at the cell level or the cell-gene level) and :code:`False` otherwise.
+
+.. code-block:: python
+
+  failed_mask = ((adata.layers['labeled_{conversion}'] + adata.layers['unlabeled_{conversion}']) > 0) & \
+      ((adata.layers['labeled_{conversion}_est'] + adata.layers['unlabeled_{conversion}_est']) == 0)
+
+The same can be done with other :ref:`read_groups`.
+
 .. _read_groups:
 
 Read groups
