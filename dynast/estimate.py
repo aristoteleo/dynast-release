@@ -15,6 +15,7 @@ def estimate(
     out_dir,
     reads='complete',
     groups=None,
+    genes=None,
     cell_threshold=1000,
     cell_gene_threshold=16,
     control_p_e=None,
@@ -51,6 +52,9 @@ def estimate(
             f'Reading {counts_path}' + (f' and suffixing all barcodes with `-{i}`' if len(count_dirs) > 1 else '')
         )
         _df_counts = preprocessing.read_counts(counts_path)
+        # Subset to provided genes
+        if genes:
+            _df_counts = _df_counts[_df_counts['GX'].isin(genes)]
         if len(count_dirs) > 1:
             _df_counts['barcode'] = _df_counts['barcode'].astype(str) + f'-{i}'
         dfs.append(_df_counts)

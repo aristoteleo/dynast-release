@@ -258,6 +258,7 @@ def setup_count_args(parser, parent):
     )
     parser_count.add_argument(
         '--barcodes',
+        metavar='TXT',
         help=('Textfile containing filtered cell barcodes. Only these barcodes will '
               'be processed.'),
         type=str,
@@ -347,6 +348,13 @@ def setup_estimate_args(parser, parent):
         ),
         action='append',
         default=None,
+    )
+    parser_estimate.add_argument(
+        '--genes',
+        metavar='TXT',
+        help=('Textfile containing list of genes to use. All other genes will be '
+              'treated as if they do not exist.'),
+        type=str,
     )
     parser_estimate.add_argument(
         '--cell-threshold',
@@ -554,6 +562,13 @@ def parse_estimate(parser, args, temp_dir=None):
     if len(args.count_dir) > 1 and args.nasc:
         parser.error('`--nasc` does not support multiple input directories')
 
+    # Read genes
+    genes = None
+    if args.genes:
+        with open(args.genes, 'r') as f:
+            genes = [line.strip() for line in f if not line.isspace()]
+        logger.warning(f'Ignoring genes not in the {len(genes)} genes provided by `--genes`')
+
     # Parse cell groups csv(s)
     groups = []
     if args.groups:
@@ -580,6 +595,7 @@ def parse_estimate(parser, args, temp_dir=None):
         args.o,
         args.reads,
         groups=groups,
+        genes=genes,
         cell_threshold=args.cell_threshold,
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,

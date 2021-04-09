@@ -132,7 +132,7 @@ Quantifying counts with :code:`count`
 	                        Conversions with (# conversions) / (# reads) greater than this threshold will be considered a
 	                        SNP and ignored. (default: no SNP detection)
 	  --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
-	  --barcodes BARCODES   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
+	  --barcodes TXT   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
 	  --no-splicing, --transcriptome-only
 	                        Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
 	                        are not assigned to the transcriptome.
@@ -168,34 +168,36 @@ The fraction of labeled RNA is estimated with the :code:`dynast estimate` comman
 
 .. code-block:: text
 
-	usage: dynast estimate [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS]
-	                       [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV]
-	                       [--cell-threshold COUNT] [--cell-gene-threshold COUNT] [--control] [--p-e P_E]
-	                       count_dir
+  usage: dynast estimate [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS]
+                         [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV] [--genes TXT]
+                         [--cell-threshold COUNT] [--cell-gene-threshold COUNT] [--control] [--p-e P_E]
+                         count_dir [count_dir ...]
 
-	Estimate fraction of labeled RNA
+  Estimate fraction of labeled RNA
 
-	positional arguments:
-	  count_dir             Path to directory that contains `dynast count` output.
+  positional arguments:
+    count_dir             Path to directory that contains `dynast count` output.
 
-	optional arguments:
-	  -h, --help            Show this help message and exit
-	  --tmp TMP             Override default temporary directory
-	  --keep-tmp            Do not delete the tmp directory
-	  --verbose             Print debugging information
-	  -t THREADS            Number of threads to use (default: 8)
-	  --reads {total,transcriptome,spliced,unspliced}
-	                        Read groups to perform estimation on. This option can be used multiple times to estimate
-	                        multiple groups. By default, all possible reads groups are used.
-	  -o OUT                Path to output directory (default: current directory)
-	  --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
-	                        the group name the cell belongs to. Cells will be combined per group for estimation.
-	  --cell-threshold COUNT
-	                        A cell must have at least this many reads for estimation. (default: 1000)
-	  --cell-gene-threshold COUNT
-	                        A cell-gene pair must have at least this many reads for estimation. (default: 16)
-	  --control             Indicate this is a control sample, only the background mutation rate will be estimated.
-	  --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
+  optional arguments:
+    -h, --help            Show this help message and exit
+    --tmp TMP             Override default temporary directory
+    --keep-tmp            Do not delete the tmp directory
+    --verbose             Print debugging information
+    -t THREADS            Number of threads to use (default: 8)
+    --reads {total,transcriptome,spliced,unspliced}
+                          Read groups to perform estimation on. This option can be used multiple times to estimate
+                          multiple groups. By default, all possible reads groups are used.
+    -o OUT                Path to output directory (default: current directory)
+    --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
+                          the group name the cell belongs to. Cells will be combined per group for estimation.
+    --genes TXT           Textfile containing list of genes to use. All other genes will be treated as if they do not
+                          exist.
+    --cell-threshold COUNT
+                          A cell must have at least this many reads for correction. (default: 1000)
+    --cell-gene-threshold COUNT
+                          A cell-gene pair must have at least this many reads for correction. (default: 16)
+    --control             Indicate this is a control sample, only the background mutation rate will be estimated.
+    --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
 
 Estimation thresholds
 '''''''''''''''''''''
