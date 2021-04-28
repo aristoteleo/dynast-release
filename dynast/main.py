@@ -558,8 +558,12 @@ def parse_estimate(parser, args, temp_dir=None):
             except ValueError:
                 parser.error('`--p-e` must be a textfile containing a single decimal number')
 
-    # If multiple count dirs are provided and --groups is specified, the number must match.
-    if len(args.count_dirs) > 1 and args.groups and len(args.groups) != len(args.count_dirs):
+    # group CSV must be proivded when there are multiple input directories
+    if len(args.count_dirs) > 1 and not args.groups:
+        parser.error('`--group` CSVs must be provided when using multiple input directories')
+
+    # If group CSV(s) are provided, the number must match input directories
+    if args.groups and len(args.groups) != len(args.count_dirs):
         parser.error('Number of `--group` CSVs must match number of input directories')
 
     # Multiple count dirs can't be used with nasc
