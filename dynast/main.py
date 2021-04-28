@@ -389,8 +389,12 @@ def setup_estimate_args(parser, parent):
         default=None,
     )
     parser_estimate.add_argument(
-        'count_dir',
-        help='Path to directory that contains `dynast count` output.',
+        'count_dirs',
+        help=(
+            'Path to directory that contains `dynast count` output. When multiple are provided, '
+            'the barcodes in each of the count directories are suffixed with `-i` where i is '
+            'a 0-indexed integer.'
+        ),
         type=str,
         nargs='+',
     )
@@ -554,12 +558,12 @@ def parse_estimate(parser, args, temp_dir=None):
             except ValueError:
                 parser.error('`--p-e` must be a textfile containing a single decimal number')
 
-    # If multiple group csvs are provided, multiple count dirs must also be provided.
-    if args.groups and len(args.groups) > 1 and len(args.groups) != len(args.count_dir):
-        parser.error('Number of inputs directories must match number of `--group` CSVs when ' 'multiple are provided.')
+    # If multiple count dirs are provided and --groups is specified, the number must match.
+    if len(args.count_dirs) > 1 and args.groups and len(args.groups) != len(args.count_dirs):
+        parser.error('Number of `--group` CSVs must match number of input directories')
 
     # Multiple count dirs can't be used with nasc
-    if len(args.count_dir) > 1 and args.nasc:
+    if len(args.count_dirs) > 1 and args.nasc:
         parser.error('`--nasc` does not support multiple input directories')
 
     # Read genes
@@ -581,7 +585,7 @@ def parse_estimate(parser, args, temp_dir=None):
                     barcode, group = line.strip().split(',')
 
                     if barcode in groups_part:
-                        parser.error(f'Found duplicate barcode {barcode} in {args.groups}')
+                        parser.error(f'Found duplicate barcode {barcode} in {path}')
 
                     groups_part[barcode] = group
             groups.append(groups_part)
@@ -591,7 +595,7 @@ def parse_estimate(parser, args, temp_dir=None):
 
     from .estimate import estimate
     estimate(
-        args.count_dir,
+        args.count_dirs,
         args.o,
         args.reads,
         groups=groups,

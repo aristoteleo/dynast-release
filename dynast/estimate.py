@@ -223,8 +223,12 @@ def estimate(
         gene_infos=gene_infos,
         pis=pis
     )
+    # If groups were provided, add the group as a column
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')
+    # Add the count dir that was provided as input as another column if multiple
+    # count dirs were provided
+    if len(count_dirs) > 1:
         adata.obs['count_dir'] = adata.obs.index.str.split('-').str[-1].astype(int).map({
             i: count_dir
             for i, count_dir in enumerate(count_dirs)

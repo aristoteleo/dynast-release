@@ -302,6 +302,8 @@ def parse_gtf(gtf_path):
             if feature != 'gene':
                 # IMPORTANT: every transcript, exon feature must have transcript_id
                 transcript_id = gtf_entry['group'].get('transcript_id')
+                if not transcript_id:
+                    logger.warning(f'Gene `{gene_id}` feature `{feature}` does not have a transcript_id.')
                 if gene_id != transcript_infos.get(transcript_id, {}).get('gene_id', gene_id):
                     logger.warning(
                         f'Transcript `{transcript_id}` is assigned to multiple genes. '
@@ -323,8 +325,6 @@ def parse_gtf(gtf_path):
 
                 if feature == 'exon':
                     transcript_exons.setdefault(transcript_id, SegmentCollection()).add_segment(Segment(start, end))
-            elif feature == 'exon':  # exon feature does not have transcript ID
-                logger.warning('Found an `exon` feature not assigned to any transcript. This exon will be ignored.')
 
     # Clean gene infos so that they link to only transcripts existing in transcript_infos
     for gene_id, attributes in gene_infos.items():
