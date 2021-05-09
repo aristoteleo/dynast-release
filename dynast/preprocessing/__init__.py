@@ -15,5 +15,4 @@ from .conversion import (
     split_counts_by_velocity,
 )
 from .coverage import calculate_coverage
-from .gtf import parse_gtf
 from .snp import detect_snps, read_snp_csv, read_snps

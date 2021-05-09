@@ -1,6 +1,6 @@
 import warnings
 
-from dynast.logging import silence_logger
+from dynast.logging import logger
 
+logger.setLevel(9999)
 warnings.filterwarnings('ignore')
-silence_logger('dynast')

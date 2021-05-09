@@ -1,5 +1,7 @@
 import datetime as dt
 import os
+
+import ngs_tools as ngs
 import pysam
 
 from . import config, constants, preprocessing, utils
@@ -72,7 +74,7 @@ def count(
     conversions_required = [conversions_path, conversions_index_path, no_conversions_path, no_index_path, genes_path]
     if not utils.all_exists(conversions_required) or overwrite:
         logger.info('Parsing gene and transcript information from GTF')
-        gene_infos, transcript_infos = preprocessing.parse_gtf(gtf_path)
+        gene_infos, transcript_infos = ngs.gtf.genes_and_transcripts_from_gtf(gtf_path, use_version=False)
         utils.write_pickle(gene_infos, genes_path)
 
         logger.info(f'Parsing read conversion information from BAM to {conversions_path}')

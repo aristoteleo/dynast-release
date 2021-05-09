@@ -4,11 +4,11 @@ import tempfile
 from collections import Counter
 from functools import partial
 
+import ngs_tools as ngs
 import numpy as np
 import pandas as pd
 import pysam
 
-from . import gtf
 from .. import config, utils
 from ..logging import logger
 
@@ -119,7 +119,7 @@ def parse_read_contig(
         gene_order = sorted(gene_infos.keys(), key=lambda gene: tuple(gene_infos[gene]['segment']))
 
     def assign_velocity_type(positions, gx=None, read_strand=None):
-        alignment = gtf.SegmentCollection.from_positions(positions)
+        alignment = ngs.gtf.SegmentCollection.from_positions(positions)
 
         # If gx is provided, narrow down search to this single gene
         assigned_gene = gx
@@ -440,10 +440,10 @@ def parse_all_reads(
     :param no_index_path: path to no conversions index
     :type no_index_path: str
     :param gene_infos: dictionary containing gene information, as returned by
-                       `preprocessing.gtf.parse_gtf`, defaults to `None`
+                       `ngs.gtf.genes_and_transcripts_from_gtf`, defaults to `None`
     :type gene_infos: dictionary, optional
     :param transcript_infos: dictionary containing transcript information,
-                             as returned by `preprocessing.gtf.parse_gtf`,
+                             as returned by `ngs.gtf.genes_and_transcripts_from_gtf`,
                              defaults to `None`
     :type transcript_infos: dictionary, optional
     :param strand: strandedness of the sequencing protocol, defaults to `forward`,
@@ -502,15 +502,15 @@ def parse_all_reads(
     if not velocity:
         args = [(contig, None, None) for contig in contigs]
     else:
-        args = [(
-            contig, {gene: info
-                     for gene, info in gene_infos.items()
-                     if info['chr'] == contig},
-            {transcript: info
-             for transcript, info in transcript_infos.items()
-             if info['chr'] == contig}
-        )
-                for contig in contigs]
+        args = []
+        for contig in contigs:
+            _gene_infos = {gene: info for gene, info in gene_infos.items() if info['chr'] == contig}
+            _transcript_infos = {
+                transcript: info
+                for transcript, info in transcript_infos.items()
+                if info['gene_id'] in _gene_infos
+            }
+            args.append((contig, _gene_infos, _transcript_infos))
 
     # Initialize and run pool
     logger.debug(f'Spawning {n_threads} processes')
