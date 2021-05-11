@@ -23,7 +23,7 @@ project = 'dynast'
 copyright = '2021, Kyung Hoi (Joseph) Min'
 author = 'Kyung Hoi (Joseph) Min'
 
-release = '0.0.1'
+release = '0.0.0'
 master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------

@@ -504,7 +504,7 @@ def parse_all_reads(
     else:
         args = []
         for contig in contigs:
-            _gene_infos = {gene: info for gene, info in gene_infos.items() if info['chr'] == contig}
+            _gene_infos = {gene: info for gene, info in gene_infos.items() if info['chromosome'] == contig}
             _transcript_infos = {
                 transcript: info
                 for transcript, info in transcript_infos.items()
