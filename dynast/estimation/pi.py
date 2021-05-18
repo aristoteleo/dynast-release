@@ -8,17 +8,20 @@ from .. import config, utils
 from ..logging import logger
 
 
-def read_pi(pi_path):
+def read_pi(pi_path, group_by=['barcode']):
     """Read pi CSV as a dictionary.
 
     :param pi_path: path to CSV containing pi values
     :type pi_path: str
+    :param group_by: columns that were used to group cells, defaults to
+        ``['barcode']``
+    :type group_by: list, optional
 
     :return: dictionary with barcodes and genes as keys
     :rtype: dictionary
     """
-    df = pd.read_csv(pi_path, usecols=['barcode', 'GX', 'pi'])
-    return dict(df.set_index(['barcode', 'GX'])['pi'])
+    df = pd.read_csv(pi_path, usecols=group_by + ['GX', 'pi'])
+    return dict(df.set_index(group_by + ['GX'])['pi'])
 
 
 # Process initializer.
@@ -180,6 +183,7 @@ def estimate_pi(
     p_e,
     p_c,
     pi_path,
+    group_by=['barcode'],
     p_group_by=None,
     n_threads=8,
     threshold=16,
@@ -197,6 +201,9 @@ def estimate_pi(
     :type p_c: float
     :param pi_path: path to write pi estimates
     :type pi_path: str
+    :param group_by: columns that were used to group cells, defaults to
+        ``['barcode']``
+    :type group_by: list, optional
     :param p_group_by: columns that p_e/p_c estimation was grouped by, defaults to `None`
     :type p_group_by: list, optional
     :param n_threads: number of threads, defaults to `8`
@@ -233,7 +240,7 @@ def estimate_pi(
     values = df_full[['conversion', 'base', 'count']].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
-    groups = df_full.groupby(['barcode', 'GX'], sort=False, observed=True).indices
+    groups = df_full.groupby(group_by + ['GX'], sort=False, observed=True).indices
     pis = {}
     skipped = 0
     failed = 0
@@ -292,7 +299,7 @@ def estimate_pi(
         logger.warning(f'Estimation failed {failed} times.')
 
     with open(pi_path, 'w') as f:
-        f.write('barcode,GX,guess,alpha,beta,pi\n')
+        f.write(f'{",".join(group_by)},GX,guess,alpha,beta,pi\n')
         for barcode, gx in sorted(pis.keys()):
             guess, alpha, beta, pi = pis[(barcode, gx)]
             f.write(f'{barcode},{gx},{guess},{alpha},{beta},{pi}\n')

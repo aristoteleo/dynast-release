@@ -169,37 +169,42 @@ The fraction of labeled RNA is estimated with the :code:`dynast estimate` comman
 .. code-block:: text
 
     usage: dynast estimate [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS]
-                           [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV] [--genes TXT]
-                           [--cell-threshold COUNT] [--cell-gene-threshold COUNT] [--control] [--p-e P_E]
-                           count_dirs [count_dirs ...]
+                       [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV]
+                       [--ignore-groups-for-pi] [--genes TXT] [--cell-threshold COUNT] [--cell-gene-threshold COUNT]
+                       [--control] [--p-e P_E]
+                       count_dirs [count_dirs ...]
 
     Estimate fraction of labeled RNA
 
     positional arguments:
-      count_dirs            Path to directory that contains `dynast count` output. When multiple are provided, the
-                            barcodes in each of the count directories are suffixed with `-i` where i is a 0-indexed
-                            integer.
+    count_dirs            Path to directory that contains `dynast count` output. When multiple are provided, the
+                        barcodes in each of the count directories are suffixed with `-i` where i is a 0-indexed
+                        integer.
 
     optional arguments:
-      -h, --help            Show this help message and exit
-      --tmp TMP             Override default temporary directory
-      --keep-tmp            Do not delete the tmp directory
-      --verbose             Print debugging information
-      -t THREADS            Number of threads to use (default: 8)
-      --reads {total,transcriptome,spliced,unspliced}
-                            Read groups to perform estimation on. This option can be used multiple times to estimate
-                            multiple groups. By default, all possible reads groups are used.
-      -o OUT                Path to output directory (default: current directory)
-      --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
-                            the group name the cell belongs to. Cells will be combined per group for estimation.
-      --genes TXT           Textfile containing list of genes to use. All other genes will be treated as if they do not
-                            exist.
-      --cell-threshold COUNT
-                            A cell must have at least this many reads for correction. (default: 1000)
-      --cell-gene-threshold COUNT
-                            A cell-gene pair must have at least this many reads for correction. (default: 16)
-      --control             Indicate this is a control sample, only the background mutation rate will be estimated.
-      --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
+    -h, --help            Show this help message and exit
+    --tmp TMP             Override default temporary directory
+    --keep-tmp            Do not delete the tmp directory
+    --verbose             Print debugging information
+    -t THREADS            Number of threads to use (default: 8)
+    --reads {total,transcriptome,spliced,unspliced}
+                        Read groups to perform estimation on. This option can be used multiple times to estimate
+                        multiple groups. (default: all possible reads groups)
+    -o OUT                Path to output directory (default: current directory)
+    --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
+                        the group name the cell belongs to. Cells will be combined per group for estimation of
+                        parameters specified by `--groups-for`.
+    --ignore-groups-for-pi
+                        Ignore cell groupings when estimating the fraction of labeled RNA. This option only has an
+                        effect when `--groups` is also specified.
+    --genes TXT           Textfile containing list of genes to use. All other genes will be treated as if they do not
+                        exist.
+    --cell-threshold COUNT
+                        A cell must have at least this many reads for correction. (default: 1000)
+    --cell-gene-threshold COUNT
+                        A cell-gene pair must have at least this many reads for correction. (default: 16)
+    --control             Indicate this is a control sample, only the background mutation rate will be estimated.
+    --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
 
 Estimation thresholds
 '''''''''''''''''''''
@@ -212,6 +217,8 @@ The :code:`--reads` argument controls which RNA species to run the estimation pr
 Grouping cells
 ''''''''''''''
 Sometimes, grouping read counts across cells may provide better estimation results, especially in the case of droplet-based methods, which result in fewer reads per cell and gene compared to plate-based methods. The :code:`--groups` argument can be used to provide a CSV of two columns: the first containing the cell barcodes and the second containing group names that each cell belongs to. Estimation is then performed on a per-group basis by combining the read counts across all cells in each group. This strategy may be applied across different samples, simply by specifying multiple input directories. In this case, the number of group CSVs specified with :code:`--groups` must match the number of input directories. For example, when providing two input directories :code:`./input1` and :code:`./input2`, with the intention of grouping cells across these two samples, two group CSVs, :code:`groups1.csv` and :code:`groups2.csv` must be provided where the former are groups for barcodes in the first sample, and the latter are groups for barcodes in the second sample. The group names may be shared across samples. The output AnnData will still contain reads per cell.
+
+Cell groupings provided this way may be ignored for estimation of the fraction of labeled RNA (see :ref:`bayesian_inference`) by providing the :code:`--ignore-groups-for-pi` flag. This flag may be used only in conjunction with :code:`--groups`, and when it is provided, estimation of the fraction of labeled RNA is performed per cell, while estimation of background and induced mutation rates are still done per group.
 
 Control samples
 ^^^^^^^^^^^^^^^

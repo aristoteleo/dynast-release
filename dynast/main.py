@@ -324,7 +324,7 @@ def setup_estimate_args(parser, parent):
         help=(
             'Read groups to perform estimation on. '
             'This option can be used multiple times to estimate multiple groups. '
-            'By default, all possible reads groups are used.'
+            '(default: all possible reads groups)'
         ),
         action='append',
         choices=['total', 'transcriptome', 'spliced', 'unspliced'],
@@ -344,10 +344,18 @@ def setup_estimate_args(parser, parent):
         help=(
             'CSV containing cell (barcode) groups, where the first column is the barcode '
             'and the second is the group name the cell belongs to. Cells will be combined per '
-            'group for estimation.'
+            'group for estimation of parameters specified by `--groups-for`.'
         ),
         action='append',
         default=None,
+    )
+    parser_estimate.add_argument(
+        '--ignore-groups-for-pi',
+        help=(
+            'Ignore cell groupings when estimating the fraction of labeled RNA. '
+            'This option only has an effect when `--groups` is also specified.'
+        ),
+        action='store_true',
     )
     parser_estimate.add_argument(
         '--genes',
@@ -594,6 +602,9 @@ def parse_estimate(parser, args, temp_dir=None):
                     groups_part[barcode] = group
             groups.append(groups_part)
 
+    if args.ignore_groups_for_pi and not (args.groups):
+        parser.error('`--ignore-groups-for-pi` can not be used without `--groups`')
+
     if not args.reads:
         args.reads = 'complete'
 
@@ -603,6 +614,7 @@ def parse_estimate(parser, args, temp_dir=None):
         args.o,
         args.reads,
         groups=groups,
+        ignore_groups_for_pi=args.ignore_groups_for_pi,
         genes=genes,
         cell_threshold=args.cell_threshold,
         cell_gene_threshold=args.cell_gene_threshold,

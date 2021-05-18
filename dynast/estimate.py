@@ -15,6 +15,7 @@ def estimate(
     out_dir,
     reads='complete',
     groups=None,
+    ignore_groups_for_pi=True,
     genes=None,
     cell_threshold=1000,
     cell_gene_threshold=16,
@@ -44,7 +45,7 @@ def estimate(
     logger.info(f'Conversions: {" ".join(",".join(convs) for convs in conversions)}')
     all_conversions = sorted(utils.flatten_list(conversions))
 
-    # Read each counts dataframe and suffix bacrodes if needed
+    # Read each counts dataframe and suffix barcodes if needed
     dfs = []
     for i, count_dir in enumerate(count_dirs):
         counts_path = os.path.join(count_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
@@ -88,7 +89,7 @@ def estimate(
     logger.info(f'Estimation will be done on the following read groups: {reads}')
 
     gene_infos = utils.read_pickle(os.path.join(count_dirs[0], constants.GENES_FILENAME))
-    df_counts_complemented = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
+    df_counts = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
 
     # Clean groups by combining multiple into one
     if isinstance(groups, list):
@@ -99,45 +100,27 @@ def estimate(
     # Change barcodes to cell groups
     if groups:
         logger.warning(f'Barcodes that are not among the {len(groups)} barcodes with assigned groups will be ignored.')
-        df_counts_complemented['barcode'] = df_counts_complemented['barcode'].map(groups)
-        df_counts_complemented = df_counts_complemented.dropna(subset=['barcode'])
+        df_counts = df_counts[df_counts['barcode'].isin(groups.keys())].reset_index(drop=True)
+        df_counts['group'] = df_counts['barcode'].map(groups).astype('category')
     logger.info(
-        f'Final counts: {df_counts_complemented.shape[0]} reads '
-        f'across {len(df_counts_complemented["barcode"].unique())} {"groups" if groups else "barcodes"}.'
+        f'Final counts: {df_counts.shape[0]} reads '
+        f'across {df_counts["barcode"].nunique()} barcodes' +
+        (f' and {df_counts["group"].nunique()} groups.' if groups else '.')
     )
 
-    # Aggregate counts to construct A matrix
-    aggregates_paths = {}
-    for key in set(reads).union(['transcriptome'] if transcriptome_all else ['total']):
-        logger.info(f'Aggregating counts for `{key}`')
-
-        if key == 'transcriptome':
-            df = df_counts_complemented[df_counts_complemented['transcriptome']]
-        elif key == 'total':
-            df = df_counts_complemented
-        else:
-            df = df_counts_complemented[df_counts_complemented['velocity'] == key]
-
-        for convs in conversions:
-            other_convs = list(set(all_conversions) - set(convs))
-            aggregates_paths.setdefault(key, {})[tuple(convs)] = preprocessing.aggregate_counts(
-                df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
-                os.path.join(out_dir, f'A_{key}_{"_".join(convs)}.csv'),
-                conversions=convs
-            )
-
     # Estimate p_e
+    p_key = 'group' if groups else 'barcode'
     p_e_path = os.path.join(out_dir, constants.P_E_FILENAME)
     if control_p_e:
         logger.info('`--p-e` provided. No background mutation rate estimation will be done.')
-        df_barcodes = df_counts_complemented['barcode'].drop_duplicates().reset_index(drop=True)
+        df_barcodes = df_counts[p_key].drop_duplicates().reset_index(drop=True)
         df_barcodes['p_e'] = control_p_e
-        df_barcodes.to_csv(p_e_path, header=['barcode', 'p_e'], index=False)
+        df_barcodes.to_csv(p_e_path, header=[p_key, 'p_e'], index=False)
     else:
-        logger.info(f'Estimating average conversion rate in unlabeled RNA to {p_e_path}')
+        logger.info(f'Estimating average conversion rate in unlabeled RNA per {p_key} to {p_e_path}')
         if control:
             p_e_path = estimation.estimate_p_e_control(
-                df_counts_complemented,
+                df_counts,
                 p_e_path,
                 conversions=conversions,
             )
@@ -145,62 +128,97 @@ def estimate(
             p_e_path = estimation.estimate_p_e_nasc(
                 preprocessing.read_rates(os.path.join(count_dir, constants.RATES_FILENAME)),
                 p_e_path,
-                group_by=['barcode'],
+                group_by=[p_key],
             )
         else:
             p_e_path = estimation.estimate_p_e(
-                df_counts_complemented,
+                df_counts,
                 p_e_path,
                 conversions=conversions,
-                group_by=['barcode'],
+                group_by=[p_key],
             )
+    p_es = estimation.read_p_e(p_e_path, group_by=[p_key])
 
     if control:
         logger.info('Downstream processing skipped for controls')
         logger.info(f'Use `--p-e {p_e_path}` to run test samples')
         return
 
+    # Aggregate counts to construct A matrix
+    # NOTE: we don't use groupings here because we may need to use individual
+    # barcodes later. For instance, p_c may be estimated in groups, but pi_g may
+    # be estimated per cell. So that the aggregated A matrix is compatible with both
+    # estimation procedures, we don't care about groupings here. Instead, groupings
+    # should be manually done at each step that requires such groupings.
+    aggregates_paths = {}
+    for key in set(reads).union(['transcriptome'] if transcriptome_all else ['total']):
+        logger.info(f'Aggregating counts for `{key}`')
+
+        if key == 'transcriptome':
+            df = df_counts[df_counts['transcriptome']]
+        elif key == 'total':
+            df = df_counts
+        else:
+            df = df_counts[df_counts['velocity'] == key]
+
+        for convs in conversions:
+            other_convs = list(set(all_conversions) - set(convs))
+            aggregates_paths.setdefault(key, {})[tuple(convs)] = preprocessing.aggregate_counts(
+                df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
+                os.path.join(out_dir, f'A_{key}_{"_".join(convs)}.csv'),
+                conversions=convs,
+            )
+
     # Estimate p_c
     p_c_paths = {}
     for convs in conversions:
         p_c_path = os.path.join(out_dir, f'{constants.P_C_PREFIX}_{"_".join(convs)}.csv')
-        logger.info(f'Estimating {convs} conversion rate in labeled RNA to {p_c_path}')
+        logger.info(f'Estimating {convs} conversion rate in labeled RNA per {p_key} to {p_c_path}')
         df_aggregates = preprocessing.read_aggregates(
             aggregates_paths['transcriptome' if transcriptome_all else 'total'][tuple(convs)]
         )
+        if groups:
+            df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
+
         p_c_paths[tuple(convs)] = estimation.estimate_p_c(
-            df_aggregates,
-            estimation.read_p_e(p_e_path, group_by=['barcode']),
-            p_c_path,
-            group_by=['barcode'],
-            threshold=cell_threshold,
-            n_threads=n_threads,
-            nasc=nasc
+            df_aggregates, p_es, p_c_path, group_by=[p_key], threshold=cell_threshold, n_threads=n_threads, nasc=nasc
         )
+    p_cs = {tuple(convs): estimation.read_p_c(p_c_paths[tuple(convs)], group_by=[p_key]) for convs in conversions}
 
     # Estimate pi
     logger.info(f'Compling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
-
+    pi_key = 'barcode' if ignore_groups_for_pi or not groups else 'group'
     pi_paths = {}
     for key in reads:
         for convs in conversions:
             pi_path = os.path.join(out_dir, f'pi_{key}_{"_".join(convs)}.csv')
-            logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs} to {pi_path}')
+            logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key} to {pi_path}')
+            df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
+            if groups:
+                df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
+
             pi_paths.setdefault(key, {})[tuple(convs)] = estimation.estimate_pi(
-                preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)]),
-                estimation.read_p_e(p_e_path, group_by=['barcode']),
-                estimation.read_p_c(p_c_paths[tuple(convs)], group_by=['barcode']),
+                df_aggregates,
+                p_es,
+                p_cs[tuple(convs)],
                 pi_path,
-                p_group_by=['barcode'],
+                group_by=[pi_key],
+                p_group_by=[p_key],
                 n_threads=n_threads,
                 threshold=cell_gene_threshold,
                 seed=seed,
                 nasc=nasc,
                 model=model,
             )
-    pis = {key: {convs: estimation.read_pi(pi_paths[key][convs]) for convs in pi_paths[key]} for key in pi_paths}
-    if groups:
+
+    # Estimated pis need to be per cell because the adata is per cell
+    pis = {
+        key: {convs: estimation.read_pi(pi_paths[key][convs], group_by=[pi_key])
+              for convs in pi_paths[key]}
+        for key in pi_paths
+    }
+    if groups and not ignore_groups_for_pi:
         group_cells = {}
         for barcode, group in groups.items():
             group_cells.setdefault(group, []).append(barcode)
@@ -216,13 +234,7 @@ def estimate(
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     logger.info(f'Combining results into Anndata object at {adata_path}')
-    df_counts = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
-    adata = utils.results_to_adata(
-        df_counts[df_counts['barcode'].isin(groups.keys())] if groups else df_counts,
-        conversions,
-        gene_infos=gene_infos,
-        pis=pis
-    )
+    adata = utils.results_to_adata(df_counts, conversions, gene_infos=gene_infos, pis=pis)
     # If groups were provided, add the group as a column
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')
@@ -233,11 +245,14 @@ def estimate(
             i: count_dir
             for i, count_dir in enumerate(count_dirs)
         }).astype('category')
-    p_es = estimation.read_p_e(p_e_path, group_by=['barcode'])
-    adata.obs['p_e'] = adata.obs['group'].map(p_es) if groups else adata.obs.index.map(p_es)
+
+    # Add p_e and p_c estimates
+    adata.obs.reset_index(inplace=True)
+    adata.obs['p_e'] = adata.obs[p_key].map(p_es).astype('float')
     for convs in conversions:
-        p_cs = estimation.read_p_c(p_c_paths[tuple(convs)], group_by=['barcode'])
-        adata.obs[f'p_c_{"_".join(convs)}'] = adata.obs['group'].map(p_cs) if groups else adata.obs.index.map(p_cs)
+        adata.obs[f'p_c_{"_".join(convs)}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype('float')
+    adata.obs.set_index('barcode', inplace=True)
+
     adata.write(adata_path)
     stats.end()
     stats.save(stats_path)
