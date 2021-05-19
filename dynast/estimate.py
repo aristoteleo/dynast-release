@@ -97,6 +97,11 @@ def estimate(
             groups = groups[0]
         else:
             groups = {f'{barcode}-{i}': group for i, _groups in enumerate(groups) for barcode, group in _groups.items()}
+        # Contains group name to list of cells mapping
+        group_cells = {}
+        for barcode, group in groups.items():
+            group_cells.setdefault(group, []).append(barcode)
+
     # Change barcodes to cell groups
     if groups:
         logger.warning(f'Barcodes that are not among the {len(groups)} barcodes with assigned groups will be ignored.')
@@ -185,15 +190,59 @@ def estimate(
         )
     p_cs = {tuple(convs): estimation.read_p_c(p_c_paths[tuple(convs)], group_by=[p_key]) for convs in conversions}
 
-    # Estimate pi
     logger.info(f'Compling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
+
+    # Estimate pi per cell
     pi_key = 'barcode' if ignore_groups_for_pi or not groups else 'group'
+    pi_c_paths = {}
+    for key in reads:
+        for convs in conversions:
+            pi_c_path = os.path.join(out_dir, f'pi_c_{key}_{"_".join(convs)}.csv')
+            logger.info(
+                f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key} to {pi_c_path}'
+            )
+            df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
+            if groups:
+                df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
+
+            pi_c_paths.setdefault(key, {})[tuple(convs)] = estimation.estimate_pi(
+                df_aggregates,
+                p_es,
+                p_cs[tuple(convs)],
+                pi_c_path,
+                group_by=[pi_key],
+                p_group_by=[p_key],
+                n_threads=n_threads,
+                threshold=cell_gene_threshold,
+                seed=seed,
+                nasc=nasc,
+                model=model,
+            )
+    pi_cs = {
+        key: {convs: estimation.read_pi(pi_c_paths[key][convs], group_by=[pi_key])
+              for convs in pi_c_paths[key]}
+        for key in pi_c_paths
+    }
+    if groups and not ignore_groups_for_pi:
+        pi_cs = {
+            key: {
+                convs: {barcode: value
+                        for group, value in pi_cs[key][convs].items()
+                        for barcode in group_cells[group]}
+                for convs in pi_cs[key]
+            }
+            for key in pi_cs
+        }
+
+    # Estimate pi per cell-gene
     pi_paths = {}
     for key in reads:
         for convs in conversions:
             pi_path = os.path.join(out_dir, f'pi_{key}_{"_".join(convs)}.csv')
-            logger.info(f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key} to {pi_path}')
+            logger.info(
+                f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key}-gene to {pi_path}'
+            )
             df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
             if groups:
                 df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
@@ -203,7 +252,7 @@ def estimate(
                 p_es,
                 p_cs[tuple(convs)],
                 pi_path,
-                group_by=[pi_key],
+                group_by=[pi_key, 'GX'],
                 p_group_by=[p_key],
                 n_threads=n_threads,
                 threshold=cell_gene_threshold,
@@ -214,14 +263,11 @@ def estimate(
 
     # Estimated pis need to be per cell because the adata is per cell
     pis = {
-        key: {convs: estimation.read_pi(pi_paths[key][convs], group_by=[pi_key])
+        key: {convs: estimation.read_pi(pi_paths[key][convs], group_by=[pi_key, 'GX'])
               for convs in pi_paths[key]}
         for key in pi_paths
     }
     if groups and not ignore_groups_for_pi:
-        group_cells = {}
-        for barcode, group in groups.items():
-            group_cells.setdefault(group, []).append(barcode)
         pis = {
             key: {
                 convs: {(barcode, gx): value
@@ -246,11 +292,15 @@ def estimate(
             for i, count_dir in enumerate(count_dirs)
         }).astype('category')
 
-    # Add p_e and p_c estimates
+    # Add p_e, p_c, pi_c estimates
     adata.obs.reset_index(inplace=True)
     adata.obs['p_e'] = adata.obs[p_key].map(p_es).astype('float')
     for convs in conversions:
-        adata.obs[f'p_c_{"_".join(convs)}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype('float')
+        convs_key = "_".join(convs)
+        adata.obs[f'p_c_{convs_key}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype('float')
+
+        for key in reads:
+            adata.obs[f'pi_c_{key}_{convs_key}'] = adata.obs[pi_key].map(pi_cs[key][tuple(convs)])
     adata.obs.set_index('barcode', inplace=True)
 
     adata.write(adata_path)

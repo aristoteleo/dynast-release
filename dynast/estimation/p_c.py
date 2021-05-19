@@ -239,14 +239,14 @@ def estimate_p_c(df_aggregates, p_e, p_c_path, group_by=None, threshold=1000, n_
             logger.warning(f'Estimation failed {failed} times.')
 
     logger.debug(f'Writing p_c estimates to {p_c_path}')
-    with open(p_c_path, 'w') as p_c_out:
+    with open(p_c_path, 'w') as f:
         if group_by is None:
-            p_c_out.write(str(p_c))
+            f.write(str(p_c))
         else:
-            p_c_out.write(f'{",".join(group_by)},p_c\n')
+            f.write(f'{",".join(group_by)},p_c\n')
             for key in sorted(p_cs.keys()):
                 p_c = p_cs[key]
                 formatted_key = key if isinstance(key, str) else ",".join(key)
-                p_c_out.write(f'{formatted_key},{p_c}\n')
+                f.write(f'{formatted_key},{p_c}\n')
 
     return p_c_path

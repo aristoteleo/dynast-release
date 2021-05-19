@@ -8,20 +8,25 @@ from .. import config, utils
 from ..logging import logger
 
 
-def read_pi(pi_path, group_by=['barcode']):
+def read_pi(pi_path, group_by=None):
     """Read pi CSV as a dictionary.
 
     :param pi_path: path to CSV containing pi values
     :type pi_path: str
-    :param group_by: columns that were used to group cells, defaults to
-        ``['barcode']``
+    :param group_by: columns that were used to group estimation, defaults to
+        ``None``
     :type group_by: list, optional
 
     :return: dictionary with barcodes and genes as keys
     :rtype: dictionary
     """
-    df = pd.read_csv(pi_path, usecols=group_by + ['GX', 'pi'])
-    return dict(df.set_index(group_by + ['GX'])['pi'])
+    if group_by is None:
+        with open(pi_path, 'r') as f:
+            # pi is always the last column
+            return float(f.readline().strip().split(',')[-1])
+
+    df = pd.read_csv(pi_path, usecols=group_by + ['pi'])
+    return dict(df.set_index(group_by)['pi'])
 
 
 # Process initializer.
@@ -183,7 +188,7 @@ def estimate_pi(
     p_e,
     p_c,
     pi_path,
-    group_by=['barcode'],
+    group_by=None,
     p_group_by=None,
     n_threads=8,
     threshold=16,
@@ -202,7 +207,7 @@ def estimate_pi(
     :param pi_path: path to write pi estimates
     :type pi_path: str
     :param group_by: columns that were used to group cells, defaults to
-        ``['barcode']``
+        ``None``
     :type group_by: list, optional
     :param p_group_by: columns that p_e/p_c estimation was grouped by, defaults to `None`
     :type p_group_by: list, optional
@@ -223,85 +228,103 @@ def estimate_pi(
     :return: path to pi output
     :rtype: str
     """
-    df_aggregates = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)]
+    df_full = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)]
 
     model = model or pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
 
     if p_group_by is not None:
-        df_full = df_aggregates.set_index(p_group_by, drop=True)
+        df_full.set_index(p_group_by, inplace=True)
         df_full['p_e'] = df_full.index.map(p_e)
         df_full['p_c'] = df_full.index.map(p_c)
-        df_full = df_full.reset_index()
+        df_full.reset_index(inplace=True)
     else:
-        df_full = df_aggregates
         df_full['p_e'] = p_e
         df_full['p_c'] = p_c
     df_full.dropna(subset=['p_c'], inplace=True)  # Drop NA values due to p_c
     values = df_full[['conversion', 'base', 'count']].values
     p_es = df_full['p_e'].values
     p_cs = df_full['p_c'].values
-    groups = df_full.groupby(group_by + ['GX'], sort=False, observed=True).indices
-    pis = {}
-    skipped = 0
-    failed = 0
-    logger.debug(f'Spawning {n_threads} processes')
-    with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
-        futures = {}
-        # Run larger groups first
-        for key in sorted(groups.keys(), key=lambda key: len(groups[key]), reverse=True):
-            idx = groups[key]
-            p_e_unique = np.unique(p_es[idx])
-            p_c_unique = np.unique(p_cs[idx])
-
-            if len(p_e_unique) > 1 or len(p_c_unique) > 1:
-                raise Exception(
-                    'p_e and p_c for each aggregate group must be a constant, '
-                    f'but instead got {p_e_unique} and {p_c_unique}'
-                )
-
-            p_e = p_e_unique[0]
-            p_c = p_c_unique[0]
-            vals = values[idx]
-            count = sum(vals[:, 2])
-
-            if count < threshold:
-                skipped += 1
-                continue
-
-            # Make a naive guess of the fraction of new RNA
-            # Clip guess to [0.01, 0.99] because STAN initialization will fail
-            # if guess is either 0 or 1.
-            guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
-
-            futures[executor.submit(
-                fit_stan_mcmc,
-                vals,
-                p_e,
-                p_c,
-                guess=guess,
-                seed=seed,
-            )] = key
-
-        for future in utils.as_completed_with_progress(futures):
-            key = futures[future]
-            try:
-                guess, alpha, beta, pi = future.result()
-                pis[key] = (guess, alpha, beta, beta_mode(alpha, beta) if nasc else pi)
-            except RuntimeError:
-                failed += 1
-
-    if skipped > 0:
-        logger.warning(
-            f'Estimation skipped for {skipped} cell-genes because they have less than '
-            f'{threshold} reads. Use `--cell-gene-threshold` to change.'
+    if group_by is None:
+        # p_e, p_c must be a single float
+        if not isinstance(p_e, float) or not isinstance(p_c, float):
+            raise Exception('`p_e` and `p_c` must be floats when `group_by` is not provided')
+        guess, alpha, beta, pi = fit_stan_mcmc(
+            values,
+            p_e,
+            p_c,
+            guess=0.5,
+            seed=seed,
         )
-    if failed > 0:
-        logger.warning(f'Estimation failed {failed} times.')
+        pi = beta_mode(alpha, beta) if nasc else pi
+    else:
+        groups = df_full.groupby(group_by, sort=False, observed=True).indices
+        pis = {}
+        skipped = 0
+        failed = 0
+        logger.debug(f'Spawning {n_threads} processes')
+        # TODO: collapse rows with duplicate conversion and base counts
+        # This can be done by constructing a csr_matrix and coverting it back
+        with ProcessPoolExecutor(max_workers=n_threads, initializer=initializer, initargs=(model,)) as executor:
+            futures = {}
+            # Run larger groups first
+            for key in sorted(groups.keys(), key=lambda key: len(groups[key]), reverse=True):
+                idx = groups[key]
+                p_e_unique = np.unique(p_es[idx])
+                p_c_unique = np.unique(p_cs[idx])
+
+                if len(p_e_unique) > 1 or len(p_c_unique) > 1:
+                    raise Exception(
+                        'p_e and p_c for each aggregate group must be a constant, '
+                        f'but instead got {p_e_unique} and {p_c_unique}'
+                    )
+
+                p_e = p_e_unique[0]
+                p_c = p_c_unique[0]
+                vals = values[idx]
+                count = sum(vals[:, 2])
+
+                if count < threshold:
+                    skipped += 1
+                    continue
+
+                # Make a naive guess of the fraction of new RNA
+                # Clip guess to [0.01, 0.99] because STAN initialization will fail
+                # if guess is either 0 or 1.
+                guess = min(max(sum(vals[vals[:, 0] > 0][:, 2]) / count, 0.01), 0.99)
+
+                futures[executor.submit(
+                    fit_stan_mcmc,
+                    vals,
+                    p_e,
+                    p_c,
+                    guess=guess,
+                    seed=seed,
+                )] = key
+
+            for future in utils.as_completed_with_progress(futures):
+                key = futures[future]
+                try:
+                    guess, alpha, beta, pi = future.result()
+                    pis[key] = (guess, alpha, beta, beta_mode(alpha, beta) if nasc else pi)
+                except RuntimeError:
+                    failed += 1
+
+        if skipped > 0:
+            logger.warning(
+                f'Estimation skipped for {skipped} cell-genes because they have less than '
+                f'{threshold} reads. Use `--cell-gene-threshold` to change.'
+            )
+        if failed > 0:
+            logger.warning(f'Estimation failed {failed} times.')
 
     with open(pi_path, 'w') as f:
-        f.write(f'{",".join(group_by)},GX,guess,alpha,beta,pi\n')
-        for barcode, gx in sorted(pis.keys()):
-            guess, alpha, beta, pi = pis[(barcode, gx)]
-            f.write(f'{barcode},{gx},{guess},{alpha},{beta},{pi}\n')
+        if group_by is None:
+            f.write(f'{guess},{alpha},{beta},{pi}')
+        else:
+            f.write(f'{",".join(group_by)},guess,alpha,beta,pi\n')
+            for key in sorted(pis.keys()):
+                guess, alpha, beta, pi = pis[key]
+                formatted_key = key if isinstance(key, str) else ",".join(key)
+                f.write(f'{formatted_key},{guess},{alpha},{beta},{pi}\n')
 
     return pi_path

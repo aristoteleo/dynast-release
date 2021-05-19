@@ -14,7 +14,7 @@ from .. import mixins
 class TestPi(mixins.TestMixin, TestCase):
 
     def test_read_pi(self):
-        pi.read_pi(self.umi_pi_path)
+        pi.read_pi(self.umi_pi_path, group_by=['barcode', 'GX'])
 
     def test_beta_mean(self):
         self.assertAlmostEqual(stats.beta.mean(1, 1), pi.beta_mean(1, 1))
@@ -42,6 +42,7 @@ class TestPi(mixins.TestMixin, TestCase):
                     p_e.read_p_e(self.umi_p_e_path, group_by=['barcode']),
                     p_c.read_p_c(self.umi_p_c_path, group_by=['barcode']),
                     pi_path,
+                    group_by=['barcode', 'GX'],
                     p_group_by=['barcode'],
                     n_threads=2,
                     threshold=1,
