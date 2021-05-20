@@ -467,6 +467,8 @@ def parse_align(parser, args, temp_dir=None):
     # STAR overrides
     overrides = {}
     if args.STAR_overrides:
+        # Strip any quotes or double-quotes because those shouldn't be part of the string
+        args.STAR_overrides = args.STAR_overrides.strip('\"\'')
         arg = None
         for part in args.STAR_overrides.split(' '):
             if part.startswith(('-', '--')):
@@ -482,6 +484,7 @@ def parse_align(parser, args, temp_dir=None):
                 overrides.setdefault(arg, []).append(part)
         # Clean
         overrides = {arg: parts[0] if len(parts) == 1 else parts for arg, parts in overrides.items()}
+    print(overrides)
 
     from .align import align
     align(
