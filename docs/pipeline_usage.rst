@@ -169,42 +169,45 @@ The fraction of labeled RNA is estimated with the :code:`dynast estimate` comman
 .. code-block:: text
 
     usage: dynast estimate [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS]
-                       [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV]
-                       [--ignore-groups-for-pi] [--genes TXT] [--cell-threshold COUNT] [--cell-gene-threshold COUNT]
-                       [--control] [--p-e P_E]
-                       count_dirs [count_dirs ...]
+                           [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV]
+                           [--ignore-groups-for-pi] [--genes TXT] [--cell-threshold COUNT] [--cell-gene-threshold COUNT]
+                           [--downsample NUM] [--control] [--p-e P_E]
+                           count_dirs [count_dirs ...]
 
     Estimate fraction of labeled RNA
 
     positional arguments:
-    count_dirs            Path to directory that contains `dynast count` output. When multiple are provided, the
-                        barcodes in each of the count directories are suffixed with `-i` where i is a 0-indexed
-                        integer.
+      count_dirs            Path to directory that contains `dynast count` output. When multiple are provided, the
+                            barcodes in each of the count directories are suffixed with `-i` where i is a 0-indexed
+                            integer.
 
     optional arguments:
-    -h, --help            Show this help message and exit
-    --tmp TMP             Override default temporary directory
-    --keep-tmp            Do not delete the tmp directory
-    --verbose             Print debugging information
-    -t THREADS            Number of threads to use (default: 8)
-    --reads {total,transcriptome,spliced,unspliced}
-                        Read groups to perform estimation on. This option can be used multiple times to estimate
-                        multiple groups. (default: all possible reads groups)
-    -o OUT                Path to output directory (default: current directory)
-    --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
-                        the group name the cell belongs to. Cells will be combined per group for estimation of
-                        parameters specified by `--groups-for`.
-    --ignore-groups-for-pi
-                        Ignore cell groupings when estimating the fraction of labeled RNA. This option only has an
-                        effect when `--groups` is also specified.
-    --genes TXT           Textfile containing list of genes to use. All other genes will be treated as if they do not
-                        exist.
-    --cell-threshold COUNT
-                        A cell must have at least this many reads for correction. (default: 1000)
-    --cell-gene-threshold COUNT
-                        A cell-gene pair must have at least this many reads for correction. (default: 16)
-    --control             Indicate this is a control sample, only the background mutation rate will be estimated.
-    --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
+      -h, --help            Show this help message and exit
+      --tmp TMP             Override default temporary directory
+      --keep-tmp            Do not delete the tmp directory
+      --verbose             Print debugging information
+      -t THREADS            Number of threads to use (default: 8)
+      --reads {total,transcriptome,spliced,unspliced}
+                            Read groups to perform estimation on. This option can be used multiple times to estimate
+                            multiple groups. (default: all possible reads groups)
+      -o OUT                Path to output directory (default: current directory)
+      --groups CSV          CSV containing cell (barcode) groups, where the first column is the barcode and the second is
+                            the group name the cell belongs to. Cells will be combined per group for estimation of
+                            parameters specified by `--groups-for`.
+      --ignore-groups-for-pi
+                            Ignore cell groupings when estimating the fraction of labeled RNA. This option only has an
+                            effect when `--groups` is also specified.
+      --genes TXT           Textfile containing list of genes to use. All other genes will be treated as if they do not
+                            exist.
+      --cell-threshold COUNT
+                            A cell must have at least this many reads for correction. (default: 1000)
+      --cell-gene-threshold COUNT
+                            A cell-gene pair must have at least this many reads for correction. (default: 16)
+      --downsample NUM      Downsample the number of reads (UMIs). If a decimal between 0 and 1 is given, then the number
+                            is interpreted as the proportion of remaining reads. If an integer is given, the number is
+                            interpreted as the absolute number of remaining reads.
+      --control             Indicate this is a control sample, only the background mutation rate will be estimated.
+      --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
 
 Estimation thresholds
 '''''''''''''''''''''

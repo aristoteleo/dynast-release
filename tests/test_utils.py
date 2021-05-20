@@ -213,6 +213,23 @@ class TestUtils(mixins.TestMixin, TestCase):
         index = [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]
         self.assertEqual([(0, 15), (3, 10)], utils.split_index(index, n=2))
 
+    def test_downsample_counts_with_count(self):
+        df = pd.DataFrame([
+            ['a', 'b', 'c'],
+            ['d', 'e', 'f'],
+            ['g', 'h', 'i'],
+        ], columns=['col1', 'col2', 'col3'])
+        df_downsampled = utils.downsample_counts(df, count=1, seed=0)
+        pd.testing.assert_frame_equal(df.iloc[[2]], df_downsampled)
+
+    def test_downsample_counts_with_proportion(self):
+        df = pd.DataFrame([
+            ['a', 'b', 'c'],
+            ['d', 'e', 'f'],
+        ], columns=['col1', 'col2', 'col3'])
+        df_downsampled = utils.downsample_counts(df, proportion=0.5, seed=0)
+        pd.testing.assert_frame_equal(df.iloc[[1]], df_downsampled)
+
     def test_counts_to_matrix(self):
         rows = [
             ['barcode1', 'GX1'],

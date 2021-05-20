@@ -17,6 +17,7 @@ def estimate(
     groups=None,
     ignore_groups_for_pi=True,
     genes=None,
+    downsample=None,
     cell_threshold=1000,
     cell_gene_threshold=16,
     control_p_e=None,
@@ -61,6 +62,21 @@ def estimate(
         dfs.append(_df_counts)
     df_counts_uncomplemented = pd.concat(dfs, ignore_index=True) if len(count_dirs) > 1 else dfs[0]
     df_counts_uncomplemented['barcode'] = df_counts_uncomplemented['barcode'].astype('category')
+
+    # Downsample here
+    if downsample:
+        _proportion = None
+        _count = None
+        if int(downsample) == downsample:
+            _count = int(downsample)
+        else:
+            _proportion = downsample
+        logger.info('Downsampling ' + (f'to {_count} entries' if _count else f'to a factor of {_proportion}'))
+        old_count = df_counts_uncomplemented.shape[0]
+        df_counts_uncomplemented = utils.downsample_counts(
+            df_counts_uncomplemented, proportion=_proportion, count=_count, seed=seed
+        )
+        logger.debug(f'Downsampled from {old_count} to {df_counts_uncomplemented.shape[0]} entries')
 
     # Check that all requested read groups can be corrected.
     transcriptome_any = df_counts_uncomplemented['transcriptome'].any()

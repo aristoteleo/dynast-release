@@ -379,6 +379,17 @@ def setup_estimate_args(parser, parent):
         default=16
     )
     parser_estimate.add_argument(
+        '--downsample',
+        metavar='NUM',
+        help=(
+            'Downsample the number of reads (UMIs). If a decimal between 0 and 1 is given, '
+            'then the number is interpreted as the proportion of remaining reads. If an integer '
+            'is given, the number is interpreted as the absolute number of remaining reads.'
+        ),
+        type=float,
+        default=None
+    )
+    parser_estimate.add_argument(
         '--nasc',
         help=argparse.SUPPRESS,
         action='store_true',
@@ -618,6 +629,7 @@ def parse_estimate(parser, args, temp_dir=None):
         groups=groups,
         ignore_groups_for_pi=args.ignore_groups_for_pi,
         genes=genes,
+        downsample=args.downsample,
         cell_threshold=args.cell_threshold,
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,

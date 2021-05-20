@@ -569,6 +569,31 @@ def split_index(index, n=8):
     return parts
 
 
+def downsample_counts(df_counts, proportion=None, count=None, seed=None):
+    """Downsample the given counts dataframe according to the ``proportion`` or
+    ``count`` arguments. One of these two must be provided, but not both.
+
+    :param df_counts: counts dataframe
+    :type df_counts: pandas.DataFrame
+    :param proportion: proportion of reads (UMIs) to keep, defaults to None
+    :type proportion: float, optional
+    :param count: absolute number of reads (UMIs) to keep, defaults to None
+    :type count: int, optional
+    :param seed: random seed, defaults to None
+    :type seed: int, optional
+
+    :return: downsampled counts dataframe
+    :rtype: pandas.DataFrame
+    """
+    if bool(proportion) == bool(count):
+        raise Exception('Only one of `proportion` or `count` must be provided.')
+
+    n_keep = int(df_counts.shape[0] * proportion) if proportion is not None else count
+    rng = np.random.default_rng(seed)
+
+    return df_counts.iloc[rng.choice(df_counts.shape[0], n_keep, shuffle=False)]
+
+
 def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
     """Convert a counts dataframe to a sparse counts matrix.
 
