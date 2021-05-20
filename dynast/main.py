@@ -484,7 +484,6 @@ def parse_align(parser, args, temp_dir=None):
                 overrides.setdefault(arg, []).append(part)
         # Clean
         overrides = {arg: parts[0] if len(parts) == 1 else parts for arg, parts in overrides.items()}
-    print(overrides)
 
     from .align import align
     align(
