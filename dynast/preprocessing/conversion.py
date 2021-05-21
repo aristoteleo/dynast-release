@@ -107,16 +107,22 @@ def complement_counts(df_counts, gene_infos):
     :return: counts dataframe with counts complemented for reads mapping to genes on the reverse strand
     :rtype: pandas.DataFrame
     """
+    # Extract columns that do not need to be complemented
+    other_columns = []
+    for col in df_counts.columns:
+        if col in COLUMNS:
+            continue
+        other_columns.append(col)
     df_counts['strand'] = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand'])
 
-    columns = ['barcode', 'GX', 'velocity', 'transcriptome'] + COLUMNS
+    columns = other_columns + COLUMNS
     df_forward = df_counts[df_counts.strand == '+'][columns]
     df_reverse = df_counts[df_counts.strand == '-'][columns]
 
-    df_reverse.columns = ['barcode', 'GX', 'velocity', 'transcriptome'] + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
+    df_reverse.columns = other_columns + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
     df_reverse = df_reverse[columns]
 
-    return pd.concat((df_forward, df_reverse)).reset_index()
+    return pd.concat((df_forward, df_reverse), verify_integrity=True)
 
 
 def drop_multimappers(df_counts, conversions=None):

@@ -569,9 +569,10 @@ def split_index(index, n=8):
     return parts
 
 
-def downsample_counts(df_counts, proportion=None, count=None, seed=None):
+def downsample_counts(df_counts, proportion=None, count=None, seed=None, group_by=None):
     """Downsample the given counts dataframe according to the ``proportion`` or
-    ``count`` arguments. One of these two must be provided, but not both.
+    ``count`` arguments. One of these two must be provided, but not both. The dataframe
+    is assumed to be UMI-deduplicated.
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
@@ -581,17 +582,32 @@ def downsample_counts(df_counts, proportion=None, count=None, seed=None):
     :type count: int, optional
     :param seed: random seed, defaults to None
     :type seed: int, optional
+    :param group_by: Columns in the counts dataframe to use to group entries.
+        When this is provided, UMIs are no longer sampled at random, but instead
+        grouped by this argument, and only groups that have more than ``count`` UMIs
+        are downsampled.
+    :type group_by: list, optional
 
     :return: downsampled counts dataframe
     :rtype: pandas.DataFrame
     """
-    if bool(proportion) == bool(count):
-        raise Exception('Only one of `proportion` or `count` must be provided.')
-
-    n_keep = int(df_counts.shape[0] * proportion) if proportion is not None else count
     rng = np.random.default_rng(seed)
+    if not group_by:
+        if bool(proportion) == bool(count):
+            raise Exception('Only one of `proportion` or `count` must be provided.')
 
-    return df_counts.iloc[rng.choice(df_counts.shape[0], n_keep, shuffle=False)]
+        n_keep = int(df_counts.shape[0] * proportion) if proportion is not None else count
+        return df_counts.iloc[rng.choice(df_counts.shape[0], n_keep, shuffle=False, replace=False)]
+    else:
+        if not count:
+            raise Exception('`count` must be provided when using `group_by`')
+
+        dfs = []
+        for key, df_group in df_counts.groupby(group_by, sort=False, observed=True):
+            if df_group.shape[0] > count:
+                df_group = df_group.iloc[rng.choice(df_group.shape[0], count, shuffle=False, replace=False)]
+            dfs.append(df_group)
+        return pd.concat(dfs)
 
 
 def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):

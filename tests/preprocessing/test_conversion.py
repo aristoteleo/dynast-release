@@ -16,9 +16,12 @@ class TestConversion(mixins.TestMixin, TestCase):
 
     def test_complement_counts(self):
         df = pd.read_csv(self.umi_counts_path)
+        df['new_column'] = 'test'
         gene_infos = utils.read_pickle(self.umi_genes_path)
         df_complemented = conversion.complement_counts(df, gene_infos)
+        print(df_complemented)
         self.assertEqual(df.shape[0], df_complemented.shape[0])
+        self.assertIn('new_column', df_complemented.columns)
         # Select one gene to investigate
         gene = list(df['GX'][df['GX'].map(lambda gx: gene_infos[gx]['strand']) == '-'])[0]
         df_gene = df[df['GX'] == gene].sort_values(['barcode', 'GX'])

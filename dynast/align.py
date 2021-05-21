@@ -126,7 +126,7 @@ def STAR_solo(
             '--runThreadN': n_threads,
             '--outFileNamePrefix': out_dir,
             '--outTmpDir': os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}'),
-            '--outBAMsortingBinsN': max((maximum // n_threads) - 10, 50)
+            '--outBAMsortingBinsN': min(max((maximum // n_threads) - 10, 50), 100000)
         }
     )
     arguments.update(overrides or {})

@@ -171,7 +171,7 @@ The fraction of labeled RNA is estimated with the :code:`dynast estimate` comman
     usage: dynast estimate [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS]
                            [--reads {total,transcriptome,spliced,unspliced}] [-o OUT] [--groups CSV]
                            [--ignore-groups-for-pi] [--genes TXT] [--cell-threshold COUNT] [--cell-gene-threshold COUNT]
-                           [--downsample NUM] [--control] [--p-e P_E]
+                           [--downsample NUM] [--downsample-mode MODE] [--control] [--p-e P_E]
                            count_dirs [count_dirs ...]
 
     Estimate fraction of labeled RNA
@@ -206,6 +206,11 @@ The fraction of labeled RNA is estimated with the :code:`dynast estimate` comman
       --downsample NUM      Downsample the number of reads (UMIs). If a decimal between 0 and 1 is given, then the number
                             is interpreted as the proportion of remaining reads. If an integer is given, the number is
                             interpreted as the absolute number of remaining reads.
+      --downsample-mode MODE
+                            Downsampling mode. Can be one of: `uniform`, `cell`, `group`. If `uniform`, all reads (UMIs)
+                            are downsampled uniformly at random. If `cell`, only cells that have more reads than the
+                            argument to `--downsample` are downsampled to exactly that number. If `group`, identical to
+                            `cell` but per group specified by `--groups`.
       --control             Indicate this is a control sample, only the background mutation rate will be estimated.
       --p-e P_E             Textfile containing a single number, indicating the estimated background mutation rate
 

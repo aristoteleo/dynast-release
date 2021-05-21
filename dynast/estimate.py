@@ -18,6 +18,7 @@ def estimate(
     ignore_groups_for_pi=True,
     genes=None,
     downsample=None,
+    downsample_mode='uniform',
     cell_threshold=1000,
     cell_gene_threshold=16,
     control_p_e=None,
@@ -62,19 +63,51 @@ def estimate(
         dfs.append(_df_counts)
     df_counts_uncomplemented = pd.concat(dfs, ignore_index=True) if len(count_dirs) > 1 else dfs[0]
     df_counts_uncomplemented['barcode'] = df_counts_uncomplemented['barcode'].astype('category')
+    df_counts_uncomplemented.drop(columns=['umi'], inplace=True)
+
+    # Clean groups by combining multiple into one
+    if isinstance(groups, list):
+        if len(groups) == 1:
+            groups = groups[0]
+        else:
+            groups = {f'{barcode}-{i}': group for i, _groups in enumerate(groups) for barcode, group in _groups.items()}
+        # Contains group name to list of cells mapping
+        group_cells = {}
+        for barcode, group in groups.items():
+            group_cells.setdefault(group, []).append(barcode)
+
+    # Change barcodes to cell groups. We add groups here instead of after
+    # complementing because the user may want to downsample per group instead of per cell.
+    if groups:
+        logger.warning(f'Barcodes that are not among the {len(groups)} barcodes with assigned groups will be ignored.')
+        df_counts_uncomplemented = df_counts_uncomplemented[df_counts_uncomplemented['barcode'].isin(
+            groups.keys()
+        )].reset_index(drop=True)
+        df_counts_uncomplemented['group'] = df_counts_uncomplemented['barcode'].map(groups).astype('category')
 
     # Downsample here
     if downsample:
         _proportion = None
         _count = None
+        _group_by = None
         if int(downsample) == downsample:
             _count = int(downsample)
         else:
             _proportion = downsample
-        logger.info('Downsampling ' + (f'to {_count} entries' if _count else f'to a factor of {_proportion}'))
+        if downsample_mode == 'cell':
+            _group_by = ['barcode']
+        elif downsample_mode == 'group':
+            _group_by = ['group']
+        if not _group_by:
+            logger.info(
+                'Downsampling uniformly at random ' +
+                (f'to {_count} entries' if _count else f'to a factor of {_proportion}')
+            )
+        else:
+            logger.info(f'Downsampling per {_group_by} to {_count} entries')
         old_count = df_counts_uncomplemented.shape[0]
         df_counts_uncomplemented = utils.downsample_counts(
-            df_counts_uncomplemented, proportion=_proportion, count=_count, seed=seed
+            df_counts_uncomplemented, proportion=_proportion, count=_count, seed=seed, group_by=_group_by
         )
         logger.debug(f'Downsampled from {old_count} to {df_counts_uncomplemented.shape[0]} entries')
 
@@ -106,23 +139,6 @@ def estimate(
 
     gene_infos = utils.read_pickle(os.path.join(count_dirs[0], constants.GENES_FILENAME))
     df_counts = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
-
-    # Clean groups by combining multiple into one
-    if isinstance(groups, list):
-        if len(groups) == 1:
-            groups = groups[0]
-        else:
-            groups = {f'{barcode}-{i}': group for i, _groups in enumerate(groups) for barcode, group in _groups.items()}
-        # Contains group name to list of cells mapping
-        group_cells = {}
-        for barcode, group in groups.items():
-            group_cells.setdefault(group, []).append(barcode)
-
-    # Change barcodes to cell groups
-    if groups:
-        logger.warning(f'Barcodes that are not among the {len(groups)} barcodes with assigned groups will be ignored.')
-        df_counts = df_counts[df_counts['barcode'].isin(groups.keys())].reset_index(drop=True)
-        df_counts['group'] = df_counts['barcode'].map(groups).astype('category')
     logger.info(
         f'Final counts: {df_counts.shape[0]} reads '
         f'across {df_counts["barcode"].nunique()} barcodes' +

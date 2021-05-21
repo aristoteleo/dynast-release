@@ -230,6 +230,15 @@ class TestUtils(mixins.TestMixin, TestCase):
         df_downsampled = utils.downsample_counts(df, proportion=0.5, seed=0)
         pd.testing.assert_frame_equal(df.iloc[[1]], df_downsampled)
 
+    def test_downsample_counts_group_by(self):
+        df = pd.DataFrame([
+            ['a', 'b', 'c'],
+            ['a', 'e', 'f'],
+            ['b', 'e', 'f'],
+        ], columns=['cell', 'col2', 'col3'])
+        df_downsampled = utils.downsample_counts(df, count=1, seed=0, group_by=['cell'])
+        pd.testing.assert_frame_equal(df.iloc[[1, 2]], df_downsampled)
+
     def test_counts_to_matrix(self):
         rows = [
             ['barcode1', 'GX1'],

@@ -390,6 +390,19 @@ def setup_estimate_args(parser, parent):
         default=None
     )
     parser_estimate.add_argument(
+        '--downsample-mode',
+        metavar='MODE',
+        help=(
+            'Downsampling mode. Can be one of: `uniform`, `cell`, `group`. If `uniform`, all reads '
+            '(UMIs) are downsampled uniformly at random. If `cell`, only cells that have more '
+            'reads than the argument to `--downsample` are downsampled to exactly that number. '
+            'If `group`, identical to `cell` but per group specified by `--groups`.'
+        ),
+        type=str,
+        choices=['uniform', 'cell', 'group'],
+        default='uniform'
+    )
+    parser_estimate.add_argument(
         '--nasc',
         help=argparse.SUPPRESS,
         action='store_true',
@@ -621,6 +634,13 @@ def parse_estimate(parser, args, temp_dir=None):
     if not args.reads:
         args.reads = 'complete'
 
+    # Check that --downsample is an integer if --downsample-mode is cell
+    if args.downsample and args.downsample_mode in ('cell', 'group'):
+        if int(args.downsample) != args.downsample:
+            parser.error('`--downsample` must be an integer when using `--downsample-mode cell/group`')
+    if args.downsample_mode == 'group' and not args.groups:
+        parser.error('`--groups` must be provided when using `--downsample-mode group`')
+
     from .estimate import estimate
     estimate(
         args.count_dirs,
@@ -630,6 +650,7 @@ def parse_estimate(parser, args, temp_dir=None):
         ignore_groups_for_pi=args.ignore_groups_for_pi,
         genes=genes,
         downsample=args.downsample,
+        downsample_mode=args.downsample_mode,
         cell_threshold=args.cell_threshold,
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,
