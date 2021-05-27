@@ -19,7 +19,6 @@ class TestConversion(mixins.TestMixin, TestCase):
         df['new_column'] = 'test'
         gene_infos = utils.read_pickle(self.umi_genes_path)
         df_complemented = conversion.complement_counts(df, gene_infos)
-        print(df_complemented)
         self.assertEqual(df.shape[0], df_complemented.shape[0])
         self.assertIn('new_column', df_complemented.columns)
         # Select one gene to investigate
@@ -111,6 +110,7 @@ class TestConversion(mixins.TestMixin, TestCase):
                     self.umi_no_conversions_path,
                     self.umi_no_conversions_index_path,
                     counts_path,
+                    utils.read_pickle(self.umi_genes_path),
                     snps=None,
                     quality=27,
                     conversions=['TC'],
@@ -131,6 +131,7 @@ class TestConversion(mixins.TestMixin, TestCase):
                     self.paired_no_conversions_path,
                     self.paired_no_conversions_index_path,
                     counts_path,
+                    utils.read_pickle(self.paired_genes_path),
                     snps=None,
                     quality=27,
                     n_threads=2,

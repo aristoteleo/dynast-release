@@ -734,6 +734,7 @@ def main():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
+        logger.info('Done')
     except Exception:
         logger.exception('An exception occurred')
     finally:

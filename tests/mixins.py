@@ -51,6 +51,8 @@ class TestMixin(TestCase):
         cls.base_dir = os.path.dirname(os.path.abspath(__file__))
         cls.fixtures_dir = os.path.join(cls.base_dir, 'fixtures')
         cls.gtf_path = os.path.join(cls.fixtures_dir, 'not_sorted.gtf')
+        cls.genes_path = os.path.join(cls.fixtures_dir, 'genes.pkl.gz')
+        cls.transcripts_path = os.path.join(cls.fixtures_dir, 'transcripts.pkl.gz')
 
         ###########################
         # UMI-based (with velocity)
@@ -67,24 +69,22 @@ class TestMixin(TestCase):
 
         # Count
         cls.umi_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count')
-        cls.umi_count_parse_dir = os.path.join(cls.umi_count_dir, '0_parse')
-        cls.umi_count_count_dir = os.path.join(cls.umi_count_dir, '1_count')
-        cls.umi_count_aggregate_dir = os.path.join(cls.umi_count_dir, '2_aggregate')
-        cls.umi_count_estimate_dir = os.path.join(cls.umi_count_dir, '3_estimate')
+        cls.umi_conversions_path = os.path.join(cls.umi_count_dir, 'conversions.csv')
+        cls.umi_conversions_index_path = os.path.join(cls.umi_count_dir, 'conversions.idx')
+        cls.umi_no_conversions_path = os.path.join(cls.umi_count_dir, 'no_conversions.csv')
+        cls.umi_no_conversions_index_path = os.path.join(cls.umi_count_dir, 'no_conversions.idx')
+        cls.umi_genes_path = cls.genes_path
+        cls.umi_transcripts_path = cls.transcripts_path
+        cls.umi_counts_path = os.path.join(cls.umi_count_dir, 'counts_TC.csv')
+        cls.umi_rates_path = os.path.join(cls.umi_count_dir, 'rates.csv')
         cls.umi_adata_path = os.path.join(cls.umi_count_dir, 'adata.h5ad')
 
-        cls.umi_conversions_path = os.path.join(cls.umi_count_parse_dir, 'conversions.csv')
-        cls.umi_conversions_index_path = os.path.join(cls.umi_count_parse_dir, 'conversions.idx')
-        cls.umi_no_conversions_path = os.path.join(cls.umi_count_parse_dir, 'no_conversions.csv')
-        cls.umi_no_conversions_index_path = os.path.join(cls.umi_count_parse_dir, 'no_conversions.idx')
-        cls.umi_genes_path = os.path.join(cls.umi_count_parse_dir, 'genes2.pkl.gz')
-        cls.umi_transcripts_path = os.path.join(cls.umi_count_parse_dir, 'transcripts2.pkl.gz')
-        cls.umi_counts_path = os.path.join(cls.umi_count_count_dir, 'counts_TC.csv')
-        cls.umi_rates_path = os.path.join(cls.umi_count_aggregate_dir, 'rates.csv')
-        cls.umi_aggregates_path = os.path.join(cls.umi_count_aggregate_dir, 'total_TC.csv')
-        cls.umi_p_e_path = os.path.join(cls.umi_count_estimate_dir, 'p_e.csv')
-        cls.umi_p_c_path = os.path.join(cls.umi_count_estimate_dir, 'p_c_TC.csv')
-        cls.umi_pi_path = os.path.join(cls.umi_count_estimate_dir, 'total_TC.csv')
+        # Estimate
+        cls.umi_estimate_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_estimate')
+        cls.umi_aggregates_path = os.path.join(cls.umi_estimate_dir, 'A_total_TC.csv')
+        cls.umi_p_e_path = os.path.join(cls.umi_estimate_dir, 'p_e.csv')
+        cls.umi_p_c_path = os.path.join(cls.umi_estimate_dir, 'p_c_TC.csv')
+        cls.umi_pi_path = os.path.join(cls.umi_estimate_dir, 'pi_total_TC.csv')
 
         #########
         # Control
@@ -127,24 +127,22 @@ class TestMixin(TestCase):
 
         # Count
         cls.paired_count_dir = os.path.join(cls.fixtures_dir, 'smartseq_count')
-        cls.paired_count_parse_dir = os.path.join(cls.paired_count_dir, '0_parse')
-        cls.paired_count_count_dir = os.path.join(cls.paired_count_dir, '1_count')
-        cls.paired_count_aggregate_dir = os.path.join(cls.paired_count_dir, '2_aggregate')
-        cls.paired_count_estimate_dir = os.path.join(cls.paired_count_dir, '3_estimate')
+        cls.paired_conversions_path = os.path.join(cls.paired_count_dir, 'conversions.csv')
+        cls.paired_conversions_index_path = os.path.join(cls.paired_count_dir, 'conversions.idx')
+        cls.paired_no_conversions_path = os.path.join(cls.paired_count_dir, 'no_conversions.csv')
+        cls.paired_no_conversions_index_path = os.path.join(cls.paired_count_dir, 'no_conversions.idx')
+        cls.paired_genes_path = cls.genes_path
+        cls.paired_transcripts_path = cls.transcripts_path
+        cls.paired_counts_path = os.path.join(cls.paired_count_dir, 'counts_TC.csv')
+        cls.paired_rates_path = os.path.join(cls.paired_count_dir, 'rates.csv')
         cls.paired_adata_path = os.path.join(cls.paired_count_dir, 'adata.h5ad')
 
-        cls.paired_conversions_path = os.path.join(cls.paired_count_parse_dir, 'conversions.csv')
-        cls.paired_conversions_index_path = os.path.join(cls.paired_count_parse_dir, 'conversions.idx')
-        cls.paired_no_conversions_path = os.path.join(cls.paired_count_parse_dir, 'no_conversions.csv')
-        cls.paired_no_conversions_index_path = os.path.join(cls.paired_count_parse_dir, 'no_conversions.idx')
-        cls.paired_genes_path = os.path.join(cls.paired_count_parse_dir, 'genes2.pkl.gz')
-        cls.paired_transcripts_path = os.path.join(cls.paired_count_parse_dir, 'transcripts2.pkl.gz')
-        cls.paired_counts_path = os.path.join(cls.paired_count_count_dir, 'counts_TC.csv')
-        cls.paired_rates_path = os.path.join(cls.paired_count_aggregate_dir, 'rates.csv')
-        cls.paired_aggregates_path = os.path.join(cls.paired_count_aggregate_dir, 'transcriptome_TC.csv')
-        cls.paired_p_e_path = os.path.join(cls.paired_count_estimate_dir, 'p_e.csv')
-        cls.paired_p_c_path = os.path.join(cls.paired_count_estimate_dir, 'p_c.csv')
-        cls.paired_pi_path = os.path.join(cls.paired_count_estimate_dir, 'transcriptome_TC.csv')
+        # Estimate
+        cls.paired_estimate_dir = os.path.join(cls.fixtures_dir, 'smartseq_estimate')
+        cls.paired_aggregates_path = os.path.join(cls.paired_estimate_dir, 'A_total_TC.csv')
+        cls.paired_p_e_path = os.path.join(cls.paired_estimate_dir, 'p_e.csv')
+        cls.paired_p_c_path = os.path.join(cls.paired_estimate_dir, 'p_c_TC.csv')
+        cls.paired_pi_path = os.path.join(cls.paired_estimate_dir, 'pi_transcriptome_TC.csv')
 
         ######################################
         # Paired (smartseq, no velocity, nasc)
@@ -155,24 +153,22 @@ class TestMixin(TestCase):
 
         # Count
         cls.nasc_count_dir = os.path.join(cls.fixtures_dir, 'nasc_count')
-        cls.nasc_count_parse_dir = os.path.join(cls.nasc_count_dir, '0_parse')
-        cls.nasc_count_count_dir = os.path.join(cls.nasc_count_dir, '1_count')
-        cls.nasc_count_aggregate_dir = os.path.join(cls.nasc_count_dir, '2_aggregate')
-        cls.nasc_count_estimate_dir = os.path.join(cls.nasc_count_dir, '3_estimate')
+        cls.nasc_conversions_path = os.path.join(cls.nasc_count_dir, 'conversions.csv')
+        cls.nasc_conversions_index_path = os.path.join(cls.nasc_count_dir, 'conversions.idx')
+        cls.nasc_no_conversions_path = os.path.join(cls.nasc_count_dir, 'no_conversions.csv')
+        cls.nasc_no_conversions_index_path = os.path.join(cls.nasc_count_dir, 'no_conversions.idx')
+        cls.nasc_genes_path = cls.genes_path
+        cls.nasc_transcripts_path = cls.transcripts_path
+        cls.nasc_counts_path = os.path.join(cls.nasc_count_dir, 'counts_TC.csv')
+        cls.nasc_rates_path = os.path.join(cls.nasc_count_dir, 'rates.csv')
         cls.nasc_adata_path = os.path.join(cls.nasc_count_dir, 'adata.h5ad')
 
-        cls.nasc_conversions_path = os.path.join(cls.nasc_count_parse_dir, 'conversions.csv')
-        cls.nasc_conversions_index_path = os.path.join(cls.nasc_count_parse_dir, 'conversions.idx')
-        cls.nasc_no_conversions_path = os.path.join(cls.nasc_count_parse_dir, 'no_conversions.csv')
-        cls.nasc_no_conversions_index_path = os.path.join(cls.nasc_count_parse_dir, 'no_conversions.idx')
-        cls.nasc_genes_path = os.path.join(cls.nasc_count_parse_dir, 'genes2.pkl.gz')
-        cls.nasc_transcripts_path = os.path.join(cls.nasc_count_parse_dir, 'transcripts2.pkl.gz')
-        cls.nasc_counts_path = os.path.join(cls.nasc_count_count_dir, 'counts_TC.csv')
-        cls.nasc_rates_path = os.path.join(cls.nasc_count_aggregate_dir, 'rates.csv')
-        cls.nasc_aggregates_path = os.path.join(cls.nasc_count_aggregate_dir, 'transcriptome_TC.csv')
-        cls.nasc_p_e_path = os.path.join(cls.nasc_count_estimate_dir, 'p_e.csv')
-        cls.nasc_p_c_path = os.path.join(cls.nasc_count_estimate_dir, 'p_c_TC.csv')
-        cls.nasc_pi_path = os.path.join(cls.nasc_count_estimate_dir, 'transcriptome_TC.csv')
+        # Estimate
+        cls.nasc_estimate_dir = os.path.join(cls.fixtures_dir, 'nasc_estimate')
+        cls.nasc_aggregates_path = os.path.join(cls.nasc_estimate_dir, 'A_transcriptome_TC.csv')
+        cls.nasc_p_e_path = os.path.join(cls.nasc_estimate_dir, 'p_e.csv')
+        cls.nasc_p_c_path = os.path.join(cls.nasc_estimate_dir, 'p_c_TC.csv')
+        cls.nasc_pi_path = os.path.join(cls.nasc_estimate_dir, 'pi_transcriptome_TC.csv')
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()

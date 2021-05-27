@@ -404,6 +404,7 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
             time.sleep(0.1)
             progress = counter.value
             pbar.update(progress - previous_progress)
+            pbar.refresh()
             previous_progress = progress
 
 

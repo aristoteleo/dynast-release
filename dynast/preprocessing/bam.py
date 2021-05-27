@@ -12,6 +12,14 @@ import pysam
 from .. import config, utils
 from ..logging import logger
 
+CONVERSION_CSV_COLUMNS = [
+    'read_id', 'index', 'barcode', 'umi', 'GX', 'contig', 'genome_i', 'original', 'converted', 'quality', 'A', 'C', 'G',
+    'T', 'velocity', 'transcriptome'
+]
+NO_CONVERSION_CSV_COLUMNS = [
+    'read_id', 'index', 'barcode', 'umi', 'GX', 'A', 'C', 'G', 'T', 'velocity', 'transcriptome'
+]
+
 
 def read_conversions(conversions_path, *args, **kwargs):
     """Read conversions CSV as a pandas DataFrame.
@@ -49,9 +57,9 @@ def read_conversions(conversions_path, *args, **kwargs):
 
 
 def parse_read_contig(
-    bam_path,
     counter,
     lock,
+    bam_path,
     contig,
     gene_infos=None,
     transcript_infos=None,
@@ -68,14 +76,13 @@ def parse_read_contig(
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
     separate process.
-
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
     :param counter: counter that keeps track of how many reads have been processed
     :type counter: multiprocessing.Value
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
     :param contig: only reads that map to this contig will be processed
     :type contig: str
     :param gene_infos: dictionary containing gene information, as returned by
@@ -109,7 +116,6 @@ def parse_read_contig(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
-
     :return: (path to conversions, path to conversions index,
               path to no conversions, path to no conversions index)
     :rtype: (str, str, str, str)
@@ -413,8 +419,8 @@ def parse_all_reads(
     index_path,
     no_conversions_path,
     no_index_path,
-    gene_infos=None,
-    transcript_infos=None,
+    gene_infos,
+    transcript_infos,
     strand='forward',
     umi_tag=None,
     barcode_tag=None,
@@ -440,12 +446,11 @@ def parse_all_reads(
     :param no_index_path: path to no conversions index
     :type no_index_path: str
     :param gene_infos: dictionary containing gene information, as returned by
-                       `ngs.gtf.genes_and_transcripts_from_gtf`, defaults to `None`
-    :type gene_infos: dictionary, optional
+                       `ngs.gtf.genes_and_transcripts_from_gtf`
+    :type gene_infos: dictionary
     :param transcript_infos: dictionary containing transcript information,
-                             as returned by `ngs.gtf.genes_and_transcripts_from_gtf`,
-                             defaults to `None`
-    :type transcript_infos: dictionary, optional
+                             as returned by `ngs.gtf.genes_and_transcripts_from_gtf`
+    :type transcript_infos: dictionary
     :param strand: strandedness of the sequencing protocol, defaults to `forward`,
                    may be one of the following: `forward`, `reverse`, `unstranded`
     :type strand: str, optional
@@ -489,28 +494,41 @@ def parse_all_reads(
             f'{", ".join(not_found)}. '
         )
 
-    logger.debug(f'Extracting contigs from BAM {bam_path}')
-    contigs = []
-    n_reads = 0
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
-        for index in bam.get_index_statistics():
-            logger.debug(f'{index.total } reads mapped to contig `{index.contig}`')
-            n_reads += index.total
-            if index.total > 0:
-                contigs.append(index.contig)
+    contig_genes = {}
+    contig_transcripts = {}
+    for gene_id, gene_info in gene_infos.items():
+        contig_genes.setdefault(gene_info['chromosome'], []).append(gene_id)
+        contig_transcripts.setdefault(gene_info['chromosome'], []).extend(gene_info['transcripts'])
 
-    if not velocity:
-        args = [(contig, None, None) for contig in contigs]
+    if n_threads > 1:
+        n_splits = min(n_threads * 8, utils.get_file_descriptor_limit() - 10)
+        logger.debug(f'Splitting BAM into {n_splits} parts')
+        splits = ngs.bam.split_bam(
+            bam_path,
+            utils.mkstemp(temp_dir, delete=True),
+            n=n_splits,
+            n_threads=n_threads,
+        )
+        for path, _ in splits.values():
+            pysam.index(path, f'{path}.bai', '-@', str(n_threads))
+
     else:
-        args = []
-        for contig in contigs:
-            _gene_infos = {gene: info for gene, info in gene_infos.items() if info['chromosome'] == contig}
-            _transcript_infos = {
-                transcript: info
-                for transcript, info in transcript_infos.items()
-                if info['gene_id'] in _gene_infos
-            }
-            args.append((contig, _gene_infos, _transcript_infos))
+        splits = {'0': (bam_path, ngs.bam.count_bam(bam_path))}
+
+    # Add argument per contig
+    args = []
+    for path, _ in splits.values():
+        with pysam.AlignmentFile(path, 'rb') as f:
+            for index in f.get_index_statistics():
+                if index.total > 0:
+                    args.append((
+                        path, index.contig,
+                        {gene_id: gene_infos[gene_id]
+                         for gene_id in contig_genes.get(index.contig, {})} if velocity else None, {
+                             transcript_id: transcript_infos[transcript_id]
+                             for transcript_id in contig_transcripts.get(index.contig, {})
+                         } if velocity else None
+                    ))
 
     # Initialize and run pool
     logger.debug(f'Spawning {n_threads} processes')
@@ -518,7 +536,6 @@ def parse_all_reads(
     async_result = pool.starmap_async(
         partial(
             parse_read_contig,
-            bam_path,
             counter,
             lock,
             strand=strand,
@@ -534,8 +551,7 @@ def parse_all_reads(
     pool.close()
 
     # Display progres bar
-    logger.debug(f'Processing contigs {contigs} from BAM')
-    utils.display_progress_with_counter(counter, n_reads, async_result)
+    utils.display_progress_with_counter(counter, sum(value[1] for value in splits.values()), async_result)
     pool.join()
 
     # Combine csvs
@@ -544,10 +560,8 @@ def parse_all_reads(
     no_index = []
     with open(conversions_path, 'wb') as conversions_out, \
         open(no_conversions_path, 'wb') as no_conversions_out:
-        conversions_out.write(
-            b'read_id,index,barcode,umi,GX,contig,genome_i,original,converted,quality,A,C,G,T,velocity,transcriptome\n'
-        )
-        no_conversions_out.write(b'read_id,index,barcode,umi,GX,A,C,G,T,velocity,transcriptome\n')
+        conversions_out.write(f'{",".join(CONVERSION_CSV_COLUMNS)}\n'.encode())
+        no_conversions_out.write(f'{",".join(NO_CONVERSION_CSV_COLUMNS)}\n'.encode())
 
         pos = conversions_out.tell()
         no_pos = no_conversions_out.tell()

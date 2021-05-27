@@ -11,6 +11,12 @@ from .. import mixins
 
 class TestBam(mixins.TestMixin, TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super(TestBam, cls).setUpClass()
+        cls.gene_infos = utils.read_pickle(cls.genes_path)
+        cls.transcript_infos = utils.read_pickle(cls.transcripts_path)
+
     def test_read_conversions(self):
         bam.read_conversions(self.umi_conversions_path)
 
@@ -31,14 +37,14 @@ class TestBam(mixins.TestMixin, TestCase):
                                  index_path,
                                  no_conversions_path,
                                  no_index_path,
-                                 utils.read_pickle(self.umi_genes_path),
-                                 utils.read_pickle(self.umi_transcripts_path),
+                                 self.gene_infos,
+                                 self.transcript_infos,
                                  strand='forward',
                                  umi_tag='UB',
                                  barcode_tag='CB',
                                  gene_tag='GX',
                                  barcodes=None,
-                                 n_threads=2,
+                                 n_threads=1,
                                  temp_dir=self.temp_dir,
                                  nasc=False,
                                  velocity=True
@@ -63,14 +69,14 @@ class TestBam(mixins.TestMixin, TestCase):
                                  index_path,
                                  no_conversions_path,
                                  no_index_path,
-                                 gene_infos=utils.read_pickle(self.umi_genes_path),
-                                 transcript_infos=utils.read_pickle(self.umi_transcripts_path),
+                                 self.gene_infos,
+                                 self.transcript_infos,
                                  strand='forward',
                                  umi_tag='UB',
                                  barcode_tag='CB',
                                  gene_tag='GX',
                                  barcodes=None,
-                                 n_threads=2,
+                                 n_threads=1,
                                  temp_dir=self.temp_dir,
                                  nasc=False,
                                  velocity=False
@@ -92,14 +98,14 @@ class TestBam(mixins.TestMixin, TestCase):
                                  index_path,
                                  no_conversions_path,
                                  no_index_path,
-                                 utils.read_pickle(self.paired_genes_path),
-                                 utils.read_pickle(self.paired_transcripts_path),
+                                 self.gene_infos,
+                                 self.transcript_infos,
                                  strand='unstranded',
                                  umi_tag=None,
                                  barcode_tag='RG',
                                  gene_tag='GX',
                                  barcodes=None,
-                                 n_threads=2,
+                                 n_threads=1,
                                  temp_dir=self.temp_dir,
                                  nasc=False,
                                  velocity=False
@@ -124,14 +130,14 @@ class TestBam(mixins.TestMixin, TestCase):
                                  index_path,
                                  no_conversions_path,
                                  no_index_path,
-                                 utils.read_pickle(self.nasc_genes_path),
-                                 utils.read_pickle(self.nasc_transcripts_path),
+                                 self.gene_infos,
+                                 self.transcript_infos,
                                  strand='forward',
                                  umi_tag=None,
                                  barcode_tag='RG',
                                  gene_tag='GX',
                                  barcodes=None,
-                                 n_threads=2,
+                                 n_threads=1,
                                  temp_dir=self.temp_dir,
                                  nasc=True,
                                  velocity=False

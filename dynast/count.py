@@ -155,6 +155,7 @@ def count(
         no_conversions_path,
         no_index_path,
         counts_path,
+        gene_infos,
         barcodes=barcodes,
         snps=snps,
         quality=quality,

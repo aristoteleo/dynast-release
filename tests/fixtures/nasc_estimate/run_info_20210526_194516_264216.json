@@ -1,0 +1,8 @@
+{
+    "version": "0.0.0",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast estimate nasc_count_new --cell-threshold 0 --cell-gene-threshold 2 -o nasc_estimate --verbose --reads transcriptome --nasc",
+    "start_time": "2021-05-26T19:45:16.264216",
+    "end_time": "2021-05-26T19:46:26.851591",
+    "elapsed": 70.587375
+}

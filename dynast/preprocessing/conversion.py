@@ -69,6 +69,7 @@ BASE_IDX = {
 CONVERSION_COLUMNS = [''.join(pair) for pair in sorted(CONVERSION_IDX.keys())]
 BASE_COLUMNS = sorted(BASE_IDX.keys())
 COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
+CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome']
 
 
 def read_counts(counts_path, *args, **kwargs):
@@ -199,7 +200,7 @@ def deduplicate_counts(df_counts, conversions=None):
 
 
 def drop_multimappers_part(counter, lock, split_path, out_path):
-    drop_multimappers(read_counts(split_path)).drop(columns='read_id').to_csv(out_path, header=None, index=None)
+    drop_multimappers(read_counts(split_path))[CSV_COLUMNS[1:]].to_csv(out_path, header=False, index=False)
     lock.acquire()
     counter.value += 1
     lock.release()
@@ -209,8 +210,8 @@ def drop_multimappers_part(counter, lock, split_path, out_path):
 def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None):
     deduplicate_counts(
         read_counts(split_path), conversions=conversions
-    ).drop(columns='read_id').to_csv(
-        out_path, header=None, index=None
+    )[CSV_COLUMNS[1:]].to_csv(
+        out_path, header=False, index=False
     )
     lock.acquire()
     counter.value += 1
@@ -402,6 +403,7 @@ def count_conversions(
     no_conversions_path,
     no_index_path,
     counts_path,
+    gene_infos,
     barcodes=None,
     snps=None,
     quality=27,
@@ -424,6 +426,9 @@ def count_conversions(
     :type no_index_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
+    :param gene_infos: dictionary containing gene information, as returned by
+                       `ngs.gtf.genes_and_transcripts_from_gtf`, defaults to `None`
+    :type gene_infos: dictionary
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -492,7 +497,7 @@ def count_conversions(
     combined_path = utils.mkstemp(dir=temp_dir)
     logger.debug(f'Combining intermediate parts to {combined_path}')
     with open(combined_path, 'wb') as out:
-        out.write(f'read_id,barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
+        out.write(f'{",".join(CSV_COLUMNS)}\n'.encode())
         for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
@@ -502,7 +507,7 @@ def count_conversions(
 
     # Filter counts dataframe
     logger.debug(f'Loading combined counts from {combined_path}')
-    df_counts = read_counts(combined_path)
+    df_counts = complement_counts(read_counts(combined_path), gene_infos)
     umi = all(df_counts['umi'] != 'NA')
     barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
     split_paths = []
@@ -539,10 +544,11 @@ def count_conversions(
     utils.display_progress_with_counter(counter, len(split_paths), async_result, desc='filtering')
     pool.join()
 
-    with open(counts_path, 'wb') as out:
-        out.write(f'barcode,umi,GX,{",".join(COLUMNS)},velocity,transcriptome\n'.encode())
+    # Need to complement counts again (to revert to original)
+    with open(counts_path, 'w') as out:
+        out.write(f'{",".join(CSV_COLUMNS[1:])}\n')
         for counts_part_path in async_result.get():
-            with open(counts_part_path, 'rb') as f:
-                shutil.copyfileobj(f, out)
+            df_part = complement_counts(pd.read_csv(counts_part_path, names=CSV_COLUMNS[1:]), gene_infos)
+            df_part[CSV_COLUMNS[1:]].to_csv(out, header=False, index=False)
 
     return counts_path
