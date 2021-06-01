@@ -3,6 +3,7 @@ from unittest import mock, TestCase
 
 import pandas as pd
 
+import dynast.preprocessing.bam as bam
 import dynast.preprocessing.coverage as coverage
 import dynast.utils as utils
 
@@ -19,6 +20,7 @@ class TestCoverage(mixins.TestMixin, TestCase):
             for contig, df_part in pd.read_csv(self.control_conversions_path, usecols=['contig', 'genome_i']
                                                ).drop_duplicates().groupby('contig')
         }
+        alignments = bam.select_alignments(bam.read_alignments(self.control_alignments_path))
         with mock.patch('dynast.preprocessing.coverage.utils.display_progress_with_counter'):
             self.assertEqual((coverage_path, index_path),
                              coverage.calculate_coverage(
@@ -26,6 +28,7 @@ class TestCoverage(mixins.TestMixin, TestCase):
                                  conversions,
                                  coverage_path,
                                  index_path,
+                                 alignments=alignments,
                                  umi_tag='UB',
                                  barcode_tag='CB',
                                  barcodes=None,

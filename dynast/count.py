@@ -67,23 +67,21 @@ def count(
 
     # Parse BAM and save results
     conversions_path = os.path.join(out_dir, constants.CONVERSIONS_FILENAME)
-    conversions_index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
-    no_conversions_path = os.path.join(out_dir, constants.NO_CONVERSIONS_FILENAME)
-    no_index_path = os.path.join(out_dir, constants.NO_CONVERSIONS_INDEX_FILENAME)
+    index_path = os.path.join(out_dir, constants.CONVERSIONS_INDEX_FILENAME)
+    alignments_path = os.path.join(out_dir, constants.ALIGNMENTS_FILENAME)
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
-    conversions_required = [conversions_path, conversions_index_path, no_conversions_path, no_index_path, genes_path]
+    conversions_required = [conversions_path, index_path, alignments_path, genes_path]
     if not utils.all_exists(conversions_required) or overwrite:
         logger.info('Parsing gene and transcript information from GTF')
         gene_infos, transcript_infos = ngs.gtf.genes_and_transcripts_from_gtf(gtf_path, use_version=False)
         utils.write_pickle(gene_infos, genes_path)
 
         logger.info(f'Parsing read conversion information from BAM to {conversions_path}')
-        conversions_path, index_path, no_conversions_path, no_index_path = preprocessing.parse_all_reads(
+        conversions_path, alignments_path, index_path = preprocessing.parse_all_reads(
             bam_path,
             conversions_path,
-            conversions_index_path,
-            no_conversions_path,
-            no_index_path,
+            alignments_path,
+            index_path,
             gene_infos,
             transcript_infos,
             strand=strand,
@@ -105,8 +103,10 @@ def count(
     coverage_index_path = os.path.join(out_dir, constants.COVERAGE_INDEX_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
     if snp_threshold:
+        logger.info('Selecting alignments to use for SNP detection')
+        alignments = preprocessing.select_alignments(preprocessing.read_alignments(alignments_path))
+
         logger.info(f'Calculating coverage and outputting to {coverage_path}')
-        os.makedirs(out_dir, exist_ok=True)
         coverage_path, coverage_index_path = preprocessing.calculate_coverage(
             bam_path, {
                 contig: set(df_part['genome_i'])
@@ -115,6 +115,7 @@ def count(
             },
             coverage_path,
             coverage_index_path,
+            alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
             gene_tag=gene_tag,
@@ -127,10 +128,11 @@ def count(
         logger.info(f'Detecting SNPs with threshold {snp_threshold} to {snps_path}')
         snps_path = preprocessing.detect_snps(
             conversions_path,
-            conversions_index_path,
+            index_path,
             coverage_path,
             coverage_index_path,
             snps_path,
+            alignments=alignments,
             quality=quality,
             threshold=snp_threshold,
             n_threads=n_threads,
@@ -151,9 +153,8 @@ def count(
     )
     counts_path = preprocessing.count_conversions(
         conversions_path,
-        conversions_index_path,
-        no_conversions_path,
-        no_index_path,
+        alignments_path,
+        index_path,
         counts_path,
         gene_infos,
         barcodes=barcodes,

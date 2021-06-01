@@ -6,7 +6,7 @@ from unittest import TestCase
 
 import pandas as pd
 
-from dynast.technology import Technology
+from dynast.technology import TECHNOLOGIES_MAP
 
 
 def tqdm_mock(iterable, *args, **kwargs):
@@ -43,8 +43,8 @@ class TestMixin(TestCase):
         cls.conversions = ['AC', 'AG', 'AT', 'CA', 'CG', 'CT', 'GA', 'GC', 'GT', 'TA', 'TC', 'TG']
         cls.bases = ['A', 'C', 'G', 'T']
         cls.types = ['transcriptome', 'spliced', 'unspliced', 'ambiguous']
-        cls.umi_technology = Technology('umi_technology', {'--arg1': 'value1', '--arg2': 2}, None)
-        cls.smartseq_technology = Technology('smartseq', {'--arg1': 'value1', '--arg2': 2}, None)
+        cls.umi_technology = TECHNOLOGIES_MAP['dropseq']
+        cls.smartseq_technology = TECHNOLOGIES_MAP['smartseq']
 
         # Paths
         cls.temp_dir = None
@@ -69,10 +69,9 @@ class TestMixin(TestCase):
 
         # Count
         cls.umi_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count')
+        cls.umi_alignments_path = os.path.join(cls.umi_count_dir, 'alignments.csv')
         cls.umi_conversions_path = os.path.join(cls.umi_count_dir, 'conversions.csv')
         cls.umi_conversions_index_path = os.path.join(cls.umi_count_dir, 'conversions.idx')
-        cls.umi_no_conversions_path = os.path.join(cls.umi_count_dir, 'no_conversions.csv')
-        cls.umi_no_conversions_index_path = os.path.join(cls.umi_count_dir, 'no_conversions.idx')
         cls.umi_genes_path = cls.genes_path
         cls.umi_transcripts_path = cls.transcripts_path
         cls.umi_counts_path = os.path.join(cls.umi_count_dir, 'counts_TC.csv')
@@ -91,25 +90,21 @@ class TestMixin(TestCase):
         #########
         # Count
         cls.control_count_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_count_control')
-        cls.control_count_parse_dir = os.path.join(cls.control_count_dir, '0_parse')
-        cls.control_count_snp_dir = os.path.join(cls.control_count_dir, '0_snp')
-        cls.control_count_count_dir = os.path.join(cls.control_count_dir, '1_count')
-        cls.control_count_aggregate_dir = os.path.join(cls.control_count_dir, '2_aggregate')
-        cls.control_count_estimate_dir = os.path.join(cls.control_count_dir, '3_estimate')
-        cls.control_adata_path = os.path.join(cls.control_count_dir, 'adata.h5ad')
+        cls.control_conversions_path = os.path.join(cls.control_count_dir, 'conversions.csv')
+        cls.control_conversions_index_path = os.path.join(cls.control_count_dir, 'conversions.idx')
+        cls.control_alignments_path = os.path.join(cls.control_count_dir, 'alignments.csv')
+        cls.control_genes_path = cls.genes_path
+        cls.control_transcripts_path = cls.transcripts_path
+        cls.control_coverage_path = os.path.join(cls.control_count_dir, 'coverage.csv')
+        cls.control_coverage_index_path = os.path.join(cls.control_count_dir, 'coverage.idx')
+        cls.control_snps_path = os.path.join(cls.control_count_dir, 'snps.csv')
+        cls.control_counts_path = os.path.join(cls.control_count_dir, 'counts_TC.csv')
+        cls.control_rates_path = os.path.join(cls.control_count_dir, 'rates.csv')
+        cls.control_p_e_path = os.path.join(cls.control_count_dir, 'p_e.csv')
 
-        cls.control_conversions_path = os.path.join(cls.control_count_parse_dir, 'conversions.csv')
-        cls.control_conversions_index_path = os.path.join(cls.control_count_parse_dir, 'conversions.idx')
-        cls.control_no_conversions_path = os.path.join(cls.control_count_parse_dir, 'no_conversions.csv')
-        cls.control_no_conversions_index_path = os.path.join(cls.control_count_parse_dir, 'no_conversions.idx')
-        cls.control_genes_path = os.path.join(cls.control_count_parse_dir, 'genes2.pkl.gz')
-        cls.control_transcripts_path = os.path.join(cls.control_count_parse_dir, 'transcripts2.pkl.gz')
-        cls.control_coverage_path = os.path.join(cls.control_count_snp_dir, 'coverage.csv')
-        cls.control_coverage_index_path = os.path.join(cls.control_count_snp_dir, 'coverage.idx')
-        cls.control_snps_path = os.path.join(cls.control_count_snp_dir, 'snps.csv')
-        cls.control_counts_path = os.path.join(cls.control_count_count_dir, 'counts_TC.csv')
-        cls.control_rates_path = os.path.join(cls.control_count_aggregate_dir, 'rates.csv')
-        cls.control_p_e_path = os.path.join(cls.control_count_estimate_dir, 'p_e.csv')
+        # Estimate
+        cls.control_estimate_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_estimate_control')
+        cls.control_p_e_path = os.path.join(cls.control_estimate_dir, 'p_e.csv')
 
         ################################
         # Paired (smartseq, no velocity)
@@ -129,8 +124,7 @@ class TestMixin(TestCase):
         cls.paired_count_dir = os.path.join(cls.fixtures_dir, 'smartseq_count')
         cls.paired_conversions_path = os.path.join(cls.paired_count_dir, 'conversions.csv')
         cls.paired_conversions_index_path = os.path.join(cls.paired_count_dir, 'conversions.idx')
-        cls.paired_no_conversions_path = os.path.join(cls.paired_count_dir, 'no_conversions.csv')
-        cls.paired_no_conversions_index_path = os.path.join(cls.paired_count_dir, 'no_conversions.idx')
+        cls.paired_alignments_path = os.path.join(cls.paired_count_dir, 'alignments.csv')
         cls.paired_genes_path = cls.genes_path
         cls.paired_transcripts_path = cls.transcripts_path
         cls.paired_counts_path = os.path.join(cls.paired_count_dir, 'counts_TC.csv')
@@ -155,8 +149,7 @@ class TestMixin(TestCase):
         cls.nasc_count_dir = os.path.join(cls.fixtures_dir, 'nasc_count')
         cls.nasc_conversions_path = os.path.join(cls.nasc_count_dir, 'conversions.csv')
         cls.nasc_conversions_index_path = os.path.join(cls.nasc_count_dir, 'conversions.idx')
-        cls.nasc_no_conversions_path = os.path.join(cls.nasc_count_dir, 'no_conversions.csv')
-        cls.nasc_no_conversions_index_path = os.path.join(cls.nasc_count_dir, 'no_conversions.idx')
+        cls.nasc_alignments_path = os.path.join(cls.nasc_count_dir, 'alignments.csv')
         cls.nasc_genes_path = cls.genes_path
         cls.nasc_transcripts_path = cls.transcripts_path
         cls.nasc_counts_path = os.path.join(cls.nasc_count_dir, 'counts_TC.csv')

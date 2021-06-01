@@ -7,27 +7,7 @@ import pandas as pd
 
 from .. import utils
 from ..logging import logger
-
-CONVERSIONS_PARSER = re.compile(
-    r'''^
-    ([^,]*),
-    ([^,]*),
-    (?P<barcode>[^,]*),
-    ([^,]*),
-    ([^,]*),
-    (?P<contig>[^,]*),
-    (?P<genome_i>[^,]*),
-    ([^,]*),
-    ([^,]*),
-    (?P<quality>[^,]*),
-    ([^,]*),
-    ([^,]*),
-    ([^,]*),
-    ([^,]*),
-    (?P<velocity>[^,]*),
-    (?P<transcriptome>[^,]*)\n
-    $''', re.VERBOSE
-)
+from .conversion import CONVERSIONS_PARSER
 
 COVERAGE_PARSER = re.compile(
     r'''^
@@ -88,7 +68,7 @@ def read_snp_csv(snp_csv):
     return dict(df.groupby('contig', sort=False, observed=True).agg(set)['genome_i'])
 
 
-def extract_conversions_part(conversions_path, counter, lock, pos, n_lines, quality=27, update_every=10000):
+def extract_conversions_part(conversions_path, counter, lock, index, alignments=None, quality=27, update_every=10000):
     """Extract number of conversions for every genomic position.
 
     :param conversions_path: path to conversions CSV
@@ -98,11 +78,11 @@ def extract_conversions_part(conversions_path, counter, lock, pos, n_lines, qual
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
-    :param pos: file handle position at which to start reading the conversions CSV
-    :type pos: int
-    :param n_lines: number of lines to parse from the conversions CSV, starting
-                    from position `pos`
-    :type n_lines: int
+    :param index: list of (file position, number of lines) tuples to process
+    :type index: list
+    :param alignments: set of (read_id, alignment_index) tuples to process. All
+        alignments are processed if this option is not provided.
+    :type alignments: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -113,36 +93,46 @@ def extract_conversions_part(conversions_path, counter, lock, pos, n_lines, qual
     :rtype: dictionary
     """
     conversions = {}
+    n = 0
     with open(conversions_path, 'r') as f:
-        f.seek(pos)
-
-        for i in range(n_lines):
-            line = f.readline()
-            groupdict = CONVERSIONS_PARSER.match(line).groupdict()
-            if int(groupdict['quality']) > quality:
-                contig = groupdict['contig']
-                genome_i = int(groupdict['genome_i'])
-
-                conversions.setdefault(contig, {}).setdefault(genome_i, 0)
-                conversions[contig][genome_i] += 1
-            if (i + 1) % update_every == 0:
+        for pos, n_lines, pos2 in index:
+            f.seek(pos)
+            n += 1
+            if n % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+
+            for _ in range(n_lines):
+                line = f.readline()
+                groups = CONVERSIONS_PARSER.match(line).groupdict()
+                key = (groups['read_id'], int(groups['index']))
+                if alignments and key not in alignments:
+                    break
+
+                if int(groups['quality']) > quality:
+                    contig = groups['contig']
+                    genome_i = int(groups['genome_i'])
+
+                    conversions.setdefault(contig, {}).setdefault(genome_i, 0)
+                    conversions[contig][genome_i] += 1
     lock.acquire()
-    counter.value += n_lines % update_every
+    counter.value += n % update_every
     lock.release()
 
     return conversions
 
 
-def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
+def extract_conversions(conversions_path, index_path, alignments=None, quality=27, n_threads=8):
     """Wrapper around `extract_conversions_part` that works in parallel.
 
     :param conversions_path: path to conversions CSV
     :type conversions_path: str
     :param index_path: path to conversions index
     :type index_path: str
+    :param alignments: set of (read_id, alignment_index) tuples to process. All
+        alignments are processed if this option is not provided.
+    :type alignments: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -159,7 +149,6 @@ def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
     parts = utils.split_index(index, n=n_threads)
 
     logger.debug(f'Spawning {n_threads} processes')
-    n_lines = sum(idx[1] for idx in index)
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
     async_result = pool.starmap_async(
         partial(
@@ -167,13 +156,14 @@ def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
             conversions_path,
             counter,
             lock,
+            alignments=alignments,
             quality=quality,
-        ), parts
+        ), [(part,) for part in parts]
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, n_lines, async_result)
+    utils.display_progress_with_counter(counter, len(index), async_result)
     pool.join()
 
     logger.debug('Combining conversions')
@@ -184,7 +174,7 @@ def extract_conversions(conversions_path, index_path, quality=27, n_threads=8):
     return conversions
 
 
-def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, update_every=10000):
+def extract_coverage_part(coverage_path, counter, lock, index, update_every=5000):
     """Extract coverage for every genomic position.
 
     :param coverage_path: path to coverage CSV
@@ -194,37 +184,40 @@ def extract_coverage_part(coverage_path, counter, lock, pos, n_lines, update_eve
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
-    :param pos: file handle position at which to start reading the conversions CSV
-    :type pos: int
-    :param n_lines: number of lines to parse from the conversions CSV, starting
-                    from position `pos`
-    :type n_lines: int
-    :param update_every: update the counter every this many reads, defaults to `10000`
+    :param index: list of (file position, number of lines) tuples to process
+    :type index: list
+    :param update_every: update the counter every this many reads, defaults to `5000`
     :type update_every: int, optional
 
     :return: nested dictionary that contains number of conversions for each contig and position
     :rtype: dictionary
     """
     coverage = {}
+    n = 0
     with open(coverage_path, 'r') as f:
-        f.seek(pos)
-
-        for i in range(n_lines):
-            line = f.readline()
-            groupdict = COVERAGE_PARSER.match(line).groupdict()
-
-            contig = groupdict['contig']
-            genome_i = int(groupdict['genome_i'])
-            count = int(groupdict['coverage'])
-
-            coverage.setdefault(contig, {}).setdefault(genome_i, 0)
-            coverage[contig][genome_i] += count
-            if (i + 1) % update_every == 0:
+        for tup in index:
+            pos = tup[0]
+            n_lines = tup[1]
+            f.seek(pos)
+            n += 1
+            if n % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+
+            for i in range(n_lines):
+                line = f.readline()
+                groupdict = COVERAGE_PARSER.match(line).groupdict()
+
+                contig = groupdict['contig']
+                genome_i = int(groupdict['genome_i'])
+                count = int(groupdict['coverage'])
+
+                coverage.setdefault(contig, {}).setdefault(genome_i, 0)
+                coverage[contig][genome_i] += count
+
     lock.acquire()
-    counter.value += n_lines % update_every
+    counter.value += n % update_every
     lock.release()
 
     return coverage
@@ -250,18 +243,19 @@ def extract_coverage(coverage_path, index_path, n_threads=8):
     parts = utils.split_index(index, n=n_threads)
 
     logger.debug(f'Spawning {n_threads} processes')
-    n_lines = sum(idx[1] for idx in index)
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
-    async_result = pool.starmap_async(partial(
-        extract_coverage_part,
-        coverage_path,
-        counter,
-        lock,
-    ), parts)
+    async_result = pool.starmap_async(
+        partial(
+            extract_coverage_part,
+            coverage_path,
+            counter,
+            lock,
+        ), [(part,) for part in parts]
+    )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, n_lines, async_result)
+    utils.display_progress_with_counter(counter, len(index), async_result)
     pool.join()
 
     logger.debug('Combining coverage')
@@ -274,10 +268,11 @@ def extract_coverage(coverage_path, index_path, n_threads=8):
 
 def detect_snps(
     conversions_path,
-    conversions_index_path,
+    index_path,
     coverage_path,
     coverage_index_path,
     snps_path,
+    alignments=None,
     quality=27,
     threshold=0.5,
     n_threads=8,
@@ -286,14 +281,17 @@ def detect_snps(
 
     :param conversions_path: path to conversions CSV
     :type conversions_path: str
-    :param conversions_index_path: path to conversions index
-    :type conversions_index_path: str
+    :param index_path: path to conversions index
+    :type index_path: str
     :param coverage_path: path to coverage CSV
     :type coverage_path: str
     :param coverage_index_path: path to coverage index
     :type coverage_index_path: str
     :param snps_path: path to output SNPs
     :type snps_path: str
+    :param alignments: set of (read_id, alignment_index) tuples to process. All
+        alignments are processed if this option is not provided.
+    :type alignments: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -304,7 +302,9 @@ def detect_snps(
     :type n_threads: int, optional
     """
     logger.debug('Counting number of conversions for each genomic position')
-    conversions = extract_conversions(conversions_path, conversions_index_path, quality=quality, n_threads=n_threads)
+    conversions = extract_conversions(
+        conversions_path, index_path, alignments=alignments, quality=quality, n_threads=n_threads
+    )
 
     logger.debug('Counting coverage for each genomic position')
     coverage = extract_coverage(coverage_path, coverage_index_path, n_threads=n_threads)

@@ -41,7 +41,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 }
             }, result)
             arguments = utils.combine_arguments(
-                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.arguments),
+                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.chemistry.to_starsolo_arguments()),
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({
@@ -89,7 +89,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 }
             }, result)
             arguments = utils.combine_arguments(
-                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.arguments),
+                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.chemistry.to_starsolo_arguments()),
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({
@@ -141,7 +141,10 @@ class TestAlign(mixins.TestMixin, TestCase):
                     }
                 }
             }, result)
-            arguments = utils.combine_arguments(config.STAR_ARGUMENTS, self.smartseq_technology.arguments)
+            arguments = utils.combine_arguments(
+                config.STAR_ARGUMENTS, self.smartseq_technology.chemistry.to_starsolo_arguments()
+            )
+            arguments = utils.combine_arguments(arguments, self.smartseq_technology.additional_args)
             arguments.update({
                 '--soloStrand': 'Forward',
                 '--genomeDir': 'path/to/index',
@@ -191,9 +194,11 @@ class TestAlign(mixins.TestMixin, TestCase):
                 }
             }, result)
             arguments = utils.combine_arguments(
-                utils.combine_arguments(config.STAR_ARGUMENTS, self.smartseq_technology.arguments),
-                config.NASC_ARGUMENTS
+                utils.combine_arguments(
+                    config.STAR_ARGUMENTS, self.smartseq_technology.chemistry.to_starsolo_arguments()
+                ), config.NASC_ARGUMENTS
             )
+            arguments = utils.combine_arguments(arguments, self.smartseq_technology.additional_args)
             arguments.update({
                 '--soloStrand': 'Forward',
                 '--genomeDir': 'path/to/index',
@@ -239,7 +244,7 @@ class TestAlign(mixins.TestMixin, TestCase):
                 }
             }, result)
             arguments = utils.combine_arguments(
-                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.arguments),
+                utils.combine_arguments(config.STAR_ARGUMENTS, self.umi_technology.chemistry.to_starsolo_arguments()),
                 config.STAR_SOLO_ARGUMENTS
             )
             arguments.update({

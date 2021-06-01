@@ -1,0 +1,8 @@
+{
+    "version": "0.0.0",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast count -g /mnt/e/references/human/ensembl/Homo_sapiens.GRCh38.101.gtf --barcode-tag RG nasc_align/Aligned.sortedByCoord.out.bam -o nasc_count_new -t 1 --verbose --transcriptome-only --nasc --conversion TC --tmp tmp2",
+    "start_time": "2021-06-01T12:38:18.061576",
+    "end_time": "2021-06-01T12:39:45.728106",
+    "elapsed": 87.66653
+}

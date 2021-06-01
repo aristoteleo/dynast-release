@@ -8,7 +8,7 @@ import warnings
 from . import __version__
 # from .config import RE_CHOICES
 from .logging import logger
-from .technology import BARCODE_UMI_TECHNOLOGIES, TECHNOLOGIES_MAP
+from .technology import TECHNOLOGIES_MAP
 from .utils import flatten_list
 
 
@@ -16,17 +16,22 @@ def print_technologies():
     """Displays a list of supported technologies along with whether a whitelist
     is provided for that technology.
     """
-    headers = ['name', 'whitelist provided', 'barcode (start, length)', 'UMI (start, length)']
+    headers = ['name', 'whitelist', 'barcode', 'umi', 'cDNA']
     rows = [headers]
 
-    print('List of supported single-cell technologies.\nPositions are 1-indexed.\n')
+    print('List of supported single-cell technologies\n')
+    print('Positions syntax: `input file index, start position, end position`')
+    print('When start & end positions are None, refers to the entire file\n')
     for key in sorted(TECHNOLOGIES_MAP):
         t = TECHNOLOGIES_MAP[key]
-        barcode = umi = 'NA'
-        if t in BARCODE_UMI_TECHNOLOGIES:
-            barcode = (t.arguments['--soloCBstart'], t.arguments['--soloCBlen'])
-            umi = (t.arguments['--soloUMIstart'], t.arguments['--soloUMIlen'])
-        row = [key, 'yes' if t.whitelist_path else '', str(barcode), str(umi)]
+        chem = t.chemistry
+        row = [
+            t.name,
+            'yes' if chem.has_whitelist else '',
+            ' '.join(str(_def) for _def in chem.cell_barcode_parser) if chem.has_cell_barcode else '',
+            ' '.join(str(_def) for _def in chem.umi_parser) if chem.has_umi else '',
+            ' '.join(str(_def) for _def in chem.cdna_parser),
+        ]
         rows.append(row)
 
     max_lens = []

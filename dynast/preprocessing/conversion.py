@@ -13,24 +13,15 @@ CONVERSIONS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
     (?P<index>[^,]*),
-    (?P<barcode>[^,]*),
-    (?P<umi>[^,]*),
-    (?P<GX>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
     (?P<original>[^,]*),
     (?P<converted>[^,]*),
-    (?P<quality>[^,]*),
-    (?P<A>[^,]*),
-    (?P<C>[^,]*),
-    (?P<G>[^,]*),
-    (?P<T>[^,]*),
-    (?P<velocity>[^,]*),
-    (?P<transcriptome>[^,]*)\n
+    (?P<quality>[^,]*)\n
     $''', re.VERBOSE
 )
 
-NO_CONVERSIONS_PARSER = re.compile(
+ALIGNMENTS_PARSER = re.compile(
     r'''^
     (?P<read_id>[^,]*),
     (?P<index>[^,]*),
@@ -42,7 +33,8 @@ NO_CONVERSIONS_PARSER = re.compile(
     (?P<G>[^,]*),
     (?P<T>[^,]*),
     (?P<velocity>[^,]*),
-    (?P<transcriptome>[^,]*)\n
+    (?P<transcriptome>[^,]*),
+    (?P<score>[^,]*)\n
     $''', re.VERBOSE
 )
 
@@ -69,7 +61,7 @@ BASE_IDX = {
 CONVERSION_COLUMNS = [''.join(pair) for pair in sorted(CONVERSION_IDX.keys())]
 BASE_COLUMNS = sorted(BASE_IDX.keys())
 COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
-CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome']
+CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome', 'score']
 
 
 def read_counts(counts_path, *args, **kwargs):
@@ -90,6 +82,7 @@ def read_counts(counts_path, *args, **kwargs):
         'GX': 'category',
         'velocity': 'category',
         'transcriptome': bool,
+        'score': np.uint16,
         **{column: np.uint8
            for column in COLUMNS}
     }
@@ -105,7 +98,8 @@ def complement_counts(df_counts, gene_infos):
                        `preprocessing.gtf.parse_gtf`
     :type gene_infos: dictionary
 
-    :return: counts dataframe with counts complemented for reads mapping to genes on the reverse strand
+    :return: counts dataframe with counts complemented for reads mapping to genes
+        on the reverse strand
     :rtype: pandas.DataFrame
     """
     # Extract columns that do not need to be complemented
@@ -140,35 +134,42 @@ def drop_multimappers(df_counts, conversions=None):
     :return: counts dataframe with multimappers appropriately filtered
     :rtype: pandas.DataFrame
     """
-    # Multimapping reads
-    duplicated_mask = df_counts.duplicated('read_id', keep=False)
-    if not any(duplicated_mask):
-        return df_counts
+    columns = list(df_counts.columns)
+    df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
+    df_sorted = df_counts.sort_values(['transcriptome', 'score', 'conversion_sum']).drop(columns='conversion_sum')
+    df_counts.drop(columns='conversion_sum', inplace=True)
+    df_sorted['not_transcriptome'] = ~df_sorted['transcriptome']
+    read_id_grouped = df_sorted.groupby('read_id', sort=False, observed=True)
 
-    df_multi = df_counts[duplicated_mask]
+    # None map to the transcriptome
+    not_transcriptome = read_id_grouped['not_transcriptome'].all()
+    not_transcriptome_read_ids = not_transcriptome.index[not_transcriptome]
 
-    filtered = []
-    for read_id, df_read in df_multi.groupby('read_id', sort=False):
-        transcriptome = list(df_read['transcriptome'])
-        # Rule 1
-        if True in transcriptome and False in transcriptome:
-            filtered.append(df_read[transcriptome])
-        # Rule 2, 3
-        elif all(~df_read['transcriptome']):
-            # Rule 2
-            if len(df_read['GX'].unique()) > 1:
-                continue
-            # Rule 3
-            elif len(df_read['velocity'].unique()) > 1:
-                df_read = df_read.copy()
-                df_read['velocity'] = 'ambiguous'
-                filtered.append(df_read.drop_duplicates('read_id', keep='first'))
-            else:
-                filtered.append(df_read.drop_duplicates('read_id', keep='first'))
+    # Assigned to multiple genes
+    multigene = read_id_grouped['GX'].nunique() > 1
+    multigene_read_ids = multigene.index[multigene]
 
-    return df_counts[~duplicated_mask].append(
-        pd.concat(filtered, ignore_index=True), ignore_index=True
-    ) if filtered else df_counts[~duplicated_mask]
+    # Assigned to multiple velocity types
+    multivelocity = read_id_grouped['velocity'].nunique() > 1
+    multivelocity_read_ids = multivelocity.index[multivelocity]
+
+    # Rule 3. Note that we need to add ambiguous category if it doesn't exist.
+    not_transcriptome_multivelocity_read_ids = not_transcriptome_read_ids.intersection(multivelocity_read_ids)
+    if list(not_transcriptome_multivelocity_read_ids):
+        if 'ambiguous' not in df_sorted['velocity'].cat.categories:
+            df_sorted['velocity'].cat.add_categories('ambiguous', inplace=True)
+        df_sorted.loc[df_sorted['read_id'].isin(not_transcriptome_read_ids.intersection(multivelocity_read_ids)),
+                      'velocity'] = 'ambiguous'
+
+    # Rule 2
+    df_sorted = df_sorted[~df_sorted['read_id'].isin(not_transcriptome_read_ids.intersection(multigene_read_ids))]
+
+    # Rule 1
+    df_deduplicated = df_sorted.drop_duplicates(
+        'read_id', keep='last'
+    ).sort_values(['barcode', 'GX']).reset_index(drop=True)
+
+    return df_deduplicated[columns]
 
 
 def deduplicate_counts(df_counts, conversions=None):
@@ -187,16 +188,19 @@ def deduplicate_counts(df_counts, conversions=None):
     :return: deduplicated counts dataframe
     :rtype: pandas.DataFrame
     """
+    columns = list(df_counts.columns)
     df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
 
     # Sort by transcriptome last, longest alignment last, least conversion first
-    df_sorted = df_counts.sort_values(['transcriptome', 'conversion_sum']).drop(columns='conversion_sum')
+    df_sorted = df_counts.sort_values(['transcriptome', 'score', 'conversion_sum']).drop(columns='conversion_sum')
+    df_counts.drop(columns='conversion_sum', inplace=True)
 
     # Always select transcriptome read if there are duplicates
-    df_deduplicated = df_sorted[~df_sorted.duplicated(subset=['barcode', 'umi', 'GX'], keep='last')].sort_values(
-        'barcode'
-    ).reset_index(drop=True)
-    return df_deduplicated
+    df_deduplicated = df_sorted.drop_duplicates(
+        subset=['barcode', 'umi', 'GX'], keep='last'
+    ).sort_values(['barcode', 'umi', 'GX']).reset_index(drop=True)
+
+    return df_deduplicated[columns]
 
 
 def drop_multimappers_part(counter, lock, split_path, out_path):
@@ -236,30 +240,26 @@ def split_counts_by_velocity(df_counts):
     return dfs
 
 
-def count_no_conversions_part(
-    no_conversions_path,
+def count_no_conversions(
+    alignments_path,
     counter,
     lock,
-    pos,
-    n_lines,
+    index,
     barcodes=None,
     temp_dir=None,
     update_every=10000,
 ):
     """Count reads that have no conversion.
 
-    :param no_conversions_path: no conversions CSV path
-    :type no_conversions_path: str
+    :param alignments_path: alignments CSV path
+    :type alignments_path: str
     :param counter: counter that keeps track of how many reads have been processed
     :type counter: multiprocessing.Value
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
-    :param pos: file handle position at which to start reading the conversions CSV
-    :type pos: int
-    :param n_lines: number of lines to parse from the conversions CSV, starting
-                    from position `pos`
-    :type n_lines: int
+    :param index: index for conversions CSV
+    :type index: list
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -272,24 +272,33 @@ def count_no_conversions_part(
     :rtype: str
     """
     count_path = utils.mkstemp(dir=temp_dir)
-    with open(no_conversions_path, 'r') as f, open(count_path, 'w') as out:
-        f.seek(pos)
-        for i in range(n_lines):
-            if (i + 1) % update_every == 0:
+    positions = set(tup[2] for tup in index)
+    n = 0
+    with open(alignments_path, 'r') as f, open(count_path, 'w') as out:
+        f.readline()  # header
+        while True:
+            pos = f.tell()
+            line = f.readline()
+            if not line:
+                break
+            n += 1
+            if n % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+            if pos in positions:
+                continue
 
-            line = f.readline()
-            groups = NO_CONVERSIONS_PARSER.match(line).groupdict()
+            groups = ALIGNMENTS_PARSER.match(line).groupdict()
             if barcodes and groups['barcode'] not in barcodes:
                 continue
             out.write(
                 f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
-                f'{",".join(groups.get(key, "0") for key in COLUMNS)},{groups["velocity"]},{groups["transcriptome"]}\n'
+                f'{",".join(groups.get(key, "0") for key in COLUMNS)},'
+                f'{groups["velocity"]},{groups["transcriptome"]},{groups["score"]}\n'
             )
     lock.acquire()
-    counter.value += n_lines % update_every
+    counter.value += n % update_every
     lock.release()
 
     return count_path
@@ -297,10 +306,10 @@ def count_no_conversions_part(
 
 def count_conversions_part(
     conversions_path,
+    alignments_path,
     counter,
     lock,
-    pos,
-    n_lines,
+    index,
     barcodes=None,
     snps=None,
     quality=27,
@@ -313,16 +322,15 @@ def count_conversions_part(
 
     :param conversions_path: path to conversions CSV
     :type conversions_path: str
+    :param alignments_path: path to alignments information about reads
+    :type alignments_path: str
     :param counter: counter that keeps track of how many reads have been processed
     :type counter: multiprocessing.Value
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
-    :param pos: file handle position at which to start reading the conversions CSV
-    :type pos: int
-    :param n_lines: number of lines to parse from the conversions CSV, starting
-                    from position `pos`
-    :type n_lines: int
+    :param index: list of (file position, number of lines) tuples to process
+    :type index: list
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
@@ -348,60 +356,45 @@ def count_conversions_part(
 
     count_path = utils.mkstemp(dir=temp_dir)
 
-    counts = None
-    key = None
-    count_base = True
-    with open(conversions_path, 'r') as f, open(count_path, 'w') as out:
-        f.seek(pos)
-
-        groups = None
-        prev_groups = None
-        for i in range(n_lines):
-            if (i + 1) % update_every == 0:
+    n = 0
+    with open(conversions_path, 'r') as f, open(alignments_path) as f_alignments, open(count_path, 'w') as out:
+        for pos, n_lines, pos2 in index:
+            f.seek(pos)
+            f_alignments.seek(pos2)
+            n += 1
+            if n % update_every == 0:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
 
-            line = f.readline()
-            prev_groups = groups
-            groups = CONVERSIONS_PARSER.match(line).groupdict()
+            alignment = ALIGNMENTS_PARSER.match(f_alignments.readline()).groupdict()
+            if barcodes and alignment['barcode'] not in barcodes:
+                continue
+            counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
+            for base, i in BASE_IDX.items():
+                counts[i] = alignment[base]
+            for _ in range(n_lines):
+                groups = CONVERSIONS_PARSER.match(f.readline()).groupdict()
+                if int(groups['quality']) > quality and not is_snp(groups):
+                    counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
 
-            new_key = (groups['read_id'], groups['index'])
-            if key != new_key:
-                if key is not None and (not barcodes or prev_groups['barcode'] in barcodes):
-                    out.write(
-                        f'{prev_groups["read_id"]},{prev_groups["barcode"]},{prev_groups["umi"]},{prev_groups["GX"]},'
-                        f'{",".join(str(c) for c in counts)},{prev_groups["velocity"]},{prev_groups["transcriptome"]}\n'
-                    )
-                counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
-                key = new_key
-                count_base = True
-            if int(groups['quality']) > quality and not is_snp(groups):
-                counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
-            if count_base:
-                for base, j in BASE_IDX.items():
-                    counts[j] = int(groups[base])
-                count_base = False
-
-        # Add last record
-        if key is not None and (not barcodes or groups['barcode'] in barcodes):
             out.write(
-                f'{groups["read_id"]},{groups["barcode"]},{groups["umi"]},{groups["GX"]},'
-                f'{",".join(str(c) for c in counts)},{groups["velocity"]},{groups["transcriptome"]}\n'
+                f'{groups["read_id"]},{alignment["barcode"]},{alignment["umi"]},'
+                f'{alignment["GX"]},{",".join(str(c) for c in counts)},'
+                f'{alignment["velocity"]},{alignment["transcriptome"]},{alignment["score"]}\n'
             )
 
-    lock.acquire()
-    counter.value += n_lines % update_every
-    lock.release()
+        lock.acquire()
+        counter.value += n % update_every
+        lock.release()
 
     return count_path
 
 
 def count_conversions(
     conversions_path,
+    alignments_path,
     index_path,
-    no_conversions_path,
-    no_index_path,
     counts_path,
     gene_infos,
     barcodes=None,
@@ -418,12 +411,10 @@ def count_conversions(
 
     :param conversions_path: path to conversions CSV
     :type conversions_path: str
+    :param alignments_path: path to alignments information about reads
+    :type alignments_path: str
     :param index_path: path to conversions index
     :type index_path: str
-    :param no_conversions_path: path to output information about reads that do not have any conversions
-    :type no_conversions_path: str
-    :param no_index_path: path to no conversions index
-    :type no_index_path: str
     :param counts_path: path to write counts CSV
     :param counts_path: str
     :param gene_infos: dictionary containing gene information, as returned by
@@ -450,47 +441,50 @@ def count_conversions(
     :rtype: str
     """
     # Load index
-    logger.debug(f'Loading indices {index_path} and {no_index_path}')
-    idx = utils.read_pickle(index_path)
-    no_idx = utils.read_pickle(no_index_path)
+    logger.debug(f'Loading index {index_path}')
+    index = utils.read_pickle(index_path)
 
     # Split index into n contiguous pieces
     logger.debug(f'Splitting indices into {n_threads} parts')
-    parts = utils.split_index(idx, n=n_threads)
-    no_parts = []
-    for i in range(0, len(no_idx), (len(no_idx) // n_threads) + 1):
-        no_parts.append((no_idx[i], min((len(no_idx) // n_threads) + 1, len(no_idx[i:]))))
+    parts = utils.split_index(index, n=n_threads)
 
     # Parse each part in a different process
     logger.debug(f'Spawning {n_threads} processes')
-    n_lines = sum(i[1] for i in idx) + len(no_idx)
+    total = len(index)
+    with open(alignments_path, 'r') as f:
+        for line in f:
+            total += 1
+    total -= 1
+
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
+    no_async_result = pool.apply_async(
+        partial(
+            count_no_conversions,
+            alignments_path,
+            counter,
+            lock,
+            index,
+            barcodes=barcodes,
+            temp_dir=tempfile.mkdtemp(dir=temp_dir)
+        )
+    )
     async_result = pool.starmap_async(
         partial(
             count_conversions_part,
             conversions_path,
+            alignments_path,
             counter,
             lock,
             barcodes=barcodes,
             snps=snps,
             quality=quality,
             temp_dir=tempfile.mkdtemp(dir=temp_dir)
-        ), parts
-    )
-    no_async_result = pool.starmap_async(
-        partial(
-            count_no_conversions_part,
-            no_conversions_path,
-            counter,
-            lock,
-            barcodes=barcodes,
-            temp_dir=tempfile.mkdtemp(dir=temp_dir)
-        ), no_parts
+        ), [(part,) for part in parts]
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, n_lines, async_result, no_async_result, desc='counting')
+    utils.display_progress_with_counter(counter, total, async_result, no_async_result, desc='counting')
     pool.join()
 
     # Combine csvs
@@ -501,9 +495,8 @@ def count_conversions(
         for counts_part_path in async_result.get():
             with open(counts_part_path, 'rb') as f:
                 shutil.copyfileobj(f, out)
-        for counts_part_path in no_async_result.get():
-            with open(counts_part_path, 'rb') as f:
-                shutil.copyfileobj(f, out)
+        with open(no_async_result.get(), 'rb') as f:
+            shutil.copyfileobj(f, out)
 
     # Filter counts dataframe
     logger.debug(f'Loading combined counts from {combined_path}')

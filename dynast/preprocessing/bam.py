@@ -12,13 +12,44 @@ import pysam
 from .. import config, utils
 from ..logging import logger
 
-CONVERSION_CSV_COLUMNS = [
-    'read_id', 'index', 'barcode', 'umi', 'GX', 'contig', 'genome_i', 'original', 'converted', 'quality', 'A', 'C', 'G',
-    'T', 'velocity', 'transcriptome'
+CONVERSION_CSV_COLUMNS = ['read_id', 'index', 'contig', 'genome_i', 'original', 'converted', 'quality']
+ALIGNMENT_COLUMNS = [
+    'read_id', 'index', 'barcode', 'umi', 'GX', 'A', 'C', 'G', 'T', 'velocity', 'transcriptome', 'score'
 ]
-NO_CONVERSION_CSV_COLUMNS = [
-    'read_id', 'index', 'barcode', 'umi', 'GX', 'A', 'C', 'G', 'T', 'velocity', 'transcriptome'
-]
+
+
+def read_alignments(alignments_path, *args, **kwargs):
+    """Read alignments CSV as a pandas DataFrame.
+
+    Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
+
+    :param alignments_path: path to alignments CSV
+    :type alignments_path: str
+
+    :return: conversions dataframe
+    :rtype: pandas.DataFrame
+    """
+    df = pd.read_csv(
+        alignments_path,
+        dtype={
+            'read_id': 'string',
+            'index': np.uint8,
+            'barcode': 'category',
+            'umi': 'category',
+            'GX': 'category',
+            'A': np.uint8,
+            'C': np.uint8,
+            'G': np.uint8,
+            'T': np.uint8,
+            'velocity': 'category',
+            'transcriptome': bool,
+            'score': np.uint16
+        },
+        na_filter=False,
+        *args,
+        **kwargs
+    )
+    return df
 
 
 def read_conversions(conversions_path, *args, **kwargs):
@@ -37,23 +68,48 @@ def read_conversions(conversions_path, *args, **kwargs):
         dtype={
             'read_id': 'string',
             'index': np.uint8,
-            'barcode': 'category',
-            'umi': 'category',
             'contig': 'category',
             'genome_i': np.uint32,
             'original': 'category',
             'converted': 'category',
-            'A': np.uint8,
-            'C': np.uint8,
-            'G': np.uint8,
-            'T': np.uint8,
-            'velocity': 'category',
-            'transcriptome': bool,
         },
+        na_filter=False,
         *args,
         **kwargs
     )
     return df
+
+
+def select_alignments(df_alignments):
+    """Select alignments among duplicates. This function performs preliminary
+    deduplication and returns a list of tuples (read_id, alignment index) to
+    use for coverage calculation and SNP detection.
+
+    :param df_alignments: alignments dataframe
+    :type df_alignments: pandas.DataFrame
+
+    :return: set of (read_id, alignment index) that were selected
+    :rtype: set
+    """
+    df_sorted = df_alignments.sort_values(['transcriptome', 'score'])
+    umi = all(df_alignments['umi'] != 'NA')
+    if umi:
+        df_deduplicated = df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last')
+    else:
+        # Drop any multimappers where none map to the transcriptome and
+        # are assigned multiple genes
+        df_sorted['not_transcriptome'] = ~df_sorted['transcriptome']
+        read_id_grouped = df_sorted.groupby('read_id', sort=False, observed=True)
+        not_transcriptome = read_id_grouped['not_transcriptome'].all()
+        not_transcriptome_read_ids = not_transcriptome.index[not_transcriptome]
+
+        multigene = read_id_grouped['GX'].nunique() > 1
+        multigene_read_ids = multigene.index[multigene]
+
+        to_drop = list(not_transcriptome_read_ids.intersection(multigene_read_ids))
+        df_deduplicated = df_sorted[~df_sorted['read_id'].isin(to_drop)].drop_duplicates('read_id', keep='last')
+
+    return set(df_deduplicated[['read_id', 'index']].itertuples(index=False, name=None))
 
 
 def parse_read_contig(
@@ -76,6 +132,7 @@ def parse_read_contig(
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
     separate process.
+
     :param counter: counter that keeps track of how many reads have been processed
     :type counter: multiprocessing.Value
     :param lock: semaphore for the `counter` so that multiple processes do not
@@ -116,9 +173,9 @@ def parse_read_contig(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
-    :return: (path to conversions, path to conversions index,
-              path to no conversions, path to no conversions index)
-    :rtype: (str, str, str, str)
+
+    :return: (path to conversions, path to conversions index, path to alignments)
+    :rtype: (str, str, str)
     """
     # Sort genes by segment positions
     if velocity:
@@ -175,15 +232,13 @@ def parse_read_contig(
         return assigned_gene, assigned_type
 
     conversions_path = utils.mkstemp(dir=temp_dir)
-    no_conversions_path = utils.mkstemp(dir=temp_dir)
+    alignments_path = utils.mkstemp(dir=temp_dir)
     index_path = utils.mkstemp(dir=temp_dir)
-    no_index_path = utils.mkstemp(dir=temp_dir)
 
     # Index will be used later for fast splitting
     # Will contain a tuple of (file position, number of lines) for every read
     # that has at least one mismatch.
     index = []
-    no_index = []
 
     paired = {}  # Dictionary to store paired read information
 
@@ -201,7 +256,7 @@ def parse_read_contig(
     n = 0
     with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
         open(conversions_path, 'w') as conversions_out, \
-        open(no_conversions_path, 'w') as no_conversions_out:
+        open(alignments_path, 'w') as alignments_out:
         for read in bam.fetch(contig):
             n_lines = 0
             pos = conversions_out.tell()
@@ -243,6 +298,7 @@ def parse_read_contig(
 
             read_id = read.query_name
             alignment_index = read.get_tag('HI')
+            alignment_score = read.get_tag('AS')
             reference_positions = read.get_reference_positions()
             counts = Counter()
 
@@ -344,33 +400,27 @@ def parse_read_contig(
                     n_lines += 1
 
                     conversions_out.write(
-                        f'{read_id},{alignment_index},{barcode},{umi},{gx},{contig},{genome_i},'
-                        f'{genome_base},{read_base},{quality},'
-                        f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
-                        f'{assignment},{gx_assigned}\n'
+                        f'{read_id},{alignment_index},{contig},{genome_i},'
+                        f'{genome_base},{read_base},{quality}\n'
                     )
 
             # Flush cached conversions
             for genome_i, (quality, genome_base, read_base) in conversions.items():
                 n_lines += 1
                 conversions_out.write(
-                    f'{read_id},{alignment_index},{barcode},{umi},{gx},{contig},{genome_i},'
-                    f'{genome_base},{read_base},{quality},'
-                    f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
-                    f'{assignment},{gx_assigned}\n'
+                    f'{read_id},{alignment_index},{contig},{genome_i},'
+                    f'{genome_base},{read_base},{quality}\n'
                 )
 
             # Add to index if lines were written
             if n_lines > 0:
-                index.append((pos, n_lines))
-            else:
-                no_index.append(no_conversions_out.tell())
-                # Otherwise, this read did not contain any conversions.
-                no_conversions_out.write(
-                    f'{read_id},{alignment_index},{barcode},{umi},{gx},'
-                    f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
-                    f'{assignment},{gx_assigned}\n'
-                )
+                index.append((pos, n_lines, alignments_out.tell()))
+            # Write alignment info
+            alignments_out.write(
+                f'{read_id},{alignment_index},{barcode},{umi},{gx},'
+                f'{counts["A"]},{counts["C"]},{counts["G"]},{counts["T"]},'
+                f'{assignment},{gx_assigned},{alignment_score}\n'
+            )
 
     lock.acquire()
     counter.value += n % update_every
@@ -378,9 +428,8 @@ def parse_read_contig(
 
     # Save index
     index_path = utils.write_pickle(index, index_path, protocol=4)
-    no_index_path = utils.write_pickle(no_index, no_index_path, protocol=4)
 
-    return conversions_path, index_path, no_conversions_path, no_index_path
+    return conversions_path, index_path, alignments_path
 
 
 def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
@@ -416,9 +465,8 @@ def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
 def parse_all_reads(
     bam_path,
     conversions_path,
+    alignments_path,
     index_path,
-    no_conversions_path,
-    no_index_path,
     gene_infos,
     transcript_infos,
     strand='forward',
@@ -439,10 +487,10 @@ def parse_all_reads(
     :type bam_path: str
     :param conversions_path: path to output information about reads that have conversions
     :type conversions_path: str
+    :param alignments_path: path to alignments information about reads
+    :type alignments_path: str
     :param index_path: path to conversions index
     :type index_path: str
-    :param no_conversions_path: path to output information about reads that do not have any conversions
-    :type no_conversions_path: str
     :param no_index_path: path to no conversions index
     :type no_index_path: str
     :param gene_infos: dictionary containing gene information, as returned by
@@ -475,9 +523,8 @@ def parse_all_reads(
                      defaults to `True`
     :type velocity: bool, optional
 
-    :return: (path to conversions, path to conversions index,
-              path to no conversions, path to no conversions index)
-    :rtype: (str, str, str, str)
+    :return: (path to conversions, path to alignments, path to conversions index)
+    :rtype: (str, str, str)
     """
     logger.debug('Checking if BAM has required tags')
     tags = config.BAM_REQUIRED_TAGS.copy()
@@ -508,6 +555,7 @@ def parse_all_reads(
             utils.mkstemp(temp_dir, delete=True),
             n=n_splits,
             n_threads=n_threads,
+            show_progress=False,
         )
         for path, _ in splits.values():
             pysam.index(path, f'{path}.bai', '-@', str(n_threads))
@@ -555,35 +603,29 @@ def parse_all_reads(
     pool.join()
 
     # Combine csvs
-    logger.debug(f'Writing conversions to {conversions_path} and {no_conversions_path}')
+    logger.debug(f'Writing alignments to {alignments_path} and conversions to {conversions_path}')
     index = []
-    no_index = []
     with open(conversions_path, 'wb') as conversions_out, \
-        open(no_conversions_path, 'wb') as no_conversions_out:
+        open(alignments_path, 'wb') as alignments_out:
         conversions_out.write(f'{",".join(CONVERSION_CSV_COLUMNS)}\n'.encode())
-        no_conversions_out.write(f'{",".join(NO_CONVERSION_CSV_COLUMNS)}\n'.encode())
+        alignments_out.write(f'{",".join(ALIGNMENT_COLUMNS)}\n'.encode())
 
         pos = conversions_out.tell()
-        no_pos = no_conversions_out.tell()
+        pos2 = alignments_out.tell()
 
-        for conversions_part_path, index_part_path, no_conversions_part_path, no_index_part_path in async_result.get():
+        for conversions_part_path, index_part_path, alignments_part_path in async_result.get():
             with open(conversions_part_path, 'rb') as f:
                 shutil.copyfileobj(f, conversions_out)
-            with open(no_conversions_part_path, 'rb') as f:
-                shutil.copyfileobj(f, no_conversions_out)
+            with open(alignments_part_path, 'rb') as f:
+                shutil.copyfileobj(f, alignments_out)
 
             # Parse index
             index_part = utils.read_pickle(index_part_path)
-            for p, n in index_part:
-                index.append((pos + p, n))
+            for p, n, a in index_part:
+                index.append((pos + p, n, pos2 + a))
             pos += os.path.getsize(conversions_part_path)
+            pos2 += os.path.getsize(alignments_part_path)
+    logger.debug(f'Writing conversions index to {index_path}')
+    index_path = utils.write_pickle(index, index_path)
 
-            no_index_part = utils.read_pickle(no_index_part_path)
-            for p in no_index_part:
-                no_index.append(no_pos + p)
-            no_pos += os.path.getsize(no_conversions_part_path)
-    logger.debug(f'Writing conversions index to {index_path} and {no_index_path}')
-    index_path = utils.write_pickle(index, index_path, protocol=4)
-    no_index_path = utils.write_pickle(no_index, no_index_path, protocol=4)
-
-    return conversions_path, index_path, no_conversions_path, no_index_path
+    return conversions_path, alignments_path, index_path

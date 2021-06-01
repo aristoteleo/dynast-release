@@ -1,46 +1,25 @@
-import os
 from collections import namedtuple
 
-from .config import WHITELIST_DIR
+import ngs_tools as ngs
 
-Technology = namedtuple('Technology', ['name', 'arguments', 'whitelist_path'])
+Technology = namedtuple('Technology', ['name', 'chemistry', 'additional_args'])
 
 BARCODE_UMI_TECHNOLOGIES = [
-    Technology(
-        'dropseq', {
-            '--soloType': 'CB_UMI_Simple',
-            '--soloCBstart': 1,
-            '--soloCBlen': 12,
-            '--soloUMIstart': 13,
-            '--soloUMIlen': 8,
-        }, None
-    ),
-    Technology(
-        'scifate', {
-            '--soloType': 'CB_UMI_Simple',
-            '--soloCBstart': 9,
-            '--soloCBlen': 10,
-            '--soloUMIstart': 1,
-            '--soloUMIlen': 8,
-        }, os.path.join(WHITELIST_DIR, 'scifate.txt.gz')
-    ),
-    Technology(
-        '10xv2', {
-            '--soloType': 'CB_UMI_Simple',
-            '--soloCBstart': 1,
-            '--soloCBlen': 16,
-            '--soloUMIstart': 17,
-            '--soloUMIlen': 10,
-        }, os.path.join(WHITELIST_DIR, '10xv2.txt.gz')
-    ),
+    Technology('dropseq',
+               ngs.chemistry.get_chemistry('dropseq').reorder([1, 0]), None),
+    Technology('scifate',
+               ngs.chemistry.get_chemistry('scifate').reorder([1, 0]), None),
+    Technology('10xv2',
+               ngs.chemistry.get_chemistry('10xv2').reorder([1, 0]), None),
 ]
 
 PLATE_TECHNOLOGIES = [
-    Technology('smartseq', {
-        '--soloType': 'SmartSeq',
-        '--soloUMIdedup': 'Exact',
-        '--outSAMattributes': ['RG'],
-    }, None),
+    Technology(
+        'smartseq', ngs.chemistry.get_chemistry('smartseq2'), {
+            '--soloUMIdedup': 'Exact',
+            '--outSAMattributes': ['RG'],
+        }
+    ),
 ]
 
 TECHNOLOGIES = BARCODE_UMI_TECHNOLOGIES + PLATE_TECHNOLOGIES

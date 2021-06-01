@@ -211,7 +211,7 @@ class TestUtils(mixins.TestMixin, TestCase):
 
     def test_split_index(self):
         index = [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)]
-        self.assertEqual([(0, 15), (3, 10)], utils.split_index(index, n=2))
+        self.assertEqual([[(0, 5), (1, 5), (2, 5)], [(3, 5), (4, 5)]], utils.split_index(index, n=2))
 
     def test_downsample_counts_with_count(self):
         df = pd.DataFrame([

@@ -537,15 +537,17 @@ def read_pickle(path):
 
 def split_index(index, n=8):
     """Split a conversions index, which is a list of tuples (file position,
-    number of lines), one for each read, into `n` approximately equal parts.
-    This function is used to split the conversions CSV for multiprocessing.
+    number of lines, alignment position), one for each read, into `n`
+    approximately equal parts. This function is used to split the conversions
+    CSV for multiprocessing.
 
     :param index: index
     :type index: list
     :param n: number of splits, defaults to `8`
     :type n: int, optional
 
-    :return: list of parts, where each part is a (file position, number of lines) tuple
+    :return: list of parts, where each part is a list of
+        (file position, number of lines, alignment position) tuples
     :rtype: list
     """
     n_lines = sum(idx[1] for idx in index)
@@ -553,19 +555,18 @@ def split_index(index, n=8):
 
     # Split the index to "approximately" equal parts
     parts = []
-    start_pos = None
+    current_part = []
     current_size = 0
-    for pos, size in index:
-        if start_pos is None:
-            start_pos = pos
-        current_size += size
+    for tup in index:
+        current_part.append(tup)
+        current_size += tup[1]
 
         if current_size >= target:
-            parts.append((start_pos, current_size))
-            start_pos = None
+            parts.append(current_part)
             current_size = 0
-    if current_size > 0:
-        parts.append((start_pos, current_size))
+            current_part = []
+    if current_part:
+        parts.append(current_part)
 
     return parts
 

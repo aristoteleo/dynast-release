@@ -1,0 +1,8 @@
+{
+    "version": "0.0.0",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast estimate smartseq_count --cell-threshold 0 --cell-gene-threshold 1 -o smartseq_estimate_new --verbose --reads transcriptome --tmp tmp2 -t 1",
+    "start_time": "2021-06-01T12:40:53.482518",
+    "end_time": "2021-06-01T12:43:24.119459",
+    "elapsed": 150.636941
+}

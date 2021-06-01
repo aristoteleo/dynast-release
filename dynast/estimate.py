@@ -174,12 +174,11 @@ def estimate(
                 conversions=conversions,
                 group_by=[p_key],
             )
-    p_es = estimation.read_p_e(p_e_path, group_by=[p_key])
-
     if control:
         logger.info('Downstream processing skipped for controls')
         logger.info(f'Use `--p-e {p_e_path}` to run test samples')
         return
+    p_es = estimation.read_p_e(p_e_path, group_by=[p_key])
 
     # Aggregate counts to construct A matrix
     # NOTE: we don't use groupings here because we may need to use individual

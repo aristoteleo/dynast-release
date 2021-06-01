@@ -1,8 +1,0 @@
-{
-    "version": "0.0.0",
-    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
-    "call": "/home/lioscro/miniconda3/bin/dynast estimate SRR11683995_count_new --cell-threshold 0 --cell-gene-threshold 1 -o SRR11683995_estimate --verbose --reads total",
-    "start_time": "2021-05-26T19:39:16.373339",
-    "end_time": "2021-05-26T19:40:29.257244",
-    "elapsed": 72.883905
-}

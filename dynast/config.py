@@ -4,7 +4,6 @@ import platform
 PACKAGE_PATH = os.path.dirname(__file__)
 PLATFORM = platform.system().lower()
 BINS_DIR = os.path.join(PACKAGE_PATH, 'bins')
-WHITELIST_DIR = os.path.join(PACKAGE_PATH, 'whitelists')
 MODELS_DIR = os.path.join(PACKAGE_PATH, 'models')
 MODEL_PATH = os.path.join(MODELS_DIR, 'pi.stan')
 MODEL_NAME = 'pi'

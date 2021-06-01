@@ -58,7 +58,9 @@ def STAR_solo(
 
     command = [utils.get_STAR_binary_path()]
     arguments = config.STAR_ARGUMENTS
-    arguments = utils.combine_arguments(arguments, technology.arguments)
+    arguments = utils.combine_arguments(arguments, technology.chemistry.to_starsolo_arguments())
+    if technology.additional_args:
+        arguments = utils.combine_arguments(arguments, technology.additional_args)
     if technology.name != 'smartseq':
         arguments = utils.combine_arguments(arguments, config.STAR_SOLO_ARGUMENTS)
         if whitelist_path:

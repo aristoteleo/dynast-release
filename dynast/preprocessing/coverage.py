@@ -17,6 +17,7 @@ def calculate_coverage_contig(
     lock,
     contig,
     indices,
+    alignments=None,
     umi_tag=None,
     barcode_tag=None,
     gene_tag='GX',
@@ -39,6 +40,9 @@ def calculate_coverage_contig(
     :type contig: str
     :param indices: genomic positions to consider
     :type indices: list
+    :param alignments: set of (read_id, alignment_index) tuples to process. All
+        alignments are processed if this option is not provided.
+    :type alignments: set, optional
     :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
                     `umi` column, defaults to `None`
     :type umi_tag: str, optional
@@ -103,11 +107,14 @@ def calculate_coverage_contig(
 
             read_id = read.query_name
             alignment_index = read.get_tag('HI')
+            key = (read_id, alignment_index)
+            if alignments and key not in alignments:
+                continue
+
             reference_positions = read.get_reference_positions()
 
             # For paired end reads, don't count overlap twice
             if read.is_paired:
-                key = (read_id, alignment_index)
                 if key not in paired:
                     paired[key] = reference_positions
                     continue
@@ -144,6 +151,7 @@ def calculate_coverage(
     conversions,
     coverage_path,
     index_path,
+    alignments=None,
     umi_tag=None,
     barcode_tag=None,
     gene_tag='GX',
@@ -163,6 +171,9 @@ def calculate_coverage(
     :type coverage_path: str
     :param index_path: path to write index
     :type index_path: str
+    :param alignments: set of (read_id, alignment_index) tuples to process. All
+        alignments are processed if this option is not provided.
+    :type alignments: set, optional
     :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
                     `umi` column, defaults to `None`
     :type umi_tag: str, optional
@@ -201,6 +212,7 @@ def calculate_coverage(
             bam_path,
             counter,
             lock,
+            alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
             gene_tag=gene_tag,

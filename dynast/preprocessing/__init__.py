@@ -6,7 +6,7 @@ from .aggregation import (
     read_aggregates,
     read_rates,
 )
-from .bam import parse_all_reads, read_conversions
+from .bam import parse_all_reads, read_alignments, read_conversions, select_alignments
 from .conversion import (
     complement_counts,
     count_conversions,
