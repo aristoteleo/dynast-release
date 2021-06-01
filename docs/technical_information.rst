@@ -21,7 +21,7 @@ Count procedure
 :code:`parse`
 '''''''''''''
 1. All gene and transcript information are parsed from the gene annotation GTF (:code:`-g`) and saved as Python pickles :code:`genes.pkl.gz` and :code:`transcripts.pkl.gz`, respectively.
-2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`no_conversions.csv`. The former contains a line for every conversion, and the latter contains a line for every read that does not have any conversions. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. Splicing types are also assigned in this step if :code:`--no-splicing` was not provided.
+2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`alignments.csv`. The former contains a line for every conversion, and the latter contains a line for every alignment. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. Splicing types are also assigned in this step if :code:`--no-splicing` was not provided.
 
 .. _snp:
 
