@@ -61,7 +61,7 @@ def count(
 
     # Check if BAM index exists and create one if it doesn't.
     bai_path = f'{bam_path}.bai'
-    if not utils.all_exists([bai_path]):
+    if not utils.all_exists(bai_path):
         logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
         pysam.index(bam_path, bai_path, '-@', str(n_threads))
 
@@ -71,7 +71,7 @@ def count(
     alignments_path = os.path.join(out_dir, constants.ALIGNMENTS_FILENAME)
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
     conversions_required = [conversions_path, index_path, alignments_path, genes_path]
-    if not utils.all_exists(conversions_required) or overwrite:
+    if not utils.all_exists(*conversions_required) or overwrite:
         logger.info('Parsing gene and transcript information from GTF')
         gene_infos, transcript_infos = ngs.gtf.genes_and_transcripts_from_gtf(gtf_path, use_version=False)
         utils.write_pickle(gene_infos, genes_path)

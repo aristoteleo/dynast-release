@@ -221,7 +221,7 @@ def align(
     }
 
     STAR_required = utils.flatten_dict_values(STAR_result)
-    skip = utils.all_exists(STAR_required)
+    skip = utils.all_exists(*STAR_required)
     if not skip:
         logger.info(f'STAR binary found at {utils.get_STAR_binary_path()}')
         STAR_result = STAR_solo(
