@@ -8,7 +8,7 @@ Dynast: Complete splicing and labeling quantification from metabolic labeling sc
 
 .. WARNING::
 
-  Dynast is still under active development, and usage may change without warning.
+  Dynast is currently in beta-testing and is still under active development. Usage may change without warning.
 
 .. toctree::
    :maxdepth: 2
