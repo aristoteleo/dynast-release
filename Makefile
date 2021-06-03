@@ -17,7 +17,7 @@ docs:
 clean:
 	rm -rf build
 	rm -rf dist
-	rm -rf dynast.egg-info
+	rm -rf dynast_release.egg-info
 	rm -rf docs/_build
 	rm -rf docs/api
 
