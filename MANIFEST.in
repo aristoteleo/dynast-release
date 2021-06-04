@@ -1,2 +1,4 @@
+include requirements.txt
+include LICENSE
 recursive-include dynast/bins *
 recursive-include dynast/models *
