@@ -32,7 +32,7 @@ def read_coverage(coverage_path):
         for line in f:
             groups = COVERAGE_PARSER.match(line).groupdict()
             contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
-            coverage[contig][genome_i] = count
+            coverage.setdefault(contig, {})[genome_i] = count
     return coverage
 
 
