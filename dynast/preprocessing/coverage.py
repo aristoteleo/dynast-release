@@ -1,6 +1,4 @@
-import gzip
-import os
-import pickle
+import re
 import shutil
 import tempfile
 from functools import partial
@@ -9,6 +7,33 @@ import pysam
 
 from .. import utils
 from ..logging import logger
+
+COVERAGE_PARSER = re.compile(
+    r'''^
+    (?P<contig>[^,]*),
+    (?P<genome_i>[^,]*),
+    (?P<coverage>[^,]*)\n
+    $''', re.VERBOSE
+)
+
+
+def read_coverage(coverage_path):
+    """Read coverage CSV as a dictionary.
+
+    :param coverage_path: path to coverage CSV
+    :type coverage_path: str
+
+    :return: coverage as a nested dictionary
+    :rtype: dict
+    """
+    coverage = {}
+    with open(coverage_path, 'r') as f:
+        f.readline()
+        for line in f:
+            groups = COVERAGE_PARSER.match(line).groupdict()
+            contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
+            coverage[contig][genome_i] = count
+    return coverage
 
 
 def calculate_coverage_contig(
@@ -59,14 +84,10 @@ def calculate_coverage_contig(
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
 
-    :return: (coverage CSV path, index path)
-    :rtype: (str, str)
+    :return: coverage CSV path
+    :rtype: str
     """
     coverage_path = utils.mkstemp(dir=temp_dir)
-    index_path = utils.mkstemp(dir=temp_dir)
-
-    # Index will be used for fast splitting, just like for conversions.csv
-    index = []
 
     paired = {}
     coverage = {}
@@ -84,15 +105,16 @@ def calculate_coverage_contig(
         open(coverage_path, 'w') as coverage_out:
         for read in bam.fetch(contig):
             n_lines = 0
-            pos = coverage_out.tell()
             n += 1
             if n % update_every == 0:
                 # Flush
-                for key in sorted(list(coverage.keys())):
-                    if key[1] < read.reference_start:
+                for genome_i in sorted(coverage.keys()):
+                    if genome_i < read.reference_start:
                         n_lines += 1
-                        coverage_out.write(f'{key[0]},{contig},{key[1]},{coverage[key]}\n')
-                        del coverage[key]
+                        coverage_out.write(f'{contig},{genome_i},{coverage[genome_i]}\n')
+                        del coverage[genome_i]
+                    else:
+                        break
 
                 lock.acquire()
                 counter.value += update_every
@@ -120,37 +142,29 @@ def calculate_coverage_contig(
                     continue
 
                 reference_positions += paired[key]
-                del paired[read_id]
+                del paired[key]
 
             for genome_i in list(set(reference_positions)):
                 if genome_i in indices:
-                    key = (barcode, genome_i)
-                    coverage.setdefault(key, 0)
-                    coverage[key] += 1
-
-            if n_lines > 0:
-                index.append((pos, n_lines))
+                    if genome_i not in coverage:
+                        coverage[genome_i] = 0
+                    coverage[genome_i] += 1
 
         n_lines = 0
-        pos = coverage_out.tell()
-        for key in sorted(list(coverage.keys())):
+        for genome_i in sorted(coverage.keys()):
             n_lines += 1
-            coverage_out.write(f'{key[0]},{contig},{key[1]},{coverage[key]}\n')
-        if n_lines > 0:
-            index.append((pos, n_lines))
+            coverage_out.write(f'{contig},{genome_i},{coverage[genome_i]}\n')
     lock.acquire()
     counter.value += n % update_every
     lock.release()
-    index_path = utils.write_pickle(index, index_path, protocol=4)
 
-    return coverage_path, index_path
+    return coverage_path
 
 
 def calculate_coverage(
     bam_path,
     conversions,
     coverage_path,
-    index_path,
     alignments=None,
     umi_tag=None,
     barcode_tag=None,
@@ -169,8 +183,6 @@ def calculate_coverage(
     :type conversions: dictionary
     :param coverage_path: path to write coverage CSV
     :type coverage_path: str
-    :param index_path: path to write index
-    :type index_path: str
     :param alignments: set of (read_id, alignment_index) tuples to process. All
         alignments are processed if this option is not provided.
     :type alignments: set, optional
@@ -192,8 +204,8 @@ def calculate_coverage(
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
 
-    :return: (coverage CSV path, index path)
-    :rtype: (str, str)
+    :return: coverage CSV path
+    :rtype: str
     """
     logger.debug(f'Extracting contigs from BAM {bam_path}')
     contigs = []
@@ -230,24 +242,10 @@ def calculate_coverage(
 
     # Combine csvs
     logger.debug(f'Writing coverage to {coverage_path}')
-    pos = 0
-    index = []
     with open(coverage_path, 'wb') as coverage_out:
-        coverage_out.write(b'barcode,contig,genome_i,coverage\n')
-        pos = coverage_out.tell()
-
-        for coverage_part_path, index_part_path in async_result.get():
+        coverage_out.write(b'contig,genome_i,coverage\n')
+        for coverage_part_path in async_result.get():
             with open(coverage_part_path, 'rb') as f:
                 shutil.copyfileobj(f, coverage_out)
 
-            # Parse index
-            with gzip.open(index_part_path, 'rb') as f:
-                index_part = pickle.load(f)
-            for p, n in index_part:
-                index.append((pos + p, n))
-            pos += os.path.getsize(coverage_part_path)
-
-    logger.debug(f'Writing coverage index to {index_path}')
-    index_path = utils.write_pickle(index, index_path, protocol=4)
-
-    return coverage_path, index_path
+    return coverage_path

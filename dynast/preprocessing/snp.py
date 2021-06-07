@@ -1,4 +1,3 @@
-import re
 from functools import partial
 from operator import truediv
 
@@ -8,15 +7,6 @@ import pandas as pd
 from .. import utils
 from ..logging import logger
 from .conversion import CONVERSIONS_PARSER
-
-COVERAGE_PARSER = re.compile(
-    r'''^
-    (?P<barcode>[^,]*),
-    (?P<contig>[^,]*),
-    (?P<genome_i>[^,]*),
-    (?P<coverage>[^,]*)\n
-    $''', re.VERBOSE
-)
 
 
 def read_snps(snps_path):
@@ -95,7 +85,7 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     conversions = {}
     n = 0
     with open(conversions_path, 'r') as f:
-        for pos, n_lines, pos2 in index:
+        for pos, n_lines, _ in index:
             f.seek(pos)
             n += 1
             if n % update_every == 0:
@@ -174,103 +164,10 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
     return conversions
 
 
-def extract_coverage_part(coverage_path, counter, lock, index, update_every=5000):
-    """Extract coverage for every genomic position.
-
-    :param coverage_path: path to coverage CSV
-    :type coverage_path: str
-    :param counter: counter that keeps track of how many reads have been processed
-    :type counter: multiprocessing.Value
-    :param lock: semaphore for the `counter` so that multiple processes do not
-                 modify it at the same time
-    :type lock: multiprocessing.Lock
-    :param index: list of (file position, number of lines) tuples to process
-    :type index: list
-    :param update_every: update the counter every this many reads, defaults to `5000`
-    :type update_every: int, optional
-
-    :return: nested dictionary that contains number of conversions for each contig and position
-    :rtype: dictionary
-    """
-    coverage = {}
-    n = 0
-    with open(coverage_path, 'r') as f:
-        for tup in index:
-            pos = tup[0]
-            n_lines = tup[1]
-            f.seek(pos)
-            n += 1
-            if n % update_every == 0:
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
-
-            for i in range(n_lines):
-                line = f.readline()
-                groupdict = COVERAGE_PARSER.match(line).groupdict()
-
-                contig = groupdict['contig']
-                genome_i = int(groupdict['genome_i'])
-                count = int(groupdict['coverage'])
-
-                coverage.setdefault(contig, {}).setdefault(genome_i, 0)
-                coverage[contig][genome_i] += count
-
-    lock.acquire()
-    counter.value += n % update_every
-    lock.release()
-
-    return coverage
-
-
-def extract_coverage(coverage_path, index_path, n_threads=8):
-    """Wrapper around `extract_coverage_part` that works in parallel.
-
-    :param coverage_path: path to coverage CSV
-    :type coverage_path: str
-    :param index_path: path to coverage index
-    :type index_path: str
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-
-    :return: nested dictionary that contains number of conversions for each contig and position
-    :rtype: dictionary
-    """
-    logger.debug(f'Loading index {index_path} for {coverage_path}')
-    index = utils.read_pickle(index_path)
-
-    logger.debug(f'Splitting index into {n_threads} parts')
-    parts = utils.split_index(index, n=n_threads)
-
-    logger.debug(f'Spawning {n_threads} processes')
-    pool, counter, lock = utils.make_pool_with_counter(n_threads)
-    async_result = pool.starmap_async(
-        partial(
-            extract_coverage_part,
-            coverage_path,
-            counter,
-            lock,
-        ), [(part,) for part in parts]
-    )
-    pool.close()
-
-    # Display progres bar
-    utils.display_progress_with_counter(counter, len(index), async_result)
-    pool.join()
-
-    logger.debug('Combining coverage')
-    coverage = {}
-    for coverage_part in async_result.get():
-        coverage = utils.merge_dictionaries(coverage, coverage_part)
-
-    return coverage
-
-
 def detect_snps(
     conversions_path,
     index_path,
-    coverage_path,
-    coverage_index_path,
+    coverage,
     snps_path,
     alignments=None,
     quality=27,
@@ -283,10 +180,8 @@ def detect_snps(
     :type conversions_path: str
     :param index_path: path to conversions index
     :type index_path: str
-    :param coverage_path: path to coverage CSV
-    :type coverage_path: str
-    :param coverage_index_path: path to coverage index
-    :type coverage_index_path: str
+    :param coverage: dictionary containing genomic coverage
+    :type coverage: dict
     :param snps_path: path to output SNPs
     :type snps_path: str
     :param alignments: set of (read_id, alignment_index) tuples to process. All
@@ -305,9 +200,6 @@ def detect_snps(
     conversions = extract_conversions(
         conversions_path, index_path, alignments=alignments, quality=quality, n_threads=n_threads
     )
-
-    logger.debug('Counting coverage for each genomic position')
-    coverage = extract_coverage(coverage_path, coverage_index_path, n_threads=n_threads)
 
     logger.debug('Calculating fraction of conversions for each genomic position')
     fractions = utils.merge_dictionaries(conversions, coverage, f=truediv)

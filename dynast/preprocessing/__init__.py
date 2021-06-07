@@ -14,5 +14,5 @@ from .conversion import (
     read_counts,
     split_counts_by_velocity,
 )
-from .coverage import calculate_coverage
+from .coverage import calculate_coverage, read_coverage
 from .snp import detect_snps, read_snp_csv, read_snps

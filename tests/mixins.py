@@ -53,6 +53,7 @@ class TestMixin(TestCase):
         cls.gtf_path = os.path.join(cls.fixtures_dir, 'not_sorted.gtf')
         cls.genes_path = os.path.join(cls.fixtures_dir, 'genes.pkl.gz')
         cls.transcripts_path = os.path.join(cls.fixtures_dir, 'transcripts.pkl.gz')
+        cls.model_path = os.path.join(cls.fixtures_dir, 'model.pkl.gz')
 
         ###########################
         # UMI-based (with velocity)

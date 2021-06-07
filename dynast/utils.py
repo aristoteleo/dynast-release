@@ -154,16 +154,22 @@ def get_file_descriptor_limit():
 
 def get_max_file_descriptor_limit():
     """Get the maximum allowed value for the maximum number of open file
-    descriptors. Note that for Windows, there is not an easy way to get this,
+    descriptors.
+
+    Note that for Windows, there is not an easy way to get this,
     as it requires reading from the registry. So, we just return the maximum for
     a vanilla Windows installation, which is 8192.
     https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/setmaxstdio?view=vs-2019
+
+    Similarly, on MacOS, we return a hardcoded 10240.
 
     :return: maximum allowed value for the maximum number of open file descriptors
     :rtype: int
     """
     if config.PLATFORM == 'windows':
         return 8192
+    elif config.PLATFORM == 'darwin':
+        return 10240
     else:
         import resource
         return resource.getrlimit(resource.RLIMIT_NOFILE)[1]
