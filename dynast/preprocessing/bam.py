@@ -555,7 +555,6 @@ def parse_all_reads(
             utils.mkstemp(temp_dir, delete=True),
             n=n_splits,
             n_threads=n_threads,
-            show_progress=False,
         )
         for path, _ in splits.values():
             pysam.index(path, f'{path}.bai', '-@', str(n_threads))
