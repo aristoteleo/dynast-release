@@ -1,7 +1,6 @@
 import os
 from unittest import mock, TestCase
 
-import ngs_tools as ngs
 from scipy import stats
 
 import dynast.estimation.p_c as p_c
@@ -30,8 +29,11 @@ class TestPi(mixins.TestMixin, TestCase):
 
     def test_estimate_pi(self):
         pi_path = os.path.join(self.temp_dir, 'pi.csv')
-        with mock.patch('dynast.estimation.pi.utils.as_completed_with_progress', mixins.tqdm_mock):
-            model = ngs.utils.read_pickle(self.model_path)
+        with mock.patch('dynast.estimation.pi.pystan.StanModel') as StanModel, \
+            mock.patch('dynast.estimation.pi.utils.as_completed_with_progress', mixins.tqdm_mock):
+            model = mock.MagicMock()
+            StanModel.return_value = model
+            model.sampling.return_value.extract.return_value = {'alpha': [2], 'beta': [2], 'pi_g': [0.5]}
 
             self.assertEqual(
                 pi_path,
@@ -42,17 +44,13 @@ class TestPi(mixins.TestMixin, TestCase):
                     pi_path,
                     group_by=['barcode', 'GX'],
                     p_group_by=['barcode'],
-                    n_threads=2,
+                    n_threads=1,
                     threshold=1,
-                    seed=0,
-                    model=model
+                    seed=None,
                 )
             )
             with open(pi_path, 'r') as f:
                 self.assertTrue(
-                    f.read().startswith(
-                        'barcode,GX,guess,alpha,beta,pi\n'
-                        'AAACCCAACGTA,ENSG00000172009,0.99,'
-                        '5.62541677460705,1.904787674870628,0.8152038631052895\n'
-                    )
+                    f.read().
+                    startswith('barcode,GX,guess,alpha,beta,pi\nAAACCCAACGTA,ENSG00000172009,0.99,2.0,2.0,0.5\n')
                 )
