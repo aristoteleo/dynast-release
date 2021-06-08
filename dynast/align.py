@@ -188,10 +188,10 @@ def align(
 
     # If whitelist was not provided but one is available, decompress into output
     # directory.
-    if whitelist_path is None and technology.whitelist_path is not None:
+    if whitelist_path is None and technology.chemistry.has_whitelist:
         whitelist_path = os.path.join(out_dir, f'{technology.name}_whitelist.txt')
         logger.info(f'Copying prepackaged whitelist for technology {technology.name} to {whitelist_path}')
-        utils.decompress_gzip(technology.whitelist_path, whitelist_path)
+        utils.decompress_gzip(technology.chemistry.whitelist_path, whitelist_path)
 
     STAR_solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
     STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR)

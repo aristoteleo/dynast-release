@@ -53,6 +53,6 @@ class TestPi(mixins.TestMixin, TestCase):
                     f.read().startswith(
                         'barcode,GX,guess,alpha,beta,pi\n'
                         'AAACCCAACGTA,ENSG00000172009,0.99,'
-                        '5.0490744831338485,1.5855262894604907,0.8228229293517654\n'
+                        '5.62541677460705,1.904787674870628,0.8152038631052895\n'
                     )
                 )
