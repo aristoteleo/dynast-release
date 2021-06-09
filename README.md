@@ -7,4 +7,6 @@
 
 ## Dynast: Inclusive and efficient quantification of labeling and splicing RNAs for time-resolved metabolic labeling based scRNA-seq experiments
 
-Guides, tutorials, technical information, and API reference can be found in the dynast [documentation](https://dynast-release.readthedocs.io/en/latest/).
+[Getting started](https://dynast-release.readthedocs.io/en/latest/getting_started.html) - [Pipeline usage](https://dynast-release.readthedocs.io/en/latest/pipeline_usage.html) - [Technical information](https://dynast-release.readthedocs.io/en/latest/technical_information.html) - [Full documentation](https://dynast-release.readthedocs.io/en/latest/index.html)
+
+<img src="docs/_static/punnet_square.png" width="50%" height="50%">
