@@ -21,7 +21,7 @@ def read_p_e(p_e_path, group_by=None):
         with open(p_e_path, 'r') as f:
             return float(f.read())
 
-    df = pd.read_csv(p_e_path)
+    df = pd.read_csv(p_e_path, dtype={key: 'string' for key in group_by})
     return dict(df.set_index(group_by)['p_e'])
 
 

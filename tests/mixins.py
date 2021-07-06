@@ -55,6 +55,9 @@ class TestMixin(TestCase):
         cls.transcripts_path = os.path.join(cls.fixtures_dir, 'transcripts.pkl.gz')
         cls.model_path = os.path.join(cls.fixtures_dir, 'model.pkl.gz')
 
+        # Misc. fixtures
+        cls.p_e_int_path = os.path.join(cls.fixtures_dir, 'p_e_int.csv')
+
         ###########################
         # UMI-based (with velocity)
         ###########################

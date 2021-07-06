@@ -14,6 +14,9 @@ class TestPE(mixins.TestMixin, TestCase):
     def test_read_p_e(self):
         p_e.read_p_e(self.umi_p_e_path, group_by=['barcode'])
 
+        result = p_e.read_p_e(self.p_e_int_path, group_by=['group'])
+        self.assertEqual({'1': 0.5, '2': 0.75}, result)
+
     def test_estimate_p_e_control(self):
         p_e_path = os.path.join(self.temp_dir, 'p_e.csv')
         self.assertEqual(
