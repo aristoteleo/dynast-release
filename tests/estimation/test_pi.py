@@ -16,6 +16,9 @@ class TestPi(mixins.TestMixin, TestCase):
     def test_read_pi(self):
         pi.read_pi(self.umi_pi_path, group_by=['barcode', 'GX'])
 
+        result = pi.read_pi(self.pi_int_path, group_by=['group'])
+        self.assertEqual({'1': 0.5, '2': 0.75}, result)
+
     def test_beta_mean(self):
         self.assertAlmostEqual(stats.beta.mean(1, 1), pi.beta_mean(1, 1))
         self.assertAlmostEqual(stats.beta.mean(1, 2), pi.beta_mean(1, 2))

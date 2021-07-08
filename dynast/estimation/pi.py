@@ -25,7 +25,7 @@ def read_pi(pi_path, group_by=None):
             # pi is always the last column
             return float(f.readline().strip().split(',')[-1])
 
-    df = pd.read_csv(pi_path, usecols=group_by + ['pi'])
+    df = pd.read_csv(pi_path, usecols=group_by + ['pi'], dtype={key: 'string' for key in group_by})
     return dict(df.set_index(group_by)['pi'])
 
 

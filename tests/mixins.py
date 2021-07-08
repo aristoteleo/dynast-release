@@ -57,6 +57,8 @@ class TestMixin(TestCase):
 
         # Misc. fixtures
         cls.p_e_int_path = os.path.join(cls.fixtures_dir, 'p_e_int.csv')
+        cls.p_c_int_path = os.path.join(cls.fixtures_dir, 'p_c_int.csv')
+        cls.pi_int_path = os.path.join(cls.fixtures_dir, 'pi_int.csv')
 
         ###########################
         # UMI-based (with velocity)

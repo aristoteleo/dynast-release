@@ -12,8 +12,11 @@ from .. import mixins
 
 class TestPC(mixins.TestMixin, TestCase):
 
-    def test_read_p_c_(self):
+    def test_read_p_c(self):
         p_c.read_p_c(self.umi_p_c_path, group_by=['barcode'])
+
+        result = p_c.read_p_c(self.p_c_int_path, group_by=['group'])
+        self.assertEqual({'1': 0.5, '2': 0.75}, result)
 
     def test_binomial_pmf(self):
         self.assertAlmostEqual(p_c.binomial_pmf(5, 10, 0.5), stats.binom.pmf(5, 10, 0.5))
