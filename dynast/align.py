@@ -120,7 +120,7 @@ def STAR_solo(
     # set n_bins to the maximum possible, as higher n_bin requires less
     # memory to sort the BAM.
     current = utils.get_file_descriptor_limit()
-    maximum = utils.get_max_file_descriptor_limit()
+    maximum = min(utils.get_max_file_descriptor_limit(), 100000)
     arguments = utils.combine_arguments(
         arguments, {
             '--soloStrand': strand.capitalize(),
@@ -128,7 +128,7 @@ def STAR_solo(
             '--runThreadN': n_threads,
             '--outFileNamePrefix': out_dir,
             '--outTmpDir': os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}'),
-            '--outBAMsortingBinsN': min(max((maximum // n_threads) - 10, 50), 100000)
+            '--outBAMsortingBinsN': max((maximum // n_threads) - 10, 50)
         }
     )
     arguments.update(overrides or {})
