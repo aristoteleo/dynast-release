@@ -462,6 +462,29 @@ def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
     return False, [tag for tag in tags_found if not tags_found[tag]]
 
 
+def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
+    """Utility function to check if BAM has paired reads.
+
+    :param bam_path: path to BAM
+    :type bam_path: str
+    :param n_reads: number of reads to consider, defaults to `100000`
+    :type n_reads: int, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+
+    :return: whether paired reads were detected
+    :rtype: bool
+    """
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch()):
+            if read.is_paired:
+                return True
+
+            if i + 1 >= n_reads:
+                break
+    return False
+
+
 def parse_all_reads(
     bam_path,
     conversions_path,
@@ -547,6 +570,18 @@ def parse_all_reads(
         contig_genes.setdefault(gene_info['chromosome'], []).append(gene_id)
         contig_transcripts.setdefault(gene_info['chromosome'], []).extend(gene_info['transcripts'])
 
+    # Filter for properly paired reads if BAM contains paired reads
+    if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
+        logger.debug('BAM contains paired reads. Filtering out non-properly paired reads')
+        bam_path = ngs.bam.filter_bam(
+            bam_path,
+            lambda read: read.is_proper_pair if read.is_paired else True,
+            utils.mkstemp(temp_dir, delete=True),
+            n_threads=n_threads,
+            show_progress=False,
+        )
+        pysam.index(bam_path, f'{bam_path}.bai', '-@', str(n_threads))
+
     if n_threads > 1:
         n_splits = min(n_threads * 8, utils.get_file_descriptor_limit() - 10)
         logger.debug(f'Splitting BAM into {n_splits} parts')
@@ -555,6 +590,7 @@ def parse_all_reads(
             utils.mkstemp(temp_dir, delete=True),
             n=n_splits,
             n_threads=n_threads,
+            show_progress=True,
         )
         for path, _ in splits.values():
             pysam.index(path, f'{path}.bai', '-@', str(n_threads))

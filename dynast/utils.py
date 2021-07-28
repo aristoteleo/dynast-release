@@ -10,7 +10,6 @@ import numpy as np
 import psutil
 import pandas as pd
 from scipy import sparse
-from tqdm import tqdm
 
 from . import config
 from .logging import logger
@@ -234,7 +233,7 @@ def make_pool_with_counter(n_threads):
 
 
 def display_progress_with_counter(counter, total, *async_results, desc=None):
-    """Display TQDM progress bar for displaying multiprocessing progress.
+    """Display progress bar for displaying multiprocessing progress.
 
     :param counter: progress counter
     :type counter: multiprocessing.Value
@@ -246,7 +245,7 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
     :param desc: progress bar description, defaults to `None`
     :type desc: str, optional
     """
-    with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1, desc=desc) as pbar:
+    with ngs.progress.progress(total=total, unit_scale=True, desc=desc) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
             time.sleep(0.1)
@@ -262,7 +261,7 @@ def as_completed_with_progress(futures):
     :param futures: iterator of `concurrent.futures.Future` objects
     :type futures: iterable
     """
-    with tqdm(total=len(futures), ascii=True, smoothing=0.1) as pbar:
+    with ngs.progress.progress(total=len(futures)) as pbar:
         for future in as_completed(futures):
             yield future
             pbar.update(1)
