@@ -83,8 +83,8 @@ def get_STAR_version():
     :return: version string
     :rtype: str
     """
-    p = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
-    version = p.stdout.read().strip()
+    p, stdout, stderr = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
+    version = stdout.strip()
     return version
 
 
