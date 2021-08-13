@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+import ngs_tools as ngs
+
 from . import config, constants, utils
 from .logging import logger
 
@@ -69,7 +71,7 @@ def STAR_solo(
         # Input FASTQs must be plaintext
         plaintext_fastqs = []
         for fastq in fastqs:
-            if fastq.endswith('.gz'):
+            if ngs.utils.is_gzip(fastq):
                 plaintext_path = utils.mkstemp(dir=temp_dir)
                 logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
                 utils.decompress_gzip(fastq, plaintext_path)
@@ -120,7 +122,7 @@ def STAR_solo(
     # set n_bins to the maximum possible, as higher n_bin requires less
     # memory to sort the BAM.
     current = utils.get_file_descriptor_limit()
-    maximum = utils.get_max_file_descriptor_limit()
+    maximum = min(utils.get_max_file_descriptor_limit(), 100000)
     arguments = utils.combine_arguments(
         arguments, {
             '--soloStrand': strand.capitalize(),
@@ -128,7 +130,7 @@ def STAR_solo(
             '--runThreadN': n_threads,
             '--outFileNamePrefix': out_dir,
             '--outTmpDir': os.path.join(temp_dir, f'{tempfile.gettempprefix()}{next(tempfile._get_candidate_names())}'),
-            '--outBAMsortingBinsN': min(max((maximum // n_threads) - 10, 50), 100000)
+            '--outBAMsortingBinsN': max((maximum // n_threads) - 10, 50)
         }
     )
     arguments.update(overrides or {})
@@ -188,10 +190,10 @@ def align(
 
     # If whitelist was not provided but one is available, decompress into output
     # directory.
-    if whitelist_path is None and technology.whitelist_path is not None:
+    if whitelist_path is None and technology.chemistry.has_whitelist:
         whitelist_path = os.path.join(out_dir, f'{technology.name}_whitelist.txt')
         logger.info(f'Copying prepackaged whitelist for technology {technology.name} to {whitelist_path}')
-        utils.decompress_gzip(technology.whitelist_path, whitelist_path)
+        utils.decompress_gzip(technology.chemistry.whitelist_path, whitelist_path)
 
     STAR_solo_dir = os.path.join(out_dir, constants.STAR_SOLO_DIR)
     STAR_gene_dir = os.path.join(STAR_solo_dir, constants.STAR_GENE_DIR)

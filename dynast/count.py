@@ -100,21 +100,19 @@ def count(
 
     # Detect SNPs
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
-    coverage_index_path = os.path.join(out_dir, constants.COVERAGE_INDEX_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
     if snp_threshold:
         logger.info('Selecting alignments to use for SNP detection')
         alignments = preprocessing.select_alignments(preprocessing.read_alignments(alignments_path))
 
         logger.info(f'Calculating coverage and outputting to {coverage_path}')
-        coverage_path, coverage_index_path = preprocessing.calculate_coverage(
+        coverage_path = preprocessing.calculate_coverage(
             bam_path, {
                 contig: set(df_part['genome_i'])
                 for contig, df_part in preprocessing.read_conversions(conversions_path, usecols=['contig', 'genome_i']).
                 drop_duplicates().groupby('contig', sort=False, observed=True)
             },
             coverage_path,
-            coverage_index_path,
             alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
@@ -124,13 +122,13 @@ def count(
             temp_dir=temp_dir,
             velocity=velocity
         )
+        coverage = preprocessing.read_coverage(coverage_path)
 
         logger.info(f'Detecting SNPs with threshold {snp_threshold} to {snps_path}')
         snps_path = preprocessing.detect_snps(
             conversions_path,
             index_path,
-            coverage_path,
-            coverage_index_path,
+            coverage,
             snps_path,
             alignments=alignments,
             quality=quality,

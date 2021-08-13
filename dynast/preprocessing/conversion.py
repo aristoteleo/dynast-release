@@ -504,20 +504,42 @@ def count_conversions(
     umi = all(df_counts['umi'] != 'NA')
     barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
     split_paths = []
-    residual_barcodes = []
-    for barcode in sorted(barcode_counts.keys()):
-        if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
-            split_path = utils.mkstemp(dir=temp_dir)
-            logger.debug(f'Splitting counts for barcode {barcode} to {split_path}')
-            df_counts[df_counts['barcode'] == barcode].to_csv(split_path, index=False)
-            split_paths.append(split_path)
-        else:
-            residual_barcodes.append(barcode)
-    if residual_barcodes:
-        split_path = utils.mkstemp(dir=temp_dir)
-        logger.debug(f'Splitting remaining {len(residual_barcodes)} barcodes to {split_path}')
-        df_counts[df_counts['barcode'].isin(residual_barcodes)].to_csv(split_path, index=False)
-        split_paths.append(split_path)
+    current_split_path = None
+    current_split_f = None
+    current_split_size = 0
+    # Split barcodes into approximately `config.COUNTS_SPLIT_THRESHOLD` bins.
+    # Note that a single barcode may have more than this many reads.
+    try:
+        for barcode in barcode_counts.keys():
+            df_counts_barcode = df_counts[df_counts['barcode'] == barcode]
+            # Make its own split
+            if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
+                split_path = utils.mkstemp(dir=temp_dir)
+                logger.debug(f'Splitting counts for barcode {barcode} to {split_path}')
+                df_counts_barcode.to_csv(split_path, index=False)
+                split_paths.append(split_path)
+            elif current_split_path is None:
+                current_split_path = utils.mkstemp(dir=temp_dir)
+                logger.debug(f'Splitting counts for residual barcodes to {current_split_path}')
+                current_split_f = open(current_split_path, 'w')
+                # Write header
+                df_counts_barcode.to_csv(current_split_f, index=False)
+                split_paths.append(current_split_path)
+            else:
+                # Don't write header
+                df_counts_barcode.to_csv(current_split_f, index=False, header=False)
+
+                # If we exceeded read threshold, close file & reset.
+                current_split_size += df_counts_barcode.shape[0]
+                if current_split_size > config.COUNTS_SPLIT_THRESHOLD:
+                    current_split_f.close()
+                    current_split_path = None
+                    current_split_size = 0
+
+    finally:
+        if current_split_f is not None:
+            current_split_f.close()
+
     del df_counts
 
     logger.debug(f'Spawning {n_threads} processes')

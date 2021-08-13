@@ -1,0 +1,8 @@
+{
+    "version": "0.0.3",
+    "workdir": "/Users/josephmin/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/Users/josephmin/miniconda3/bin/dynast count -g /Users/josephmin/scratch/references/homo_sapiens/Homo_sapiens.GRCh38.101.gtf --barcode-tag CB --umi-tag UB SRR11683995_align/Aligned.sortedByCoord.out.bam -o SRR11683995_1000_count_control_new -t 1 --verbose --control --tmp tmp4 --conversion TC --snp-threshold 0.5",
+    "start_time": "2021-06-07T15:51:16.467548",
+    "end_time": "2021-06-07T15:51:24.566905",
+    "elapsed": 8.099357
+}

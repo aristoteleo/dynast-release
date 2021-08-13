@@ -91,12 +91,12 @@ class TestUtils(mixins.TestMixin, TestCase):
         total = mock.MagicMock()
         async_result = mock.MagicMock()
         async_result.ready.return_value = True
-        with mock.patch('dynast.utils.tqdm'):
+        with mock.patch('dynast.utils.ngs.progress.progress'):
             utils.display_progress_with_counter(counter, total, async_result)
 
     def test_as_completed_with_progress(self):
         futures = [mock.MagicMock(), mock.MagicMock()]
-        with mock.patch('dynast.utils.tqdm'), \
+        with mock.patch('dynast.utils.ngs.progress.progress'), \
             mock.patch('dynast.utils.as_completed') as as_completed:
             as_completed.return_value = ['future1', 'future2']
             self.assertEqual(['future1', 'future2'], list(utils.as_completed(futures)))

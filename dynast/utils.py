@@ -10,7 +10,6 @@ import numpy as np
 import psutil
 import pandas as pd
 from scipy import sparse
-from tqdm import tqdm
 
 from . import config
 from .logging import logger
@@ -84,8 +83,8 @@ def get_STAR_version():
     :return: version string
     :rtype: str
     """
-    p = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
-    version = p.stdout.read().strip()
+    p, stdout, stderr = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
+    version = stdout.strip()
     return version
 
 
@@ -154,16 +153,22 @@ def get_file_descriptor_limit():
 
 def get_max_file_descriptor_limit():
     """Get the maximum allowed value for the maximum number of open file
-    descriptors. Note that for Windows, there is not an easy way to get this,
+    descriptors.
+
+    Note that for Windows, there is not an easy way to get this,
     as it requires reading from the registry. So, we just return the maximum for
     a vanilla Windows installation, which is 8192.
     https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/setmaxstdio?view=vs-2019
+
+    Similarly, on MacOS, we return a hardcoded 10240.
 
     :return: maximum allowed value for the maximum number of open file descriptors
     :rtype: int
     """
     if config.PLATFORM == 'windows':
         return 8192
+    elif config.PLATFORM == 'darwin':
+        return 10240
     else:
         import resource
         return resource.getrlimit(resource.RLIMIT_NOFILE)[1]
@@ -228,7 +233,7 @@ def make_pool_with_counter(n_threads):
 
 
 def display_progress_with_counter(counter, total, *async_results, desc=None):
-    """Display TQDM progress bar for displaying multiprocessing progress.
+    """Display progress bar for displaying multiprocessing progress.
 
     :param counter: progress counter
     :type counter: multiprocessing.Value
@@ -240,7 +245,7 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
     :param desc: progress bar description, defaults to `None`
     :type desc: str, optional
     """
-    with tqdm(total=total, ascii=True, unit_scale=True, smoothing=0.1, desc=desc) as pbar:
+    with ngs.progress.progress(total=total, unit_scale=True, desc=desc) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
             time.sleep(0.1)
@@ -256,7 +261,7 @@ def as_completed_with_progress(futures):
     :param futures: iterator of `concurrent.futures.Future` objects
     :type futures: iterable
     """
-    with tqdm(total=len(futures), ascii=True, smoothing=0.1) as pbar:
+    with ngs.progress.progress(total=len(futures)) as pbar:
         for future in as_completed(futures):
             yield future
             pbar.update(1)

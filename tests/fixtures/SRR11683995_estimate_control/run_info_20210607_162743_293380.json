@@ -1,0 +1,8 @@
+{
+    "version": "0.0.3",
+    "workdir": "/Users/josephmin/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/Users/josephmin/miniconda3/bin/dynast estimate SRR11683995_count_control --control -o SRR11683995_estimate_control",
+    "start_time": "2021-06-07T16:27:43.293380",
+    "end_time": "2021-06-07T16:27:43.704171",
+    "elapsed": 0.410791
+}
