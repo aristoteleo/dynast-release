@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+import ngs_tools as ngs
+
 from . import config, constants, utils
 from .logging import logger
 
@@ -69,7 +71,7 @@ def STAR_solo(
         # Input FASTQs must be plaintext
         plaintext_fastqs = []
         for fastq in fastqs:
-            if fastq.endswith('.gz'):
+            if ngs.utils.is_gzip(fastq):
                 plaintext_path = utils.mkstemp(dir=temp_dir)
                 logger.warning(f'Decompressing {fastq} to {plaintext_path} because STAR requires plaintext FASTQs')
                 utils.decompress_gzip(fastq, plaintext_path)
