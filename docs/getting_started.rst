@@ -16,11 +16,11 @@ The latest stable release of dynast is available on the Python Package Index (Py
 
 To install directly from the Git repository::
 
-	pip install git+https://github.com:aristoteleo/dynast-release
+	pip install git+https://github.com/aristoteleo/dynast-release
 
 To install the latest *development* verson::
 
-	pip install git+https://github.com:aristoteleo/dynast-release@devel
+	pip install git+https://github.com/aristoteleo/dynast-release@devel
 
 Please note that not all features may be stable when using the development version.
 
