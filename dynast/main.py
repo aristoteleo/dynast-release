@@ -9,7 +9,7 @@ from . import __version__
 # from .config import RE_CHOICES
 from .logging import logger
 from .technology import TECHNOLOGIES_MAP
-from .utils import flatten_list
+from .utils import flatten_list, patch_mp_connection_bpo_17560
 
 
 def print_technologies():
@@ -736,6 +736,7 @@ def main():
     os.makedirs(args.tmp)
     os.environ['NUMEXPR_MAX_THREADS'] = str(args.t)
     try:
+        patch_mp_connection_bpo_17560()  # Monkeypatch for python 3.7
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             COMMAND_TO_FUNCTION[args.command](parser, args, temp_dir=args.tmp)
