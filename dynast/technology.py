@@ -11,6 +11,8 @@ BARCODE_UMI_TECHNOLOGIES = [
                ngs.chemistry.get_chemistry('scifate').reorder([1, 0]), None),
     Technology('10xv2',
                ngs.chemistry.get_chemistry('10xv2').reorder([1, 0]), None),
+    Technology('10xv3',
+               ngs.chemistry.get_chemistry('10xv3').reorder([1, 0]), None),
 ]
 
 PLATE_TECHNOLOGIES = [
