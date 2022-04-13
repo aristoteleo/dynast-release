@@ -57,3 +57,24 @@ class TestSnp(mixins.TestMixin, TestCase):
                 )
             )
             self.assertTrue(mixins.files_equal(self.control_snps_path, snps_path))
+
+    def test_detect_snps_with_conversions(self):
+        alignments = bam.select_alignments(bam.read_alignments(self.control_alignments_path))
+        cov = coverage.read_coverage(self.control_coverage_path)
+        snps_path = os.path.join(self.temp_dir, 'snps.csv')
+        with mock.patch('dynast.preprocessing.snp.utils.display_progress_with_counter'):
+            self.assertEqual(
+                snps_path,
+                snp.detect_snps(
+                    self.control_conversions_path,
+                    self.control_conversions_index_path,
+                    cov,
+                    snps_path,
+                    alignments=alignments,
+                    quality=27,
+                    threshold=0.5,
+                    conversions=['TC'],
+                    n_threads=2
+                )
+            )
+            self.assertTrue(mixins.files_equal(self.control_snps_conversions_path, snps_path))

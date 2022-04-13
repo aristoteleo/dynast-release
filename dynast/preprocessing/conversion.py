@@ -357,7 +357,7 @@ def count_conversions_part(
     count_path = utils.mkstemp(dir=temp_dir)
 
     n = 0
-    with open(conversions_path, 'r') as f, open(alignments_path) as f_alignments, open(count_path, 'w') as out:
+    with open(conversions_path, 'r') as f, open(alignments_path, 'r') as f_alignments, open(count_path, 'w') as out:
         for pos, n_lines, pos2 in index:
             f.seek(pos)
             f_alignments.seek(pos2)

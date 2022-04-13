@@ -3,6 +3,7 @@ from operator import truediv
 
 import numpy as np
 import pandas as pd
+from ngs_tools.sequence import NUCLEOTIDE_COMPLEMENT
 
 from .. import utils
 from ..logging import logger
@@ -58,7 +59,9 @@ def read_snp_csv(snp_csv):
     return dict(df.groupby('contig', sort=False, observed=True).agg(set)['genome_i'])
 
 
-def extract_conversions_part(conversions_path, counter, lock, index, alignments=None, quality=27, update_every=10000):
+def extract_conversions_part(
+    conversions_path, counter, lock, index, alignments=None, quality=27, conversions=None, update_every=10000
+):
     """Extract number of conversions for every genomic position.
 
     :param conversions_path: path to conversions CSV
@@ -76,13 +79,19 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
+    :param conversions: list of conversions to consider, defaults to `None`, which
+        considers all conversions.
+    :type conversions: list, optional
     :param update_every: update the counter every this many reads, defaults to `10000`
     :type update_every: int, optional
 
     :return: nested dictionary that contains number of conversions for each contig and position
     :rtype: dictionary
     """
-    conversions = {}
+    if conversions:
+        conversions_comp = [''.join(NUCLEOTIDE_COMPLEMENT[c] for c in conv) for conv in conversions]
+        _conversions = conversions + conversions_comp
+    convs = {}
     n = 0
     with open(conversions_path, 'r') as f:
         for pos, n_lines, _ in index:
@@ -101,19 +110,23 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
                     break
 
                 if int(groups['quality']) > quality:
+                    # Only consider specific conversions of interest.
+                    if conversions and f'{groups["original"]}{groups["converted"]}' not in _conversions:
+                        continue
+
                     contig = groups['contig']
                     genome_i = int(groups['genome_i'])
 
-                    conversions.setdefault(contig, {}).setdefault(genome_i, 0)
-                    conversions[contig][genome_i] += 1
+                    convs.setdefault(contig, {}).setdefault(genome_i, 0)
+                    convs[contig][genome_i] += 1
     lock.acquire()
     counter.value += n % update_every
     lock.release()
 
-    return conversions
+    return convs
 
 
-def extract_conversions(conversions_path, index_path, alignments=None, quality=27, n_threads=8):
+def extract_conversions(conversions_path, index_path, alignments=None, quality=27, conversions=None, n_threads=8):
     """Wrapper around `extract_conversions_part` that works in parallel.
 
     :param conversions_path: path to conversions CSV
@@ -126,6 +139,9 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
+    :param conversions: list of conversions to consider, defaults to `None`, which
+        considers all conversions.
+    :type conversions: list, optional
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
 
@@ -148,6 +164,7 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
             lock,
             alignments=alignments,
             quality=quality,
+            conversions=conversions,
         ), [(part,) for part in parts]
     )
     pool.close()
@@ -157,11 +174,11 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
     pool.join()
 
     logger.debug('Combining conversions')
-    conversions = {}
+    convs = {}
     for conversions_part in async_result.get():
-        conversions = utils.merge_dictionaries(conversions, conversions_part)
+        convs = utils.merge_dictionaries(convs, conversions_part)
 
-    return conversions
+    return convs
 
 
 def detect_snps(
@@ -172,6 +189,7 @@ def detect_snps(
     alignments=None,
     quality=27,
     threshold=0.5,
+    conversions=None,
     n_threads=8,
 ):
     """Detect SNPs.
@@ -193,16 +211,24 @@ def detect_snps(
     :param threshold: positions with conversions / coverage > threshold will be
                       considered as SNPs, defaults to `0.5`
     :type threshold: float, optional
+    :param conversions: list of conversions to consider, defaults to `None`, which
+        considers all conversions.
+    :type conversions: list, optional
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
     """
     logger.debug('Counting number of conversions for each genomic position')
-    conversions = extract_conversions(
-        conversions_path, index_path, alignments=alignments, quality=quality, n_threads=n_threads
+    convs = extract_conversions(
+        conversions_path,
+        index_path,
+        alignments=alignments,
+        quality=quality,
+        conversions=conversions,
+        n_threads=n_threads
     )
 
     logger.debug('Calculating fraction of conversions for each genomic position')
-    fractions = utils.merge_dictionaries(conversions, coverage, f=truediv)
+    fractions = utils.merge_dictionaries(convs, coverage, f=truediv)
 
     logger.debug(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:

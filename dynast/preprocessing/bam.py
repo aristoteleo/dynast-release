@@ -317,7 +317,7 @@ def parse_read_contig(
                     continue
 
                 mate = paired[key]
-                mate_sequence = mate.seq.upper()
+                mate_sequence = mate.query_sequence.upper()
                 mate_qualities = mate.query_qualities
                 mate_reference = mate.get_reference_sequence().upper()
                 mate_reference_positions = mate.get_reference_positions()
@@ -359,7 +359,7 @@ def parse_read_contig(
             umi = read.get_tag(umi_tag) if umi_tag else 'NA'
             gx_assigned = read.has_tag(gene_tag)
             gx = read.get_tag(gene_tag) if gx_assigned else ''
-            sequence = read.seq.upper()
+            sequence = read.query_sequence.upper()
             qualities = read.query_qualities
             reference = read.get_reference_sequence().upper()
             counts += Counter(reference)

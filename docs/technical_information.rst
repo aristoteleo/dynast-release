@@ -30,7 +30,7 @@ Count procedure
 This step is skipped if :code:`--snp-threshold` is not specified.
 
 1. Read coverage of the genome is computed by parsing all aligned reads from the input BAM and output to :code:`coverage.csv`.
-2. SNPs are detected by calculating, for every genomic position, the fraction of reads with a conversion at that position over its coverage. If this fraction is greater than :code:`--snp-threshold`, then the genomic position is written to the output file :code:`snps.csv`. Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion.
+2. SNPs are detected by calculating, for every genomic position, the fraction of reads with a conversion at that position over its coverage. If this fraction is greater than :code:`--snp-threshold`, then the genomic position is written to the output file :code:`snps.csv`. Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion. Only conversions that would affect the detection of labeled RNA are considered. For example, if :code:`--conversion TC` is provided, only T>C and A>G conversions (relative to the forward strand) are considered during SNP detection.
 
 .. _quant:
 

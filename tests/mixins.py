@@ -104,6 +104,7 @@ class TestMixin(TestCase):
         cls.control_coverage_path = os.path.join(cls.control_count_dir, 'coverage.csv')
         cls.control_coverage_index_path = os.path.join(cls.control_count_dir, 'coverage.idx')
         cls.control_snps_path = os.path.join(cls.control_count_dir, 'snps.csv')
+        cls.control_snps_conversions_path = os.path.join(cls.control_count_dir, 'snps_conversions.csv')
         cls.control_counts_path = os.path.join(cls.control_count_dir, 'counts_TC.csv')
         cls.control_rates_path = os.path.join(cls.control_count_dir, 'rates.csv')
         cls.control_p_e_path = os.path.join(cls.control_count_dir, 'p_e.csv')
