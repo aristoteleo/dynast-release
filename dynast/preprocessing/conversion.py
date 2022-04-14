@@ -312,7 +312,6 @@ def count_no_conversions(
 def count_conversions_part(
     conversions_path,
     alignments_path,
-    gene_strands,
     counter,
     lock,
     index,
@@ -358,8 +357,7 @@ def count_conversions_part(
     def is_snp(gx, conversion, contig, genome_i):
         if not snps:
             return False
-        conv = conversion if gene_strands[gx] == '+' else CONVERSION_COMPLEMENT[conversion]
-        return genome_i in snps.get(conv, {}).get(contig, set())
+        return genome_i in snps.get(conversion, {}).get(contig, set())
 
     count_path = utils.mkstemp(dir=temp_dir)
 
@@ -482,8 +480,7 @@ def count_conversions(
         partial(
             count_conversions_part,
             conversions_path,
-            alignments_path, {gene: info['strand']
-                              for gene, info in gene_infos.items()},
+            alignments_path,
             counter,
             lock,
             barcodes=barcodes,
