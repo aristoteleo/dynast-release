@@ -133,7 +133,6 @@ def count(
             alignments=alignments,
             quality=quality,
             threshold=snp_threshold,
-            conversions=all_conversions,
             n_threads=n_threads,
         )
 

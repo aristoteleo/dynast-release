@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from functools import partial
 
+import ngs_tools as ngs
 import numpy as np
 import pandas as pd
 
@@ -39,18 +40,18 @@ ALIGNMENTS_PARSER = re.compile(
 )
 
 CONVERSION_IDX = {
-    ('A', 'C'): 0,
-    ('A', 'G'): 1,
-    ('A', 'T'): 2,
-    ('C', 'A'): 3,
-    ('C', 'G'): 4,
-    ('C', 'T'): 5,
-    ('G', 'A'): 6,
-    ('G', 'C'): 7,
-    ('G', 'T'): 8,
-    ('T', 'A'): 9,
-    ('T', 'C'): 10,
-    ('T', 'G'): 11,
+    'AC': 0,
+    'AG': 1,
+    'AT': 2,
+    'CA': 3,
+    'CG': 4,
+    'CT': 5,
+    'GA': 6,
+    'GC': 7,
+    'GT': 8,
+    'TA': 9,
+    'TC': 10,
+    'TG': 11,
 }
 BASE_IDX = {
     'A': 12,
@@ -58,7 +59,11 @@ BASE_IDX = {
     'G': 14,
     'T': 15,
 }
-CONVERSION_COLUMNS = [''.join(pair) for pair in sorted(CONVERSION_IDX.keys())]
+CONVERSION_COMPLEMENT = {
+    conversion: ngs.sequence.complement_sequence(conversion, reverse=False)
+    for conversion in CONVERSION_IDX.keys()
+}
+CONVERSION_COLUMNS = sorted(CONVERSION_IDX.keys())
 BASE_COLUMNS = sorted(BASE_IDX.keys())
 COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome', 'score']
@@ -307,6 +312,7 @@ def count_no_conversions(
 def count_conversions_part(
     conversions_path,
     alignments_path,
+    gene_strands,
     counter,
     lock,
     index,
@@ -349,10 +355,11 @@ def count_conversions_part(
     :rtype: tuple
     """
 
-    def is_snp(g):
+    def is_snp(gx, conversion, contig, genome_i):
         if not snps:
             return False
-        return int(g['genome_i']) in snps.get(g['contig'], set())
+        conv = conversion if gene_strands[gx] == '+' else CONVERSION_COMPLEMENT[conversion]
+        return genome_i in snps.get(conv, {}).get(contig, set())
 
     count_path = utils.mkstemp(dir=temp_dir)
 
@@ -373,10 +380,13 @@ def count_conversions_part(
             counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
             for base, i in BASE_IDX.items():
                 counts[i] = alignment[base]
+            gx = alignment['GX']
             for _ in range(n_lines):
                 groups = CONVERSIONS_PARSER.match(f.readline()).groupdict()
-                if int(groups['quality']) > quality and not is_snp(groups):
-                    counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
+                conversion = f'{groups["original"]}{groups["converted"]}'
+                if int(groups['quality']) > quality and not is_snp(gx, conversion, groups['contig'], int(
+                        groups['genome_i'])):
+                    counts[CONVERSION_IDX[conversion]] += 1
 
             out.write(
                 f'{groups["read_id"]},{alignment["barcode"]},{alignment["umi"]},'
@@ -472,7 +482,8 @@ def count_conversions(
         partial(
             count_conversions_part,
             conversions_path,
-            alignments_path,
+            alignments_path, {gene: info['strand']
+                              for gene, info in gene_infos.items()},
             counter,
             lock,
             barcodes=barcodes,
