@@ -23,6 +23,7 @@ def count(
     quality=27,
     conversions=[['TC']],
     snp_threshold=0.5,
+    snp_min_coverage=1,
     snp_csv=None,
     n_threads=8,
     temp_dir=None,
@@ -133,6 +134,7 @@ def count(
             alignments=alignments,
             quality=quality,
             threshold=snp_threshold,
+            min_coverage=snp_min_coverage,
             n_threads=n_threads,
         )
 

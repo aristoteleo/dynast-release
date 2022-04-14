@@ -194,6 +194,7 @@ def detect_snps(
     alignments=None,
     quality=27,
     threshold=0.5,
+    min_coverage=1,
     n_threads=8,
 ):
     """Detect SNPs.
@@ -215,6 +216,9 @@ def detect_snps(
     :param threshold: positions with conversions / coverage > threshold will be
                       considered as SNPs, defaults to `0.5`
     :type threshold: float, optional
+    :param min_coverage: only positions with at least this many mapping read_snps
+                         are considered, defaults to `1`
+    :type min_coverage: int, optional
     :param n_threads: number of threads, defaults to `8`
     :type n_threads: int, optional
     """
@@ -231,10 +235,10 @@ def detect_snps(
     logger.debug(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:
         f.write('contig,genome_i,original,converted\n')
-        for ((conversion), contig, genome_i), fraction in utils.flatten_dictionary(fractions):
+        for (conversion, contig, genome_i), fraction in utils.flatten_dictionary(fractions):
             # If (# conversions) / (# coverage) is greater than a threshold,
             # consider this a SNP and write to CSV
-            if fraction > threshold:
+            if coverage[contig][genome_i] >= min_coverage and fraction > threshold:
                 f.write(f'{contig},{genome_i},{conversion[0]},{conversion[1]}\n')
 
     return snps_path

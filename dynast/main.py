@@ -254,6 +254,16 @@ def setup_count_args(parser, parent):
         default=False,
     )
     parser_count.add_argument(
+        '--snp-min-coverage',
+        metavar='THRESHOLD',
+        help=(
+            'For a conversion to be considered as a SNP, there must be at least '
+            'this many reads mapping to that region. (default: 1)'
+        ),
+        type=int,
+        default=1,
+    )
+    parser_count.add_argument(
         '--snp-csv',
         metavar='CSV',
         help=('CSV file of two columns: contig (i.e. chromosome) and genome position '
@@ -574,6 +584,7 @@ def parse_count(parser, args, temp_dir=None):
         quality=args.quality,
         conversions=conversions,
         snp_threshold=args.snp_threshold,
+        snp_min_coverage=args.snp_min_coverage,
         snp_csv=args.snp_csv,
         n_threads=args.t,
         temp_dir=temp_dir,
