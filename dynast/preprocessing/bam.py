@@ -508,6 +508,48 @@ def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
+def split_bam(bam_path, n, n_threads=8, temp_dir=None):
+    """Split BAM into n parts.
+
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
+    :param n: number of splits
+    :type n: int
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+
+    :return: List of tuples containing (split BAM path, number of reads)
+    :rtype: list
+    """
+    # Filter for properly paired reads if BAM contains paired reads
+    if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
+        logger.debug('BAM contains paired reads. Filtering out non-properly paired reads')
+        bam_path = ngs.bam.filter_bam(
+            bam_path,
+            lambda read: read.is_proper_pair if read.is_paired else True,
+            utils.mkstemp(temp_dir, delete=True),
+            n_threads=n_threads,
+            show_progress=False,
+        )
+        pysam.index(bam_path, f'{bam_path}.bai', '-@', str(n_threads))
+
+    logger.debug(f'Splitting BAM into {n} parts')
+    splits = list(
+        ngs.bam.split_bam(
+            bam_path,
+            utils.mkstemp(temp_dir, delete=True),
+            n=n,
+            n_threads=n_threads,
+            show_progress=True,
+        ).values()
+    )
+    for path, _ in splits:
+        pysam.index(path, f'{path}.bai', '-@', str(n_threads))
+    return splits
+
+
 def parse_all_reads(
     bam_path,
     conversions_path,
@@ -524,7 +566,8 @@ def parse_all_reads(
     temp_dir=None,
     nasc=False,
     control=False,
-    velocity=True
+    velocity=True,
+    return_splits=False
 ):
     """Parse all reads in a BAM and extract conversion, content and alignment
     information as CSVs.
@@ -568,9 +611,14 @@ def parse_all_reads(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
+    :param return_splits: return BAM splits for later reuse, defaults to `True`
+    :type return_splits: bool, optional
 
     :return: (path to conversions, path to alignments, path to conversions index)
-    :rtype: (str, str, str)
+             If `return_splits` is True, then there is an additional return value, which
+             is a list of tuples containing split BAM paths and number of reads
+             in each BAM.
+    :rtype: (str, str, str) or (str, str, str, list)
     """
     logger.debug('Checking if BAM has required tags')
     tags = get_tags_from_bam(bam_path, config.BAM_PEEK_READS, n_threads=n_threads)
@@ -629,37 +677,14 @@ def parse_all_reads(
         contig_genes.setdefault(gene_info['chromosome'], []).append(gene_id)
         contig_transcripts.setdefault(gene_info['chromosome'], []).extend(gene_info['transcripts'])
 
-    # Filter for properly paired reads if BAM contains paired reads
-    if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
-        logger.debug('BAM contains paired reads. Filtering out non-properly paired reads')
-        bam_path = ngs.bam.filter_bam(
-            bam_path,
-            lambda read: read.is_proper_pair if read.is_paired else True,
-            utils.mkstemp(temp_dir, delete=True),
-            n_threads=n_threads,
-            show_progress=False,
-        )
-        pysam.index(bam_path, f'{bam_path}.bai', '-@', str(n_threads))
-
-    if n_threads > 1:
-        n_splits = min(n_threads * 8, utils.get_file_descriptor_limit() - 10)
-        logger.debug(f'Splitting BAM into {n_splits} parts')
-        splits = ngs.bam.split_bam(
-            bam_path,
-            utils.mkstemp(temp_dir, delete=True),
-            n=n_splits,
-            n_threads=n_threads,
-            show_progress=True,
-        )
-        for path, _ in splits.values():
-            pysam.index(path, f'{path}.bai', '-@', str(n_threads))
-
-    else:
-        splits = {'0': (bam_path, ngs.bam.count_bam(bam_path))}
+    splits = split_bam(
+        bam_path, min(n_threads * 8,
+                      utils.get_file_descriptor_limit() - 10), n_threads=n_threads, temp_dir=temp_dir
+    ) if n_threads > 1 else [(bam_path, ngs.bam.count_bam(bam_path))]
 
     # Add argument per contig
     args = []
-    for path, _ in splits.values():
+    for path, _ in splits:
         with pysam.AlignmentFile(path, 'rb') as f:
             for index in f.get_index_statistics():
                 if index.total > 0:
@@ -693,7 +718,7 @@ def parse_all_reads(
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, sum(value[1] for value in splits.values()), async_result)
+    utils.display_progress_with_counter(counter, sum(value[1] for value in splits), async_result)
     pool.join()
 
     # Combine csvs
@@ -722,4 +747,5 @@ def parse_all_reads(
     logger.debug(f'Writing conversions index to {index_path}')
     index_path = utils.write_pickle(index, index_path)
 
-    return conversions_path, alignments_path, index_path
+    return (conversions_path, alignments_path, index_path,
+            splits) if return_splits else (conversions_path, alignments_path, index_path)

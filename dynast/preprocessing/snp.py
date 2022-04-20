@@ -79,7 +79,7 @@ def read_snp_csv(snp_csv):
             raise Exception(f'Failed to parse {snp_csv}')
 
 
-def extract_conversions_part(conversions_path, counter, lock, index, alignments=None, quality=27, update_every=10000):
+def extract_conversions_part(conversions_path, counter, lock, index, alignments=None, quality=27, update_every=5000):
     """Extract number of conversions for every genomic position.
 
     :param conversions_path: path to conversions CSV
@@ -97,7 +97,7 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
-    :param update_every: update the counter every this many reads, defaults to `10000`
+    :param update_every: update the counter every this many reads, defaults to `5000`
     :type update_every: int, optional
 
     :return: nested dictionary that contains number of conversions for each contig and position
@@ -227,18 +227,15 @@ def detect_snps(
         conversions_path, index_path, alignments=alignments, quality=quality, n_threads=n_threads
     )
 
-    logger.debug('Calculating fraction of conversions for each genomic position')
-    fractions = {}
-    for conversion, _convs in convs.items():
-        fractions[conversion] = utils.merge_dictionaries(_convs, coverage, f=truediv)
-
     logger.debug(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:
         f.write('contig,genome_i,original,converted\n')
-        for (conversion, contig, genome_i), fraction in utils.flatten_dictionary(fractions):
-            # If (# conversions) / (# coverage) is greater than a threshold,
-            # consider this a SNP and write to CSV
-            if coverage[contig][genome_i] >= min_coverage and fraction > threshold:
-                f.write(f'{contig},{genome_i},{conversion[0]},{conversion[1]}\n')
+        for conversion, _convs in convs.items():
+            fractions = utils.merge_dictionaries(_convs, coverage, f=truediv)
+            for (contig, genome_i), fraction in utils.flatten_dictionary(fractions):
+                # If (# conversions) / (# coverage) is greater than a threshold,
+                # consider this a SNP and write to CSV
+                if coverage[contig][genome_i] >= min_coverage and fraction > threshold:
+                    f.write(f'{contig},{genome_i},{conversion[0]},{conversion[1]}\n')
 
     return snps_path
