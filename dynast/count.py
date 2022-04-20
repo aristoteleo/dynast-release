@@ -99,6 +99,31 @@ def count(
         logger.warning('Skipped BAM parsing because files already exist. Use `--overwrite` to re-parse the BAM.')
         gene_infos = utils.read_pickle(genes_path)
 
+    # Check consistency of alignments
+    small_alignments = preprocessing.read_alignments(alignments_path, nrows=config.BAM_PEEK_READS)
+    barcode_is_na = small_alignments['barcode'] == 'NA'
+    umi_is_na = small_alignments['umi'] == 'NA'
+    if barcode_tag and barcode_is_na.any():
+        raise Exception(
+            "`--barcode-tag` was provided but existing files contain NA barcodes. "
+            'Re-run `dynast count` with `--overwrite` to fix this inconsistency.'
+        )
+    elif not barcode_tag and (~barcode_is_na).any():
+        raise Exception(
+            "`--barcode-tag` was not provided but existing files contain barcodes. "
+            'Re-run `dynast count` with `--overwrite` to fix this inconsistency.'
+        )
+    if umi_tag and umi_is_na.any():
+        raise Exception(
+            "`--umi-tag` was provided but existing files contain NA UMIs. "
+            'Re-run `dynast count` with `--overwrite` to fix this inconsistency.'
+        )
+    elif not umi_tag and (~umi_is_na).any():
+        raise Exception(
+            "`--umi-tag` was not provided but existing files contain UMIs. "
+            'Re-run `dynast count` with `--overwrite` to fix this inconsistency.'
+        )
+
     # Detect SNPs
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
