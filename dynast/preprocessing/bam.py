@@ -432,6 +432,29 @@ def parse_read_contig(
     return conversions_path, index_path, alignments_path
 
 
+def get_tags_from_bam(bam_path, n_reads=100000, n_threads=8):
+    """Utility function to retrieve all read tags present in a BAM.
+
+    :param bam_path: path to BAM
+    :type bam_path: str
+    :param n_reads: number of reads to consider, defaults to `100000`
+    :type n_reads: int, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+
+    :return: set of all tags found
+    :rtype: set
+    """
+    tags = set()
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch(until_eof=True)):
+            for (tag, _) in read.get_tags():
+                tags.add(tag)
+            if i + 1 >= n_reads:
+                break
+    return tags
+
+
 def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
     """Utility function to check if BAM tags exists in a BAM within the first
     `n_reads` reads.
@@ -550,6 +573,42 @@ def parse_all_reads(
     :rtype: (str, str, str)
     """
     logger.debug('Checking if BAM has required tags')
+    tags = get_tags_from_bam(bam_path, config.BAM_PEEK_READS, n_threads=n_threads)
+    required_tags = config.BAM_REQUIRED_TAGS.copy()
+    if barcode_tag:
+        required_tags.append(barcode_tag)
+    elif config.BAM_BARCODE_TAG in tags:
+        logger.warning(
+            f'BAM contains reads with {config.BAM_BARCODE_TAG} tag. Are you sure '
+            f'you didn\'t mean to provide `--barcode-tag {config.BAM_BARCODE_TAG}`?'
+        )
+    elif config.BAM_READGROUP_TAG in tags:
+        logger.warning(
+            f'BAM contains reads with {config.BAM_READGROUP_TAG} tag. Are you sure '
+            f'you didn\'t mean to provide `--barcode-tag {config.BAM_READGROUP_TAG}`?'
+        )
+    if umi_tag:
+        required_tags.append(umi_tag)
+    elif config.BAM_UMI_TAG in tags:
+        logger.warning(
+            f'BAM contains reads with {config.BAM_UMI_TAG} tag. Are you sure '
+            f'you didn\'t mean to provide `--umi-tag {config.BAM_UMI_TAG}`?'
+        )
+    if gene_tag:
+        required_tags.append(gene_tag)
+    elif config.BAM_GENE_TAG in tags:
+        logger.warning(
+            f'BAM contains reads with {config.BAM_GENE_TAG} tag. Are you sure '
+            f'you didn\'t mean to provide `--gene-tag {config.BAM_GENE_TAG}`?'
+        )
+
+    missing_tags = set(required_tags) - tags
+    if missing_tags:
+        raise Exception(
+            f'First {config.BAM_PEEK_READS} reads in the BAM do not contain the following required tags: '
+            f'{", ".join(missing_tags)}. '
+        )
+
     tags = config.BAM_REQUIRED_TAGS.copy()
     if barcode_tag:
         tags.append(barcode_tag)
