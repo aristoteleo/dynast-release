@@ -445,14 +445,14 @@ def get_tags_from_bam(bam_path, n_reads=100000, n_threads=8):
     :return: set of all tags found
     :rtype: set
     """
-    tags = set()
+    tags = []
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
         for i, read in enumerate(bam.fetch(until_eof=True)):
             for (tag, _) in read.get_tags():
-                tags.add(tag)
+                tags.append(tag)
             if i + 1 >= n_reads:
                 break
-    return tags
+    return set(tags)
 
 
 def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
