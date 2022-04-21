@@ -567,7 +567,6 @@ def parse_all_reads(
     nasc=False,
     control=False,
     velocity=True,
-    return_splits=False
 ):
     """Parse all reads in a BAM and extract conversion, content and alignment
     information as CSVs.
