@@ -72,14 +72,13 @@ def count(
     alignments_path = os.path.join(out_dir, constants.ALIGNMENTS_FILENAME)
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
     conversions_required = [conversions_path, index_path, alignments_path, genes_path]
-    bam_splits = None
     if not utils.all_exists(*conversions_required) or overwrite:
         logger.info('Parsing gene and transcript information from GTF')
         gene_infos, transcript_infos = ngs.gtf.genes_and_transcripts_from_gtf(gtf_path, use_version=False)
         utils.write_pickle(gene_infos, genes_path)
 
         logger.info(f'Parsing read conversion information from BAM to {conversions_path}')
-        conversions_path, alignments_path, index_path, bam_splits = preprocessing.parse_all_reads(
+        conversions_path, alignments_path, index_path = preprocessing.parse_all_reads(
             bam_path,
             conversions_path,
             alignments_path,
@@ -95,7 +94,6 @@ def count(
             temp_dir=temp_dir,
             nasc=nasc,
             velocity=velocity,
-            return_splits=True,
         )
     else:
         logger.warning('Skipped BAM parsing because files already exist. Use `--overwrite` to re-parse the BAM.')
@@ -135,7 +133,8 @@ def count(
 
         logger.info(f'Calculating coverage and outputting to {coverage_path}')
         coverage_path = preprocessing.calculate_coverage(
-            bam_path, {
+            bam_path,
+            {
                 contig: set(df_part['genome_i'])
                 for contig, df_part in preprocessing.read_conversions(conversions_path, usecols=['contig', 'genome_i']).
                 drop_duplicates().groupby('contig', sort=False, observed=True)
@@ -149,7 +148,6 @@ def count(
             n_threads=n_threads,
             temp_dir=temp_dir,
             velocity=velocity,
-            splits=bam_splits
         )
         coverage = preprocessing.read_coverage(coverage_path)
 

@@ -611,14 +611,9 @@ def parse_all_reads(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
-    :param return_splits: return BAM splits for later reuse, defaults to `True`
-    :type return_splits: bool, optional
 
     :return: (path to conversions, path to alignments, path to conversions index)
-             If `return_splits` is True, then there is an additional return value, which
-             is a list of tuples containing split BAM paths and number of reads
-             in each BAM.
-    :rtype: (str, str, str) or (str, str, str, list)
+    :rtype: (str, str, str)
     """
     logger.debug('Checking if BAM has required tags')
     tags = get_tags_from_bam(bam_path, config.BAM_PEEK_READS, n_threads=n_threads)
@@ -747,5 +742,4 @@ def parse_all_reads(
     logger.debug(f'Writing conversions index to {index_path}')
     index_path = utils.write_pickle(index, index_path)
 
-    return (conversions_path, alignments_path, index_path,
-            splits) if return_splits else (conversions_path, alignments_path, index_path)
+    return conversions_path, alignments_path, index_path
