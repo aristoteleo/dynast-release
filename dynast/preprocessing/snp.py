@@ -131,6 +131,8 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     lock.acquire()
     counter.value += n % update_every
     lock.release()
+    if alignments:
+        del alignments
 
     return convs
 
