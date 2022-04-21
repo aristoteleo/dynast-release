@@ -510,7 +510,8 @@ def count_conversions(
     logger.debug(f'Loading combined counts from {combined_path}')
     df_counts = complement_counts(read_counts(combined_path), gene_infos)
     umi = all(df_counts['umi'] != 'NA')
-    barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
+    barcode_groupby = df_counts.groupby('barcode', sort=False, observed=True)
+    barcode_counts = dict(barcode_groupby.size())
     split_paths = []
     current_split_path = None
     current_split_f = None
@@ -518,8 +519,7 @@ def count_conversions(
     # Split barcodes into approximately `config.COUNTS_SPLIT_THRESHOLD` bins.
     # Note that a single barcode may have more than this many reads.
     try:
-        for barcode in barcode_counts.keys():
-            df_counts_barcode = df_counts[df_counts['barcode'] == barcode]
+        for barcode, df_counts_barcode in barcode_groupby:
             # Make its own split
             if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
                 split_path = utils.mkstemp(dir=temp_dir)
