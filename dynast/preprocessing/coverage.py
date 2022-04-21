@@ -1,11 +1,10 @@
 import re
+import shutil
 from collections import Counter
 from functools import partial
 
-import ngs_tools as ngs
 import pysam
 
-from . import bam
 from .. import utils
 from ..logging import logger
 
@@ -29,14 +28,10 @@ def read_coverage(coverage_path):
     """
     coverage = {}
     with open(coverage_path, 'r') as f:
-        for i, line in enumerate(f):
+        f.readline()
+        for line in f:
             groups = COVERAGE_PARSER.match(line).groupdict()
-            try:
-                contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
-            except ValueError as e:
-                if i == 0:
-                    continue
-                raise e
+            contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
             coverage.setdefault(contig, {})[genome_i] = count
     return coverage
 
@@ -173,7 +168,6 @@ def calculate_coverage(
     n_threads=8,
     temp_dir=None,
     velocity=True,
-    splits=None,
 ):
     """Calculate coverage of each genomic position per barcode.
 
@@ -204,29 +198,18 @@ def calculate_coverage(
     :type temp_dir: str, optional
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
-    :param splits: list containing tuples of (pre-split BAM paths, number of reads),
-                   defaults to `None`
-    :type splits: list, optional
 
     :return: coverage CSV path
     :rtype: str
     """
-    if splits is None:
-        splits = bam.split_bam(
-            bam_path,
-            min(n_threads * 8,
-                utils.get_file_descriptor_limit() - 10),
-            n_threads=n_threads,
-            temp_dir=temp_dir
-        ) if n_threads > 1 else [(bam_path, ngs.bam.count_bam(bam_path))]
-
-    # Add argument per contig
-    args = []
-    for path, _ in splits:
-        with pysam.AlignmentFile(path, 'rb') as f:
-            for index in f.get_index_statistics():
-                if index.total > 0:
-                    args.append((path, index.contig, conversions.get(index.contig, set())))
+    logger.debug(f'Extracting contigs from BAM {bam_path}')
+    contigs = []
+    n_reads = 0
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for index in bam.get_index_statistics():
+            n_reads += index.total
+            if index.total > 0:
+                contigs.append(index.contig)
 
     logger.debug(f'Spawning {n_threads} processes')
     pool, counter, lock = utils.make_pool_with_counter(n_threads)
@@ -235,30 +218,26 @@ def calculate_coverage(
             calculate_coverage_contig,
             counter,
             lock,
+            bam_path,
             alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
             gene_tag=gene_tag,
             barcodes=barcodes,
             velocity=velocity
-        ), args
+        ), [(contig, conversions.get(contig, set())) for contig in contigs]
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, sum(value[1] for value in splits), async_result)
+    utils.display_progress_with_counter(counter, n_reads, async_result)
     pool.join()
 
-    logger.debug('Combining results')
-    coverage = {}
-    for coverage_part_path in async_result.get():
-        cov = read_coverage(coverage_part_path)
-        coverage = utils.merge_dictionaries(coverage, cov)
-
     logger.debug(f'Writing coverage to {coverage_path}')
-    with open(coverage_path, 'w') as coverage_out:
-        coverage_out.write('contig,genome_i,coverage\n')
-        for (contig, genome_i), cover in utils.flatten_dictionary(coverage):
-            coverage_out.write(f'{contig},{genome_i},{cover}\n')
+    with open(coverage_path, 'wb') as coverage_out:
+        coverage_out.write(b'contig,genome_i,coverage\n')
+        for coverage_part_path in async_result.get():
+            with open(coverage_part_path, 'rb') as f:
+                shutil.copyfileobj(f, coverage_out)
 
     return coverage_path
