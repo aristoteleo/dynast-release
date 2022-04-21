@@ -111,10 +111,11 @@ def calculate_coverage_contig(
         open(coverage_path, 'w') as coverage_out:
         for read in bam.fetch(contig):
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
 
             if len(coverage) > 1000000:
                 # NOTE: dictionary keys are sorted by insertion order
@@ -158,7 +159,7 @@ def calculate_coverage_contig(
             coverage_out.write(f'{contig},{genome_i},{cover}\n')
 
     lock.acquire()
-    counter.value += n % update_every
+    counter.value += n
     lock.release()
     del coverage
     del indices

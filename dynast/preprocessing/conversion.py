@@ -287,10 +287,11 @@ def count_no_conversions(
             if not line:
                 break
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
             if pos in positions:
                 continue
 
@@ -303,7 +304,7 @@ def count_no_conversions(
                 f'{groups["velocity"]},{groups["transcriptome"]},{groups["score"]}\n'
             )
     lock.acquire()
-    counter.value += n % update_every
+    counter.value += n
     lock.release()
 
     return count_path
@@ -367,10 +368,11 @@ def count_conversions_part(
             f.seek(pos)
             f_alignments.seek(pos2)
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
 
             alignment = ALIGNMENTS_PARSER.match(f_alignments.readline()).groupdict()
             if barcodes and alignment['barcode'] not in barcodes:
@@ -393,7 +395,7 @@ def count_conversions_part(
             )
 
         lock.acquire()
-        counter.value += n % update_every
+        counter.value += n
         lock.release()
 
     return count_path

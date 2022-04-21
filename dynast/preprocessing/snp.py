@@ -109,10 +109,11 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
         for pos, n_lines, _ in index:
             f.seek(pos)
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
 
             for _ in range(n_lines):
                 line = f.readline()
@@ -129,7 +130,7 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
                     count = convs.setdefault(conversion, {}).setdefault(contig, {}).setdefault(genome_i, 0)
                     convs[conversion][contig][genome_i] = count + 1
     lock.acquire()
-    counter.value += n % update_every
+    counter.value += n
     lock.release()
     if alignments:
         del alignments

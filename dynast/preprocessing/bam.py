@@ -263,10 +263,11 @@ def parse_read_contig(
 
             # Update every some interval. Updating every loop is very slow.
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
 
                 # Update gene order (remove genes we no longer have to consider)
                 # We take advantage of the fact that gene_order contains genes sorted
@@ -423,7 +424,7 @@ def parse_read_contig(
             )
 
     lock.acquire()
-    counter.value += n % update_every
+    counter.value += n
     lock.release()
 
     # Save index
