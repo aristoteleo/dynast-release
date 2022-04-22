@@ -134,7 +134,7 @@ def count(
     if utils.all_exists(convs_path):
         prev_conversions = utils.read_pickle(convs_path)
         if conversions != prev_conversions:
-            logger.warning(f"Conversions changed from {prev_conversions} in previous run to " f"{conversions}.")
+            logger.warning(f'Conversions changed from {prev_conversions} in previous run to {conversions}.')
             redo_snp = True
     else:
         redo_snp = True
