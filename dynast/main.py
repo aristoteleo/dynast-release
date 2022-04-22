@@ -9,7 +9,7 @@ from . import __version__
 # from .config import RE_CHOICES
 from .logging import logger
 from .technology import TECHNOLOGIES_MAP
-from .utils import flatten_list, patch_mp_connection_bpo_17560
+from .utils import flatten_iter, patch_mp_connection_bpo_17560
 
 
 def print_technologies():
@@ -566,9 +566,12 @@ def parse_count(parser, args, temp_dir=None):
     conversions = []
     for arg in args.conversion:
         conversions.append(arg.upper().split(','))
-    flattened = list(flatten_list(conversions))
+    flattened = list(flatten_iter(conversions))
     if len(set(flattened)) != len(flattened):
         parser.error('duplicate conversions are not allowed for `--conversion`')
+
+    # Convert conversions to frozenset of tuples.
+    conversions = frozenset(tuple(conv) for conv in conversions)
 
     from .count import count
     count(

@@ -21,7 +21,7 @@ def count(
     barcodes=None,
     control=False,
     quality=27,
-    conversions=[['TC']],
+    conversions=frozenset([('TC',)]),
     snp_threshold=0.5,
     snp_min_coverage=1,
     snp_csv=None,
@@ -38,7 +38,7 @@ def count(
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    all_conversions = sorted(utils.flatten_list(conversions))
+    all_conversions = sorted(utils.flatten_iter(conversions))
 
     # Check memory.
     available_memory = utils.get_available_memory()
@@ -73,6 +73,7 @@ def count(
     genes_path = os.path.join(out_dir, constants.GENES_FILENAME)
     conversions_required = [conversions_path, index_path, alignments_path, genes_path]
     bam_splits = None
+    bam_parsed = False
     if not utils.all_exists(*conversions_required) or overwrite:
         logger.info('Parsing gene and transcript information from GTF')
         gene_infos, transcript_infos = ngs.gtf.genes_and_transcripts_from_gtf(gtf_path, use_version=False)
@@ -97,6 +98,7 @@ def count(
             velocity=velocity,
             return_splits=True
         )
+        bam_parsed = True
     else:
         logger.warning('Skipped BAM parsing because files already exist. Use `--overwrite` to re-parse the BAM.')
         gene_infos = utils.read_pickle(genes_path)
@@ -126,49 +128,88 @@ def count(
             'Re-run `dynast count` with `--overwrite` to fix this inconsistency.'
         )
 
+    # Save conversions
+    redo_snp = False
+    convs_path = os.path.join(out_dir, constants.CONVS_FILENAME)
+    if utils.all_exists(convs_path):
+        prev_conversions = utils.read_pickle(convs_path)
+        if conversions != prev_conversions:
+            logger.warning(f"Conversions changed from {prev_conversions} in previous run to " f"{conversions}.")
+            redo_snp = True
+    else:
+        redo_snp = True
+
     # Detect SNPs
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
+    snp_required = [convs_path, coverage_path, snps_path]
     if snp_threshold:
-        logger.info('Selecting alignments to use for SNP detection')
-        alignments = preprocessing.select_alignments(preprocessing.read_alignments(alignments_path))
+        if not utils.all_exists(*snp_required) or redo_snp or bam_parsed:
+            logger.info('Selecting alignments to use for SNP detection')
+            alignments = preprocessing.select_alignments(preprocessing.read_alignments(alignments_path))
 
-        logger.info(f'Calculating coverage and outputting to {coverage_path}')
-        coverage_path = preprocessing.calculate_coverage(
-            bam_path, {
-                contig: set(df_part['genome_i'])
-                for contig, df_part in preprocessing.read_conversions(conversions_path, usecols=['contig', 'genome_i']).
-                drop_duplicates().groupby('contig', sort=False, observed=True)
-            },
-            coverage_path,
-            alignments=alignments,
-            umi_tag=umi_tag,
-            barcode_tag=barcode_tag,
-            gene_tag=gene_tag,
-            barcodes=barcodes,
-            n_threads=n_threads,
-            temp_dir=temp_dir,
-            velocity=velocity,
-            splits=bam_splits
-        )
-        coverage = preprocessing.read_coverage(coverage_path)
+            snp_conversions = set(
+                all_conversions + [preprocessing.CONVERSION_COMPLEMENT[conv] for conv in all_conversions]
+            )
+            logger.info(f'Selecting genomic locations with {snp_conversions} conversions in forward strand.')
+            df_conversions = preprocessing.read_conversions(conversions_path)
 
-        logger.info(f'Detecting SNPs with threshold {snp_threshold} to {snps_path}')
-        snps_path = preprocessing.detect_snps(
-            conversions_path,
-            index_path,
-            coverage,
-            snps_path,
-            alignments=alignments,
-            quality=quality,
-            threshold=snp_threshold,
-            min_coverage=snp_min_coverage,
-            n_threads=n_threads,
-        )
+            # Subset to selected alignments.
+            df_conversions = df_conversions[[
+                key in alignments for key in df_conversions[['read_id', 'index']].itertuples(index=False, name=None)
+            ]]
 
-    # Save conversions so that it can be used when estimating
-    convs_path = os.path.join(out_dir, constants.CONVS_FILENAME)
-    utils.write_pickle(conversions, convs_path)
+            # Subset to conversions of interest
+            mask = None
+            for conv in snp_conversions:
+                _mask = (df_conversions['original'] == conv[0]) & (df_conversions['converted'] == conv[1])
+                if mask is None:
+                    mask = _mask
+                else:
+                    mask |= _mask
+            df_conversions = df_conversions.loc[mask, ['contig', 'genome_i']]
+
+            logger.info(f'Calculating coverage and outputting to {coverage_path}')
+            coverage_path = preprocessing.calculate_coverage(
+                bam_path, {
+                    contig: set(df_part['genome_i'])
+                    for contig, df_part in df_conversions.groupby('contig', sort=False, observed=True)
+                },
+                coverage_path,
+                alignments=alignments,
+                umi_tag=umi_tag,
+                barcode_tag=barcode_tag,
+                gene_tag=gene_tag,
+                barcodes=barcodes,
+                n_threads=n_threads,
+                temp_dir=temp_dir,
+                velocity=velocity,
+                splits=bam_splits
+            )
+            coverage = preprocessing.read_coverage(coverage_path)
+
+            logger.info(f'Detecting SNPs with threshold {snp_threshold} to {snps_path}')
+            snps_path = preprocessing.detect_snps(
+                conversions_path,
+                index_path,
+                coverage,
+                snps_path,
+                alignments=alignments,
+                conversions=snp_conversions,
+                quality=quality,
+                threshold=snp_threshold,
+                min_coverage=snp_min_coverage,
+                n_threads=n_threads,
+            )
+
+            utils.write_pickle(conversions, convs_path)
+        else:
+            logger.warning(
+                'Skipped SNP detection because files already exist. '
+                f'Remove {convs_path} to run SNP detection again.'
+            )
+    else:
+        utils.write_pickle(conversions, convs_path)
 
     # Count conversions and calculate mutation rates
     counts_path = os.path.join(out_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')

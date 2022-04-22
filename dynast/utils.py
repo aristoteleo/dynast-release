@@ -26,7 +26,7 @@ flatten_dict_values = ngs.utils.flatten_dict_values
 mkstemp = ngs.utils.mkstemp
 all_exists = ngs.utils.all_exists
 flatten_dictionary = ngs.utils.flatten_dictionary
-flatten_list = ngs.utils.flatten_list
+flatten_iter = ngs.utils.flatten_iter
 merge_dictionaries = ngs.utils.merge_dictionaries
 write_pickle = ngs.utils.write_pickle
 read_pickle = ngs.utils.read_pickle
@@ -449,12 +449,12 @@ def split_matrix(matrix, pis, barcodes, features):
     return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
 
 
-def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
+def results_to_adata(df_counts, conversions=frozenset([('TC',)]), gene_infos=None, pis=None):
     """Compile all results to a single anndata.
 
     :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
-    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
     :type conversions: list, optional
     :param gene_infos: dictionary containing gene information, defaults to `None`
     :type gene_infos: dict, optional
@@ -466,7 +466,7 @@ def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
     """
     pis = pis or {}
     gene_infos = gene_infos or {}
-    all_conversions = sorted(flatten_list(conversions))
+    all_conversions = sorted(flatten_iter(conversions))
     transcriptome_exists = df_counts['transcriptome'].any()
     transcriptome_only = df_counts['transcriptome'].all()
     velocities = df_counts['velocity'].unique()

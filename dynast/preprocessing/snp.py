@@ -79,7 +79,9 @@ def read_snp_csv(snp_csv):
             raise Exception(f'Failed to parse {snp_csv}')
 
 
-def extract_conversions_part(conversions_path, counter, lock, index, alignments=None, quality=27, update_every=5000):
+def extract_conversions_part(
+    conversions_path, counter, lock, index, alignments=None, conversions=None, quality=27, update_every=5000
+):
     """Extract number of conversions for every genomic position.
 
     :param conversions_path: path to conversions CSV
@@ -94,6 +96,8 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     :param alignments: set of (read_id, alignment_index) tuples to process. All
         alignments are processed if this option is not provided.
     :type alignments: set, optional
+    :param conversions: set of conversions to consider
+    :type conversions: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -123,6 +127,8 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
 
                 if int(groups['quality']) > quality:
                     conversion = f'{groups["original"]}{groups["converted"]}'
+                    if conversions and conversion not in conversions:
+                        continue
 
                     contig = groups['contig']
                     genome_i = int(groups['genome_i'])
@@ -136,7 +142,7 @@ def extract_conversions_part(conversions_path, counter, lock, index, alignments=
     return convs
 
 
-def extract_conversions(conversions_path, index_path, alignments=None, quality=27, conversions=None, n_threads=8):
+def extract_conversions(conversions_path, index_path, alignments=None, conversions=None, quality=27, n_threads=8):
     """Wrapper around `extract_conversions_part` that works in parallel
 
     :param conversions_path: path to conversions CSV
@@ -146,6 +152,8 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
     :param alignments: set of (read_id, alignment_index) tuples to process. All
         alignments are processed if this option is not provided.
     :type alignments: set, optional
+    :param conversions: set of conversions to consider
+    :type conversions: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -170,6 +178,7 @@ def extract_conversions(conversions_path, index_path, alignments=None, quality=2
             counter,
             lock,
             alignments=alignments,
+            conversions=conversions,
             quality=quality,
         ), [(part,) for part in parts]
     )
@@ -193,6 +202,7 @@ def detect_snps(
     coverage,
     snps_path,
     alignments=None,
+    conversions=None,
     quality=27,
     threshold=0.5,
     min_coverage=1,
@@ -211,6 +221,8 @@ def detect_snps(
     :param alignments: set of (read_id, alignment_index) tuples to process. All
         alignments are processed if this option is not provided.
     :type alignments: set, optional
+    :param conversions: set of conversions to consider
+    :type conversions: set, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -225,7 +237,12 @@ def detect_snps(
     """
     logger.debug('Counting number of conversions for each genomic position')
     convs = extract_conversions(
-        conversions_path, index_path, alignments=alignments, quality=quality, n_threads=n_threads
+        conversions_path,
+        index_path,
+        alignments=alignments,
+        conversions=conversions,
+        quality=quality,
+        n_threads=n_threads
     )
 
     logger.debug(f'Writing detected SNPs to {snps_path}')

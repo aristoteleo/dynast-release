@@ -72,6 +72,7 @@ def read_conversions(conversions_path, *args, **kwargs):
             'genome_i': np.uint32,
             'original': 'category',
             'converted': 'category',
+            'quality': np.uint8
         },
         na_filter=False,
         *args,

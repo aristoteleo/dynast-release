@@ -9,6 +9,7 @@ from .aggregation import (
 from .bam import parse_all_reads, read_alignments, read_conversions, select_alignments
 from .conversion import (
     complement_counts,
+    CONVERSION_COMPLEMENT,
     count_conversions,
     deduplicate_counts,
     read_counts,

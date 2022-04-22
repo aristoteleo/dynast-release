@@ -45,7 +45,7 @@ def estimate(
                 f'({_conversions} != {conversions}).'
             )
     logger.info(f'Conversions: {" ".join(",".join(convs) for convs in conversions)}')
-    all_conversions = sorted(utils.flatten_list(conversions))
+    all_conversions = sorted(utils.flatten_iter(conversions))
 
     # Read each counts dataframe and suffix barcodes if needed
     dfs = []
