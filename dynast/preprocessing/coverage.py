@@ -51,7 +51,7 @@ def calculate_coverage_contig(
     gene_tag='GX',
     barcodes=None,
     temp_dir=None,
-    update_every=30000,
+    update_every=50000,
     velocity=True
 ):
     """Calculate converage for a specific contig. This function is designed to
