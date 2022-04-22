@@ -251,7 +251,7 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
     with ngs.progress.progress(total=total, unit_scale=True, desc=desc) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
-            time.sleep(0.1)
+            time.sleep(0.01)
             progress = counter.value
             pbar.update(progress - previous_progress)
             pbar.refresh()

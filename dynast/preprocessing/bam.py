@@ -264,9 +264,8 @@ def parse_read_contig(
             # Update every some interval. Updating every loop is very slow.
             n += 1
             if n == update_every:
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
+                with lock:
+                    counter.value += update_every
                 n = 0
 
                 # Update gene order (remove genes we no longer have to consider)
@@ -423,9 +422,8 @@ def parse_read_contig(
                 f'{assignment},{gx_assigned},{alignment_score}\n'
             )
 
-    lock.acquire()
-    counter.value += n
-    lock.release()
+    with lock:
+        counter.value += n
 
     # Save index
     index_path = utils.write_pickle(index, index_path, protocol=4)

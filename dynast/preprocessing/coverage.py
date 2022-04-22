@@ -53,7 +53,7 @@ def calculate_coverage_contig(
     gene_tag='GX',
     barcodes=None,
     temp_dir=None,
-    update_every=10000,
+    update_every=30000,
     velocity=True
 ):
     """Calculate converage for a specific contig. This function is designed to
@@ -86,7 +86,7 @@ def calculate_coverage_contig(
     :type barcodes: list, optional
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
-    :param update_every: update the counter every this many reads, defaults to `10000`
+    :param update_every: update the counter every this many reads, defaults to `30000`
     :type update_every: int, optional
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
@@ -112,12 +112,11 @@ def calculate_coverage_contig(
         for read in bam.fetch(contig):
             n += 1
             if n == update_every:
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
+                with lock:
+                    counter.value += update_every
                 n = 0
 
-            if len(coverage) > 1000000:
+            if len(coverage) > 100000:
                 # NOTE: dictionary keys are sorted by insertion order
                 for genome_i in list(coverage.keys()):
                     if genome_i < read.reference_start:
@@ -158,9 +157,8 @@ def calculate_coverage_contig(
         for genome_i, cover in coverage.items():
             coverage_out.write(f'{contig},{genome_i},{cover}\n')
 
-    lock.acquire()
-    counter.value += n
-    lock.release()
+    with lock:
+        counter.value += n
     del coverage
     del indices
     if alignments:
