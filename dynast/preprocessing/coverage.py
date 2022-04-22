@@ -2,10 +2,8 @@ import re
 from collections import Counter
 from functools import partial
 
-import ngs_tools as ngs
 import pysam
 
-from . import bam
 from .. import utils
 from ..logging import logger
 
@@ -116,7 +114,7 @@ def calculate_coverage_contig(
                     counter.value += update_every
                 n = 0
 
-            if len(coverage) > 100000:
+            if len(coverage) > 1000000:
                 # NOTE: dictionary keys are sorted by insertion order
                 for genome_i in list(coverage.keys()):
                     if genome_i < read.reference_start:
@@ -178,10 +176,8 @@ def calculate_coverage(
     barcode_tag=None,
     gene_tag='GX',
     barcodes=None,
-    n_threads=8,
     temp_dir=None,
     velocity=True,
-    splits=None,
 ):
     """Calculate coverage of each genomic position per barcode.
 
@@ -206,55 +202,47 @@ def calculate_coverage(
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
-    :param splits: list containing tuples of (pre-split BAM paths, number of reads),
-                   defaults to `None`
-    :type splits: list, optional
 
     :return: coverage CSV path
     :rtype: str
     """
-    if splits is None:
-        splits = bam.split_bam(
-            bam_path,
-            min(n_threads * 8,
-                utils.get_file_descriptor_limit() - 10),
-            n_threads=n_threads,
-            temp_dir=temp_dir
-        ) if n_threads > 1 else [(bam_path, ngs.bam.count_bam(bam_path))]
+    logger.debug(f'Extracting contigs from BAM {bam_path}')
+    contigs = []
+    n_reads = 0
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for index in bam.get_index_statistics():
+            n_reads += index.total
+            if index.total > 0:
+                contigs.append(index.contig)
 
-    # Add argument per contig
-    args = []
-    for path, _ in splits:
-        with pysam.AlignmentFile(path, 'rb') as f:
-            for index in f.get_index_statistics():
-                if index.total > 0:
-                    args.append((path, index.contig, conversions.get(index.contig, set())))
-
-    logger.debug(f'Spawning {n_threads} processes')
-    pool, counter, lock = utils.make_pool_with_counter(n_threads)
+    # Turns out coverage calculation per read is fast enough that we end
+    # up being IO-bound if we use multiprocessing. So, we just process
+    # sequentially (per contig) here instead.
+    # We create a new pool because we still want to be able to keep track of
+    # the current progress.
+    pool, counter, lock = utils.make_pool_with_counter(1)
     async_result = pool.starmap_async(
         partial(
             calculate_coverage_contig,
             counter,
             lock,
+            bam_path,
             alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
             gene_tag=gene_tag,
             barcodes=barcodes,
             velocity=velocity
-        ), args
+        ), [(contig, conversions.get(contig, set())) for contig in contigs]
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, sum(value[1] for value in splits), async_result)
+    utils.display_progress_with_counter(counter, n_reads, async_result)
     pool.join()
 
     logger.debug('Combining results')

@@ -33,7 +33,6 @@ class TestCoverage(mixins.TestMixin, TestCase):
                     umi_tag='UB',
                     barcode_tag='CB',
                     barcodes=None,
-                    n_threads=2,
                     temp_dir=self.temp_dir,
                     velocity=True,
                 )
