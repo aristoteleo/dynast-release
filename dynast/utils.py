@@ -391,8 +391,8 @@ def split_counts(df_counts, barcodes, features, barcode_column='barcode', featur
     :type barcode_column: str, optional
     :param feature_column: column in counts dataframe to use as features, defaults to `GX`
     :type feature_column: str, optional
-    :param conversions: conversion(s) in question, defaults to `['TC']`
-    :type conversions: list, optional
+    :param conversions: conversion(s) in question, defaults to `('TC',)`
+    :type conversions: tuple, optional
 
     :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
     :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
