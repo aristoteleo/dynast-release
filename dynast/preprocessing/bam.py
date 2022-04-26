@@ -178,6 +178,10 @@ def parse_read_contig(
     :return: (path to conversions, path to conversions index, path to alignments)
     :rtype: (str, str, str)
     """
+
+    def skip_alignment(read, tags):
+        return read.is_secondary or read.is_unmapped or read.is_duplicate or any(not read.has_tag(tag) for tag in tags)
+
     # Sort genes by segment positions
     if velocity:
         gene_order = sorted(gene_infos.keys(), key=lambda gene: tuple(gene_infos[gene]['segment']))
@@ -288,12 +292,11 @@ def parse_read_contig(
                     if to_remove > 0:
                         gene_order = gene_order[to_remove:]
 
-            # Skip reads that do not contain these tags
-            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate or read.is_unmapped:
+            # Skip reads
+            if skip_alignment(read, required_tags):
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'
-            # If barcodes are provided, skip any barcodes not in the list.
             if barcodes and barcode not in barcodes:
                 continue
 
@@ -515,6 +518,36 @@ def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
+def check_bam_contains_secondary(bam_path, n_reads=100000, n_threads=8):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch()):
+            if read.is_secondary:
+                return True
+
+            if i + 1 >= n_reads:
+                break
+    return False
+
+
+def check_bam_contains_unmapped(bam_path):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for index in bam.get_index_statistics():
+            if index.unmapped > 0:
+                return True
+    return False
+
+
+def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch()):
+            if read.is_duplicate:
+                return True
+
+            if i + 1 >= n_reads:
+                break
+    return False
+
+
 def split_bam(bam_path, n, n_threads=8, temp_dir=None):
     """Split BAM into n parts.
 
@@ -627,57 +660,6 @@ def parse_all_reads(
              in each BAM.
     :rtype: (str, str, str) or (str, str, str, list)
     """
-    logger.debug('Checking if BAM has required tags')
-    tags = get_tags_from_bam(bam_path, config.BAM_PEEK_READS, n_threads=n_threads)
-    required_tags = config.BAM_REQUIRED_TAGS.copy()
-    if barcode_tag:
-        required_tags.append(barcode_tag)
-    elif config.BAM_BARCODE_TAG in tags:
-        logger.warning(
-            f'BAM contains reads with {config.BAM_BARCODE_TAG} tag. Are you sure '
-            f'you didn\'t mean to provide `--barcode-tag {config.BAM_BARCODE_TAG}`?'
-        )
-    elif config.BAM_READGROUP_TAG in tags:
-        logger.warning(
-            f'BAM contains reads with {config.BAM_READGROUP_TAG} tag. Are you sure '
-            f'you didn\'t mean to provide `--barcode-tag {config.BAM_READGROUP_TAG}`?'
-        )
-    if umi_tag:
-        required_tags.append(umi_tag)
-    elif config.BAM_UMI_TAG in tags:
-        logger.warning(
-            f'BAM contains reads with {config.BAM_UMI_TAG} tag. Are you sure '
-            f'you didn\'t mean to provide `--umi-tag {config.BAM_UMI_TAG}`?'
-        )
-    if gene_tag:
-        required_tags.append(gene_tag)
-    elif config.BAM_GENE_TAG in tags:
-        logger.warning(
-            f'BAM contains reads with {config.BAM_GENE_TAG} tag. Are you sure '
-            f'you didn\'t mean to provide `--gene-tag {config.BAM_GENE_TAG}`?'
-        )
-
-    missing_tags = set(required_tags) - tags
-    if missing_tags:
-        raise Exception(
-            f'First {config.BAM_PEEK_READS} reads in the BAM do not contain the following required tags: '
-            f'{", ".join(missing_tags)}. '
-        )
-
-    tags = config.BAM_REQUIRED_TAGS.copy()
-    if barcode_tag:
-        tags.append(barcode_tag)
-    if umi_tag:
-        tags.append(umi_tag)
-    if gene_tag:
-        tags.append(gene_tag)
-    all_exists, not_found = check_bam_tags_exist(bam_path, tags, config.BAM_PEEK_READS, n_threads=n_threads)
-    if not all_exists:
-        raise Exception(
-            f'First {config.BAM_PEEK_READS} reads in the BAM do not contain the following required tags: '
-            f'{", ".join(not_found)}. '
-        )
-
     contig_genes = {}
     contig_transcripts = {}
     for gene_id, gene_info in gene_infos.items():

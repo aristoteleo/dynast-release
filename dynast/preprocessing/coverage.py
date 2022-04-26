@@ -92,6 +92,10 @@ def calculate_coverage_contig(
     :return: coverag
     :rtype: dict
     """
+
+    def skip_alignment(read, tags):
+        return read.is_secondary or read.is_unmapped or read.is_duplicate or any(not read.has_tag(tag) for tag in tags)
+
     coverage_path = utils.mkstemp(dir=temp_dir)
     paired = {}
     coverage = Counter()
@@ -124,7 +128,7 @@ def calculate_coverage_contig(
                     else:
                         break
 
-            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate or read.is_unmapped:
+            if skip_alignment(read, required_tags):
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'

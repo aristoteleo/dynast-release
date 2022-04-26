@@ -113,11 +113,11 @@ def complement_counts(df_counts, gene_infos):
         if col in COLUMNS:
             continue
         other_columns.append(col)
-    df_counts['strand'] = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand'])
+    forward_strand = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand']) == '+'
 
     columns = other_columns + COLUMNS
-    df_forward = df_counts[df_counts.strand == '+'][columns]
-    df_reverse = df_counts[df_counts.strand == '-'][columns]
+    df_forward = df_counts[forward_strand][columns]
+    df_reverse = df_counts[~forward_strand][columns]
 
     df_reverse.columns = other_columns + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
     df_reverse = df_reverse[columns]
