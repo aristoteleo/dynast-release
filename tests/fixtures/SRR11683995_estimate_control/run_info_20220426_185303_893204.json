@@ -1,0 +1,8 @@
+{
+    "version": "0.1.2",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast estimate SRR11683995_count_control --control -o SRR11683995_estimate_control",
+    "start_time": "2022-04-26T18:53:03.893204",
+    "end_time": "2022-04-26T18:53:04.296502",
+    "elapsed": 0.403298
+}

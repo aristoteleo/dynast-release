@@ -6,7 +6,10 @@ from .aggregation import (
     read_aggregates,
     read_rates,
 )
-from .bam import parse_all_reads, read_alignments, read_conversions, select_alignments
+from .bam import (
+    check_bam_contains_duplicate, check_bam_contains_secondary, check_bam_contains_unmapped, get_tags_from_bam,
+    parse_all_reads, read_alignments, read_conversions, select_alignments
+)
 from .conversion import (
     complement_counts,
     CONVERSION_COMPLEMENT,
