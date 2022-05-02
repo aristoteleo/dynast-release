@@ -28,6 +28,7 @@ def count(
     n_threads=8,
     temp_dir=None,
     velocity=True,
+    strict_exon_overlap=False,
     nasc=False,
     overwrite=False,
 ):
@@ -142,6 +143,7 @@ def count(
             temp_dir=temp_dir,
             nasc=nasc,
             velocity=velocity,
+            strict_exon_overlap=strict_exon_overlap,
         )
         bam_parsed = True
     else:

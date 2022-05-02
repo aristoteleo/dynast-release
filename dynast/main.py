@@ -278,7 +278,8 @@ def setup_count_args(parser, parent):
               'be processed.'),
         type=str,
     )
-    parser_count.add_argument(
+    splicing_group = parser_count.add_mutually_exclusive_group()
+    splicing_group.add_argument(
         '--no-splicing',
         '--transcriptome-only',
         help=(
@@ -286,6 +287,18 @@ def setup_count_args(parser, parent):
             'and ignore reads that are not assigned to the transcriptome.'
         ),
         action='store_true'
+    )
+    splicing_group.add_argument(
+        '--exon-overlap',
+        help=(
+            'Algorithm to use to detect spliced reads (that overlap exons). '
+            'May be `strict`, which assigns reads as spliced if it only overlaps '
+            'exons, or `lenient`, which assigns reads as spliced if it does not '
+            'overlap with any introns of at least one transcript. (default: lenient)'
+        ),
+        type=str,
+        choices=['lenient', 'strict'],
+        default='lenient',
     )
     parser_count.add_argument(
         '--nasc',
@@ -594,6 +607,7 @@ def parse_count(parser, args, temp_dir=None):
         nasc=args.nasc,
         overwrite=args.overwrite,
         velocity=not args.no_splicing,
+        strict_exon_overlap=args.exon_overlap == 'strict'
     )
 
 

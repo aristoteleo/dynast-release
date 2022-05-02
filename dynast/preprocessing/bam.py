@@ -130,7 +130,8 @@ def parse_read_contig(
     temp_dir=None,
     update_every=2000,
     nasc=False,
-    velocity=True
+    velocity=True,
+    strict_exon_overlap=False,
 ):
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
@@ -176,6 +177,9 @@ def parse_read_contig(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
+    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
+        as spliced, defaults to `False`
+    :type strict_exon_overlap: bool, optional
 
     :return: (path to conversions, path to conversions index, path to alignments)
     :rtype: (str, str, str)
@@ -229,9 +233,9 @@ def parse_read_contig(
                 if not any_exon_overlap and not any_intron_overlap:
                     continue
 
-            if any_exon_only and not any_intron_overlap:
+            if any_exon_only and (not strict_exon_overlap or not any_intron_overlap):
                 assigned_gene, assigned_type = gene, 'spliced'
-            elif not any_exon_only and any_intron_overlap:
+            elif any_intron_overlap and (not strict_exon_overlap or not any_exon_only):
                 assigned_gene, assigned_type = gene, 'unspliced'
             else:
                 assigned_gene, assigned_type = gene, 'ambiguous'
@@ -609,6 +613,7 @@ def parse_all_reads(
     nasc=False,
     control=False,
     velocity=True,
+    strict_exon_overlap=False,
     return_splits=False,
 ):
     """Parse all reads in a BAM and extract conversion, content and alignment
@@ -653,6 +658,9 @@ def parse_all_reads(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
+    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
+        as spliced, defaults to `False`
+    :type strict_exon_overlap: bool, optional
     :param return_splits: return BAM splits for later reuse, defaults to `True`
     :type return_splits: bool, optional
 
@@ -704,6 +712,7 @@ def parse_all_reads(
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             nasc=nasc,
             velocity=velocity,
+            strict_exon_overlap=strict_exon_overlap,
         ), args
     )
     pool.close()
