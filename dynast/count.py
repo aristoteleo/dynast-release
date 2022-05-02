@@ -189,6 +189,16 @@ def count(
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
     snp_required = [convs_path, coverage_path, snps_path]
     if snp_threshold:
+        if not control:
+            # If SNP filtering is used with a non-control sample, there are some
+            # inconsistencies in what particular reads (among duplicated ones) are used for
+            # coverage/SNP-calling and conversion-calling.
+            logger.warning(
+                "Reads used for coverage calculation and SNP-calling may differ from those "
+                "that will be used for conversion-calling. This is due to using the "
+                "`--snp-threshold` option on a non `--control` sample."
+            )
+
         if not utils.all_exists(*snp_required) or redo_snp or bam_parsed:
             logger.info('Selecting alignments to use for SNP detection')
             alignments = preprocessing.select_alignments(preprocessing.read_alignments(alignments_path))
@@ -205,14 +215,8 @@ def count(
             ]]
 
             # Subset to conversions of interest
-            mask = None
-            for conv in snp_conversions:
-                _mask = (df_conversions['original'] == conv[0]) & (df_conversions['converted'] == conv[1])
-                if mask is None:
-                    mask = _mask
-                else:
-                    mask |= _mask
-            df_conversions = df_conversions.loc[mask, ['contig', 'genome_i']]
+            df_conversions = df_conversions.loc[df_conversions['conversion'].isin(snp_conversions),
+                                                ['contig', 'genome_i']]
 
             logger.info(f'Calculating coverage and outputting to {coverage_path}')
             coverage_path = preprocessing.calculate_coverage(

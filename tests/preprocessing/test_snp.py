@@ -33,10 +33,8 @@ class TestSnp(mixins.TestMixin, TestCase):
         conversions_truth = {}
         df_indexed = df.set_index(['read_id', 'index'])
         df_selected = df_indexed[(df_indexed['quality'] > 35) & (df_indexed.index.isin(alignments))].reset_index()
-        for (contig, genome_i, original, converted), count in dict(df_selected.groupby(['contig', 'genome_i',
-                                                                                        'original',
-                                                                                        'converted']).size()).items():
-            conversion = f'{original}{converted}'
+        for (contig, genome_i, conversion), count in dict(df_selected.groupby(['contig', 'genome_i',
+                                                                               'conversion']).size()).items():
             conversions_truth.setdefault(conversion, {}).setdefault(contig, {}).setdefault(genome_i, 0)
             conversions_truth[conversion][contig][genome_i] += 1
         self.assertEqual(conversions_truth, conversions)

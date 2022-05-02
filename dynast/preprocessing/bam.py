@@ -12,7 +12,7 @@ import pysam
 from .. import config, utils
 from ..logging import logger
 
-CONVERSION_CSV_COLUMNS = ['read_id', 'index', 'contig', 'genome_i', 'original', 'converted', 'quality']
+CONVERSION_CSV_COLUMNS = ['read_id', 'index', 'contig', 'genome_i', 'conversion', 'quality']
 ALIGNMENT_COLUMNS = [
     'read_id', 'index', 'barcode', 'umi', 'GX', 'A', 'C', 'G', 'T', 'velocity', 'transcriptome', 'score'
 ]
@@ -70,8 +70,7 @@ def read_conversions(conversions_path, *args, **kwargs):
             'index': np.uint8,
             'contig': 'category',
             'genome_i': np.uint32,
-            'original': 'category',
-            'converted': 'category',
+            'conversion': 'category',
             'quality': np.uint8
         },
         na_filter=False,
@@ -97,6 +96,9 @@ def select_alignments(df_alignments):
     if umi:
         df_deduplicated = df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last')
     else:
+        # TODO: This part can probably be removed because BAM parsing only considers
+        # primary alignments now.
+
         # Drop any multimappers where none map to the transcriptome and
         # are assigned multiple genes
         df_sorted['not_transcriptome'] = ~df_sorted['transcriptome']
@@ -405,7 +407,7 @@ def parse_read_contig(
 
                     conversions_out.write(
                         f'{read_id},{alignment_index},{contig},{genome_i},'
-                        f'{genome_base},{read_base},{quality}\n'
+                        f'{genome_base}{read_base},{quality}\n'
                     )
 
             # Flush cached conversions
@@ -413,7 +415,7 @@ def parse_read_contig(
                 n_lines += 1
                 conversions_out.write(
                     f'{read_id},{alignment_index},{contig},{genome_i},'
-                    f'{genome_base},{read_base},{quality}\n'
+                    f'{genome_base}{read_base},{quality}\n'
                 )
 
             # Add to index if lines were written

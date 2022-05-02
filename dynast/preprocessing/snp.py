@@ -9,7 +9,7 @@ from .. import utils
 from ..logging import logger
 from .conversion import CONVERSION_COMPLEMENT, CONVERSIONS_PARSER
 
-SNP_COLUMNS = ['contig', 'genome_i', 'original', 'converted']
+SNP_COLUMNS = ['contig', 'genome_i', 'conversion']
 
 
 def read_snps(snps_path):
@@ -22,19 +22,15 @@ def read_snps(snps_path):
     :rtype: dictionary
     """
     df = pd.read_csv(
-        snps_path,
-        dtype={
+        snps_path, dtype={
             'contig': 'category',
             'genome_i': np.uint32,
-            'original': 'category',
-            'converted': 'category',
+            'conversion': 'category',
         }
     )
-    df['conversion'] = df['original'].astype(str) + df['converted'].astype(str)
-    df.drop(columns=['original', 'converted'], inplace=True)
     snps = {}
     for (conversion, contig), indices in dict(df.groupby(['conversion', 'contig'], sort=False,
-                                                         observed=True).agg(set)['genome_i']).items():
+                                                         observed=True)['genome_i'].agg(set)).items():
         snps.setdefault(conversion, {})[contig] = indices
     return snps
 
@@ -126,7 +122,7 @@ def extract_conversions_part(
                     break
 
                 if int(groups['quality']) > quality:
-                    conversion = f'{groups["original"]}{groups["converted"]}'
+                    conversion = groups["conversion"]
                     if conversions and conversion not in conversions:
                         continue
 
@@ -247,13 +243,13 @@ def detect_snps(
 
     logger.debug(f'Writing detected SNPs to {snps_path}')
     with open(snps_path, 'w') as f:
-        f.write('contig,genome_i,original,converted\n')
+        f.write(f'{",".join(SNP_COLUMNS)}\n')
         for conversion, _convs in convs.items():
             fractions = utils.merge_dictionaries(_convs, coverage, f=truediv)
             for (contig, genome_i), fraction in utils.flatten_dictionary(fractions):
                 # If (# conversions) / (# coverage) is greater than a threshold,
                 # consider this a SNP and write to CSV
                 if coverage[contig][genome_i] >= min_coverage and fraction > threshold:
-                    f.write(f'{contig},{genome_i},{conversion[0]},{conversion[1]}\n')
+                    f.write(f'{contig},{genome_i},{conversion}\n')
 
     return snps_path

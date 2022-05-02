@@ -119,6 +119,19 @@ class TestConversion(mixins.TestMixin, TestCase):
         self.assertEqual(1, df_deduplicated.shape[0])
         self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
 
+    def test_deduplicate_counts_desired_conversion(self):
+        rows = [
+            ['barcode', 'umi', 'GX', 0] + [1] * len(conversion.CONVERSION_COLUMNS) +
+            [0] * len(conversion.BASE_COLUMNS) + [True],
+            ['barcode', 'umi', 'GX', 0] + [0] * len(conversion.CONVERSION_COLUMNS) +
+            [0] * len(conversion.BASE_COLUMNS) + [True],
+        ]
+        rows[1][4] = 100
+        df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX', 'score'] + conversion.COLUMNS + ['transcriptome'])
+        df_deduplicated = conversion.deduplicate_counts(df, conversions=['TC'])
+        self.assertEqual(1, df_deduplicated.shape[0])
+        self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
+
     def test_split_counts_by_velocity(self):
         df = pd.read_csv(self.umi_counts_path)
         dfs = conversion.split_counts_by_velocity(df)

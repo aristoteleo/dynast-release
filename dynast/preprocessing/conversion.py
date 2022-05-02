@@ -16,8 +16,7 @@ CONVERSIONS_PARSER = re.compile(
     (?P<index>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
-    (?P<original>[^,]*),
-    (?P<converted>[^,]*),
+    (?P<conversion>[^,]*),
     (?P<quality>[^,]*)\n
     $''', re.VERBOSE
 )
@@ -131,6 +130,9 @@ def drop_multimappers(df_counts, conversions=None):
     * none map to the transcriptome AND aligned to multiple genes -- drop all
     * none map to the transcriptome AND assigned multiple velocity types -- set to ambiguous
 
+    TODO: This function can probably be removed because BAM parsing only considers
+    primary alignments now.
+
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
     :param conversions: conversions to prioritize, defaults to `None`
@@ -181,7 +183,8 @@ def deduplicate_counts(df_counts, conversions=None):
     """Deduplicate counts based on barcode, UMI, and gene.
 
     The order of priority is the following.
-    1. Reads that align to the transcriptome (exon only)
+    1. If `conversions` is provided, reads that have at least one such conversion
+    2. Reads that align to the transcriptome (exon only)
     2. If `conversions` is provided, reads that have a larger sum of such conversions
        If `conversions` is not provided, reads that have larger sum of all conversions
 
@@ -193,19 +196,25 @@ def deduplicate_counts(df_counts, conversions=None):
     :return: deduplicated counts dataframe
     :rtype: pandas.DataFrame
     """
-    columns = list(df_counts.columns)
     df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
+    # Deduplication priority.
+    sort_order = ['transcriptome', 'score', 'conversion_sum']
+    to_remove = ['conversion_sum']
 
-    # Sort by transcriptome last, longest alignment last, least conversion first
-    df_sorted = df_counts.sort_values(['transcriptome', 'score', 'conversion_sum']).drop(columns='conversion_sum')
-    df_counts.drop(columns='conversion_sum', inplace=True)
+    use_conversions = conversions is not None
+    if use_conversions:
+        df_counts['has_conversions'] = df_counts[conversions].sum(axis=1) > 0
+        sort_order.insert(0, 'has_conversions')
+        to_remove.append('has_conversions')
 
-    # Always select transcriptome read if there are duplicates
-    df_deduplicated = df_sorted.drop_duplicates(
-        subset=['barcode', 'umi', 'GX'], keep='last'
-    ).sort_values(['barcode', 'umi', 'GX']).reset_index(drop=True)
+    # Sort by has desired conversion(s) last, transcriptome last,
+    # best alignment last, most conversions last
+    df_sorted = df_counts.sort_values(sort_order).drop(columns=to_remove)
 
-    return df_deduplicated[columns]
+    # Restore input dataframe.
+    df_counts.drop(columns=to_remove, inplace=True)
+
+    return df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last').reset_index(drop=True)
 
 
 def drop_multimappers_part(counter, lock, split_path, out_path):
@@ -383,7 +392,7 @@ def count_conversions_part(
             gx = alignment['GX']
             for _ in range(n_lines):
                 groups = CONVERSIONS_PARSER.match(f.readline()).groupdict()
-                conversion = f'{groups["original"]}{groups["converted"]}'
+                conversion = groups["conversion"]
                 if int(groups['quality']) > quality and not is_snp(gx, conversion, groups['contig'], int(
                         groups['genome_i'])):
                     counts[CONVERSION_IDX[conversion]] += 1

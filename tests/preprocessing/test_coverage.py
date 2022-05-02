@@ -20,9 +20,7 @@ class TestCoverage(mixins.TestMixin, TestCase):
         df_conversions = df_conversions[[
             key in alignments for key in df_conversions[['read_id', 'index']].itertuples(index=False, name=None)
         ]]
-        df_conversions = df_conversions.loc[((df_conversions['original'] == 'T') & (df_conversions['converted'] == 'C'))
-                                            | ((df_conversions['original'] == 'A') &
-                                               (df_conversions['converted'] == 'G')), ['contig', 'genome_i']]
+        df_conversions = df_conversions.loc[df_conversions['conversion'].isin(('TC', 'AG')), ['contig', 'genome_i']]
 
         conversions = {
             contig: set(df_part['genome_i'])
