@@ -243,9 +243,10 @@ def call_consensus(
         hd['SO'] = 'unsorted'
         header = pysam.AlignmentHeader.from_dict(header_dict)
         with pysam.AlignmentFile(temp_out_path, 'wb', header=header) as out:
-            for i, read in tqdm(enumerate(f.fetch()), total=ngs.bam.count_bam(bam_path), ascii=True, smoothing=0.1,
+            for i, read in tqdm(enumerate(f.fetch()), total=ngs.bam.count_bam(bam_path), ascii=True, smoothing=0.01,
                                 desc='Calling consensus'):
                 if skip_alignment(read, required_tags):
+                    out.write(read)
                     continue
 
                 contig = read.reference_name
