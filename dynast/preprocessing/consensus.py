@@ -186,6 +186,7 @@ def call_consensus(
     barcode_tag=None,
     gene_tag='GX',
     quality=27,
+    add_RS_RI=False,
     temp_dir=None,
     n_threads=8
 ):
@@ -204,6 +205,33 @@ def call_consensus(
             if start >= gene_segment.start and end <= gene_segment.end:
                 genes.append(gene)
         return genes
+
+    def create_tags_and_strand(barcode, umi, gene_info, reads):
+        tags = []
+        if barcode_tag:
+            tags.append((barcode_tag, barcode))
+        if umi_tag:
+            tags.append((umi_tag, umi))
+        tags.extend([('AS', sum(read.get_tag('AS') for read in reads)), ('NH', 1), ('HI', 1), ('GX', gene),
+                     ('RN', len(reads))])
+        gn = gene_info.get('gene_name')
+        if gn:
+            tags.append(('GN', gn))
+        if add_RS_RI:
+            tags.extend([('RS', ';'.join(read.query_name for read in reads)),
+                         ('RI', ';'.join(str(read.get_tag('HI')) for read in reads))])
+
+        # Figure out what strand the consensus should map to
+        consensus_strand = None
+        gene_strand = gene_info['strand']
+        if strand == 'forward':
+            consensus_strand = gene_strand
+        elif strand == 'reverse':
+            consensus_strand = '-' if gene_strand == '+' else '+'
+        return tags, consensus_strand
+
+    if add_RS_RI:
+        logger.warning('RS and RI tags will be added to the BAM. This may dramatically increase ' 'the BAM size.')
 
     contig_gene_order = {}
     for gene_id, gene_info in gene_infos.items():
@@ -251,7 +279,7 @@ def call_consensus(
 
                 contig = read.reference_name
                 barcode = read.get_tag(barcode_tag) if barcode_tag else None
-                umi = read.get_tag(barcode_tag) if umi_tag else None
+                umi = read.get_tag(umi_tag) if umi_tag else None
 
                 read_id = read.query_name
                 alignment_index = read.get_tag('HI')
@@ -320,28 +348,7 @@ def call_consensus(
                                         out.write(reads[0])
                                         continue
 
-                                    tags = []
-                                    if barcode_tag:
-                                        tags.append((barcode_tag, barcode))
-                                    if umi_tag:
-                                        tags.append((umi_tag, umi))
-                                    tags.extend([
-                                        ('AS', sum(read.get_tag('AS') for read in reads)),
-                                        ('NH', 1),
-                                        ('HI', 1),
-                                        ('GX', gene),
-                                    ])
-                                    gn = gene_info.get('gene_name')
-                                    if gn:
-                                        tags.append(('GN', gn))
-
-                                    # Figure out what strand the consensus should map to
-                                    consensus_strand = None
-                                    gene_strand = gene_info['strand']
-                                    if strand == 'forward':
-                                        consensus_strand = gene_strand
-                                    elif strand == 'reverse':
-                                        consensus_strand = '-' if gene_strand == '+' else '+'
+                                    tags, consensus_strand = create_tags_and_strand(barcode, umi, gene_info, reads)
 
                                     # Save for multiprocessing later.
                                     args_q.put(([read.to_string()
@@ -367,9 +374,20 @@ def call_consensus(
                         except queue.Empty:
                             break
 
+            # Put remaining
+            for gene, barcode_umi_groups in gx_barcode_umi_groups.items():
+                for barcode, umi_groups in barcode_umi_groups.items():
+                    for umi, reads in umi_groups.items():
+                        if len(reads) == 1:
+                            out.write(reads[0])
+                            continue
+
+                        tags, consensus_strand = create_tags_and_strand(barcode, umi, gene_infos[gene], reads)
+                        args_q.put(([read.to_string() for read in reads], header_dict, tags, consensus_strand))
+
+            # Signal to workers to terminate once queue is depleted.
             for _ in range(len(workers)):
                 args_q.put(None)
-
             for worker in workers:
                 worker.join()
 

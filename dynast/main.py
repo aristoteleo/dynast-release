@@ -233,6 +233,16 @@ def setup_consensus_args(parser, parent):
         default=27
     )
     parser_consensus.add_argument(
+        '--add-RS-RI',
+        help=(
+            'Add custom RS and RI tags to the output BAM, each of which contain a '
+            'semi-colon delimited list of read names (RS) and alignment indices (RI) '
+            'of the reads and alignments from which the consensus is derived. This '
+            'option is useful for debugging.'
+        ),
+        action='store_true'
+    )
+    parser_consensus.add_argument(
         'bam',
         help=(
             'Alignment BAM file that contains the appropriate UMI and barcode tags, '
@@ -658,6 +668,7 @@ def parse_consensus(parser, args, temp_dir=None):
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
         quality=args.quality,
+        add_RS_RI=args.add_RS_RI,
         n_threads=args.t,
         temp_dir=temp_dir,
     )

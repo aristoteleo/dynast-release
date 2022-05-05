@@ -18,6 +18,7 @@ def consensus(
     barcode_tag=None,
     gene_tag='GX',
     quality=27,
+    add_RS_RI=False,
     n_threads=8,
     temp_dir=None,
 ):
@@ -94,6 +95,7 @@ def consensus(
         barcode_tag=barcode_tag,
         gene_tag=gene_tag,
         quality=quality,
+        add_RS_RI=add_RS_RI,
         temp_dir=temp_dir,
         n_threads=n_threads
     )
