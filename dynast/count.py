@@ -2,7 +2,6 @@ import datetime as dt
 import os
 
 import ngs_tools as ngs
-import pysam
 
 from . import config, constants, preprocessing, utils
 from .logging import logger
@@ -50,22 +49,10 @@ def count(
             'free when running dynast. Continuing may cause dynast to crash with an out-of-memory error.'
         )
 
-    # Check that BAM is sorted by coordinate. If not, run samtools sort.
-    sorted_bam_path = '{}.sortedByCoord{}'.format(*os.path.splitext(bam_path))
-    bam_sorted = False
-    with pysam.AlignmentFile(bam_path, 'rb') as f:
-        if f.header.get('HD', {}).get('SO') == 'coordinate':
-            bam_sorted = True
-    if not bam_sorted:
-        logger.info(f'Sorting {bam_path} with samtools to {sorted_bam_path}')
-        pysam.sort(bam_path, '-o', sorted_bam_path, '-@', str(n_threads))
-        bam_path = sorted_bam_path
-
-    # Check if BAM index exists and create one if it doesn't.
-    bai_path = f'{bam_path}.bai'
-    if not utils.all_exists(bai_path):
-        logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
-        pysam.index(bam_path, bai_path, '-@', str(n_threads))
+    # Sort and index bam.
+    bam_path = preprocessing.sort_and_index_bam(
+        bam_path, '{}.sortedByCoord{}'.format(*os.path.splitext(bam_path)), n_threads=n_threads
+    )
 
     # Check BAM tags
     tags = preprocessing.get_tags_from_bam(bam_path, config.BAM_PEEK_READS, n_threads=n_threads)

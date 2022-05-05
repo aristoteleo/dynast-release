@@ -6,7 +6,7 @@ import sys
 import warnings
 
 from . import __version__
-# from .config import RE_CHOICES
+from .config import BAM_GENE_TAG
 from .logging import logger
 from .technology import TECHNOLOGIES_MAP
 from .utils import flatten_iter, patch_mp_connection_bpo_17560
@@ -133,7 +133,7 @@ def setup_align_args(parser, parent):
         help=('Path to file of whitelisted barcodes to correct to. '
               'If not provided, all barcodes are used.'),
     )
-    parser_align.add_argument('--overwrite', help='Overwrite existing alignment files', action='store_true')
+    parser_align.add_argument('--overwrite', help='Overwrite existing files.', action='store_true')
     parser_align.add_argument(
         '--STAR-overrides', metavar='ARGUMENTS', help='Arguments to pass directly to STAR.', type=str, default=None
     )
@@ -154,6 +154,93 @@ def setup_align_args(parser, parent):
     )
 
     return parser_align
+
+
+def setup_consensus_args(parser, parent):
+    """Helper function to set up a subparser for the `consensus` command.
+
+    :param parser: argparse parser to add the `consensus` command to
+    :type args: argparse.ArgumentParser
+    :param parent: argparse parser parent of the newly added subcommand.
+                   used to inherit shared commands/flags
+    :type args: argparse.ArgumentParser
+
+    :return: the newly added parser
+    :rtype: argparse.ArgumentParser
+    """
+    parser_consensus = parser.add_parser(
+        'consensus',
+        description='Generate consensus sequences',
+        help='Generate consensus sequences',
+        parents=[parent],
+    )
+    parser_consensus._actions[0].help = parser_consensus._actions[0].help.capitalize()
+
+    required_consensus = parser_consensus.add_argument_group('required arguments')
+    required_consensus.add_argument(
+        '-g', metavar='GTF', help='Path to GTF file used to generate the STAR index', type=str, required=True
+    )
+    parser_consensus.add_argument(
+        '-o',
+        metavar='OUT',
+        help='Path to output directory (default: current directory)',
+        type=str,
+        default='.',
+    )
+    parser_consensus.add_argument(
+        '--umi-tag',
+        metavar='TAG',
+        help=(
+            'BAM tag to use as unique molecular identifiers (UMI). If not provided, '
+            'all reads are assumed to be unique. (default: None)'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_consensus.add_argument(
+        '--barcode-tag',
+        metavar='TAG',
+        help=(
+            'BAM tag to use as cell barcodes. If not provided, all reads are '
+            'assumed to be from a single cell. (default: None)'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_consensus.add_argument(
+        '--gene-tag',
+        metavar='TAG',
+        help=f'BAM tag to use as gene assignments (default: {BAM_GENE_TAG})',
+        type=str,
+        default=BAM_GENE_TAG,
+    )
+    parser_consensus.add_argument(
+        '--strand',
+        help='Read strandedness. (default: `forward`)',
+        choices=['forward', 'reverse', 'unstranded'],
+        default='forward',
+    )
+    parser_consensus.add_argument(
+        '--quality',
+        metavar='QUALITY',
+        help=(
+            'Base quality threshold. When generating a consensus nucleotide at a '
+            'certain position, the base with smallest error probability below this '
+            'quality threshold is chosen. If no base meets this criteria, the '
+            'reference base is chosen. (default: 27)'
+        ),
+        type=int,
+        default=27
+    )
+    parser_consensus.add_argument(
+        'bam',
+        help=(
+            'Alignment BAM file that contains the appropriate UMI and barcode tags, '
+            'specifiable with `--umi-tag`, and `--barcode-tag`.'
+        ),
+        type=str,
+    )
+    return parser_consensus
 
 
 def setup_count_args(parser, parent):
@@ -222,9 +309,9 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--gene-tag',
         metavar='TAG',
-        help='BAM tag to use as gene assignments (default: GX)',
+        help=f'BAM tag to use as gene assignments (default: {BAM_GENE_TAG})',
         type=str,
-        default='GX',
+        default=BAM_GENE_TAG,
     )
     parser_count.add_argument(
         '--strand',
@@ -312,7 +399,7 @@ def setup_count_args(parser, parent):
     )
     parser_count.add_argument(
         '--overwrite',
-        help='',
+        help='Overwrite existing files.',
         action='store_true',
     )
     parser_count.add_argument(
@@ -552,6 +639,30 @@ def parse_align(parser, args, temp_dir=None):
     )
 
 
+def parse_consensus(parser, args, temp_dir=None):
+    """Parser for the `consensus` command.
+    :param args: Command-line arguments dictionary, as parsed by argparse
+    :type args: dict
+    """
+    # Check quality
+    if args.quality < 0 or args.quality > 41:
+        parser.error('`--quality` must be in [0, 42)')
+
+    from .consensus import consensus
+    consensus(
+        args.bam,
+        args.g,
+        args.o,
+        strand=args.strand,
+        umi_tag=args.umi_tag,
+        barcode_tag=args.barcode_tag,
+        gene_tag=args.gene_tag,
+        quality=args.quality,
+        n_threads=args.t,
+        temp_dir=temp_dir,
+    )
+
+
 def parse_count(parser, args, temp_dir=None):
     """Parser for the `count` command.
     :param args: Command-line arguments dictionary, as parsed by argparse
@@ -698,6 +809,7 @@ def parse_estimate(parser, args, temp_dir=None):
 COMMAND_TO_FUNCTION = {
     'ref': parse_ref,
     'align': parse_align,
+    'consensus': parse_consensus,
     'count': parse_count,
     'estimate': parse_estimate,
 }
@@ -725,11 +837,13 @@ def main():
     # Command parsers
     parser_ref = setup_ref_args(subparsers, parent)
     parser_align = setup_align_args(subparsers, parent)
+    parser_consensus = setup_consensus_args(subparsers, parent)
     parser_count = setup_count_args(subparsers, parent)
     parser_estimate = setup_estimate_args(subparsers, parent)
     command_to_parser = {
         'ref': parser_ref,
         'align': parser_align,
+        'consensus': parser_consensus,
         'count': parser_count,
         'estimate': parser_estimate,
     }

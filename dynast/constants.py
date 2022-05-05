@@ -11,6 +11,8 @@ STAR_BARCODES_FILENAME = 'barcodes.tsv'
 STAR_FEATURES_FILENAME = 'features.tsv'
 STAR_MATRIX_FILENAME = 'matrix.mtx'
 
+CONSENSUS_BAM_FILENAME = 'consensus.bam'
+
 COUNT_DIR = 'count'
 PARSE_DIR = '0_parse'
 CONVS_FILENAME = 'convs.pkl.gz'

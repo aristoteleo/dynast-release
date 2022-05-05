@@ -378,7 +378,18 @@ def parse_read_contig(
             assignment = 'unassigned'
             if velocity:
                 read_strand = None
-                if strand == 'forward':
+                if read.is_paired:
+                    if read.is_read1:  # R1 is mapped after R2
+                        if strand == 'forward':
+                            read_strand = '+' if read.is_reverse else '-'
+                        elif strand == 'reverse':
+                            read_strand = '-' if read.is_reverse else '+'
+                    else:  # R1 is mapped before R2
+                        if strand == 'forward':
+                            read_strand = '-' if read.is_reverse else '+'
+                        elif strand == 'reverse':
+                            read_strand = '+' if read.is_reverse else '-'
+                elif strand == 'forward':
                     read_strand = '-' if read.is_reverse else '+'
                 elif strand == 'reverse':
                     read_strand = '+' if read.is_reverse else '-'
@@ -552,6 +563,45 @@ def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8):
             if i + 1 >= n_reads:
                 break
     return False
+
+
+def sort_and_index_bam(bam_path, out_path, n_threads=8, temp_dir=None):
+    """Sort and index BAM.
+
+    If the BAM is already sorted, the sorting step is skipped.
+
+    :param bam_path: path to alignment BAM file to sort
+    :type bam_path: str
+    :param out_path: path to output sorted BAM
+    :type out_path: str
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+
+    :return: path to sorted and indexed BAM
+    :rtype: str
+    """
+    bam_sorted = False
+    with pysam.AlignmentFile(bam_path, 'rb') as f:
+        if f.header.get('HD', {}).get('SO') == 'coordinate':
+            bam_sorted = True
+
+    if not bam_sorted:
+        logger.info(f'Sorting {bam_path} with samtools to {out_path}')
+        args = ['-o', out_path, '-@', str(n_threads)]
+        if temp_dir:
+            args.extend(['-T', temp_dir])
+        pysam.sort(bam_path, *args)
+        bam_path = out_path
+
+    # Check if BAM index exists and create one if it doesn't.
+    bai_path = f'{bam_path}.bai'
+    if not utils.all_exists(bai_path):
+        logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
+        pysam.index(bam_path, bai_path, '-@', str(n_threads))
+
+    return bam_path
 
 
 def split_bam(bam_path, n, n_threads=8, temp_dir=None):
