@@ -8,6 +8,8 @@ This section details technical information of the quantification and statistical
 	:width: 700
 	:align: center
 
+.. _consensus_procedure:
+
 Consensus procedure
 ^^^^^^^^^^^^^^^^^^^
 :code:`dynast consensus` procedure generates consensus sequences for each mRNA molecule that was present in the sample. It relies on sequencing the same mRNA molecule (often distinguished using UMIs for UMI-based technologies, or start and end alignment positions for non-UMI technologies) multiple times, to obtain a more confident read sequence.

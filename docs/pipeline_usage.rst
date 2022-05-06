@@ -80,6 +80,7 @@ UMI-based technologies
 For UMI-based technologies (such as Drop-seq, 10X Chromium, scNT-seq), the following BAM tags are written to the alignment BAM.
 
 * :code:`MD`
+* :code:`HI`, :code:`AS` for alignment index and score
 * :code:`CR`, :code:`CB` for raw and corrected barcodes
 * :code:`UR`, :code:`UB` for raw and corrected UMIs
 
@@ -87,11 +88,52 @@ For UMI-based technologies (such as Drop-seq, 10X Chromium, scNT-seq), the follo
 
 Plate-based technologies
 ''''''''''''''''''''''''
-For plate-based technologies (such as Smart-Seq), the following BAM tags are written to the alignment BAM.
+For plate-based technologies (such as Smart-Seq), the following BAM tags are written to the alignment BAM. See
 
-* :code:`MD` BAM tag
-* :code:`HI` BAM tag for paired reads
-* :code:`RG` BAM tag, indicating the sample name
+* :code:`MD`
+* :code:`HI`, :code:`AS` for alignment index and score
+* :code:`RG` indicating the sample name
+
+Calling consensus sequences with :code:`consensus`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:code:`dynast consensus` parses the alignment BAM to generate consensus sequences for each sequenced mRNA molecule (see :ref:`consensus_procedure`).
+
+.. code-block:: text
+
+    usage: dynast consensus [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF [-o OUT] [--umi-tag TAG]
+                            [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
+                            [--quality QUALITY] [--add-RS-RI]
+                            bam
+
+    Generate consensus sequences
+
+    positional arguments:
+      bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable with
+                            `--umi-tag`, and `--barcode-tag`.
+
+    optional arguments:
+      -h, --help            Show this help message and exit
+      --tmp TMP             Override default temporary directory
+      --keep-tmp            Do not delete the tmp directory
+      --verbose             Print debugging information
+      -t THREADS            Number of threads to use (default: 8)
+      -o OUT                Path to output directory (default: current directory)
+      --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are assumed
+                            to be unique. (default: None)
+      --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single
+                            cell. (default: None)
+      --gene-tag TAG        BAM tag to use as gene assignments (default: GX)
+      --strand {forward,reverse,unstranded}
+                            Read strandedness. (default: `forward`)
+      --quality QUALITY     Base quality threshold. When generating a consensus nucleotide at a certain position, the base
+                            with smallest error probability below this quality threshold is chosen. If no base meets this
+                            criteria, the reference base is chosen. (default: 27)
+      --add-RS-RI           Add custom RS and RI tags to the output BAM, each of which contain a semi-colon delimited list
+                            of read names (RS) and alignment indices (RI) of the reads and alignments from which the
+                            consensus is derived. This option is useful for debugging.
+
+    required arguments:
+      -g GTF                Path to GTF file used to generate the STAR index
 
 
 Quantifying counts with :code:`count`
