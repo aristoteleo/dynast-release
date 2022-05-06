@@ -142,15 +142,17 @@ Quantifying counts with :code:`count`
 
 .. code-block:: text
 
-    usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT] [--umi-tag TAG]
-                        [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}] [--quality QUALITY] [--snp-threshold THRESHOLD]
-                        [--snp-min-coverage THRESHOLD] [--snp-csv CSV] [--barcodes TXT] [--no-splicing] [--control] [--overwrite]
+    usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
+                        [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
+                        [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-min-coverage THRESHOLD] [--snp-csv CSV]
+                        [--barcodes TXT] [--no-splicing | --exon-overlap {lenient,strict}] [--control] [--overwrite]
                         bam
 
     Quantify unlabeled and labeled RNA
 
     positional arguments:
-      bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable with `--umi-tag`, and `--barcode-tag`.
+      bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable with
+                            `--umi-tag`, and `--barcode-tag`.
 
     optional arguments:
       -h, --help            Show this help message and exit
@@ -159,32 +161,39 @@ Quantifying counts with :code:`count`
       --verbose             Print debugging information
       -t THREADS            Number of threads to use (default: 8)
       -o OUT                Path to output directory (default: current directory)
-      --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are assumed to be unique. (default: None)
-      --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single cell. (default: None)
+      --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are assumed
+                            to be unique. (default: None)
+      --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single
+                            cell. (default: None)
       --gene-tag TAG        BAM tag to use as gene assignments (default: GX)
       --strand {forward,reverse,unstranded}
                             Read strandedness. (default: `forward`)
-      --quality QUALITY     Base quality threshold. Only bases with PHRED quality greater than this value will be considered when counting conversions.
-                            (default: 27)
+      --quality QUALITY     Base quality threshold. Only bases with PHRED quality greater than this value will be
+                            considered when counting conversions. (default: 27)
       --snp-threshold THRESHOLD
-                            Conversions with (# conversions) / (# reads) greater than this threshold will be considered a SNP and ignored. (default: no
-                            SNP detection)
+                            Conversions with (# conversions) / (# reads) greater than this threshold will be considered a
+                            SNP and ignored. (default: no SNP detection)
       --snp-min-coverage THRESHOLD
-                            For a conversion to be considered as a SNP, there must be at least this many reads mapping to that region. (default: 1)
+                            For a conversion to be considered as a SNP, there must be at least this many reads mapping to
+                            that region. (default: 1)
       --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
       --barcodes TXT        Textfile containing filtered cell barcodes. Only these barcodes will be processed.
       --no-splicing, --transcriptome-only
-                            Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that are not assigned to the
-                            transcriptome.
+                            Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
+                            are not assigned to the transcriptome.
+      --exon-overlap {lenient,strict}
+                            Algorithm to use to detect spliced reads (that overlap exons). May be `strict`, which assigns
+                            reads as spliced if it only overlaps exons, or `lenient`, which assigns reads as spliced if it
+                            does not overlap with any introns of at least one transcript. (default: lenient)
       --control             Indicate this is a control sample, which is used to detect SNPs.
-      --overwrite
+      --overwrite           Overwrite existing files.
 
     required arguments:
       -g GTF                Path to GTF file used to generate the STAR index
       --conversion CONVERSION
-                            The type of conversion(s) introduced at a single timepoint. Multiple conversions can be specified with a comma-delimited
-                            list. For example, T>C and A>G is TC,AG. This option can be specified multiple times (i.e. dual labeling), for each labeling
-                            timepoint.
+                            The type of conversion(s) introduced at a single timepoint. Multiple conversions can be
+                            specified with a comma-delimited list. For example, T>C and A>G is TC,AG. This option can be
+                            specified multiple times (i.e. dual labeling), for each labeling timepoint.
 
 .. _basic_arguments:
 
