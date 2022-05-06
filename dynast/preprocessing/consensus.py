@@ -232,7 +232,7 @@ def call_consensus(
         return tags, consensus_strand
 
     if add_RS_RI:
-        logger.warning('RS and RI tags will be added to the BAM. This may dramatically increase ' 'the BAM size.')
+        logger.warning('RS and RI tags will be added to the BAM. This may dramatically increase the BAM size.')
 
     contig_gene_order = {}
     for gene_id, gene_info in gene_infos.items():
