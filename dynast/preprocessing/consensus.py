@@ -196,7 +196,8 @@ def call_consensus(
 
     def find_genes(contig, start, end, read_strand=None):
         genes = []
-        for gene in contig_gene_order[contig]:
+        # NOTE: contigs may not have any genes
+        for gene in contig_gene_order.get(contig, []):
             if read_strand and read_strand != gene_infos[gene]['strand']:
                 continue
             gene_segment = gene_infos[gene]['segment']
