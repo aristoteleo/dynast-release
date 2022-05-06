@@ -2,11 +2,28 @@
 
 Technical Information
 =====================
-This section details technical information of the quantification and statistical estimation procedures of the :code:`dynast count` and :code:`dynast estimate` commands. Descriptions of :code:`dynast ref` and :code:`dynast align` commands are in :ref:`pipeline_usage`.
+This section details technical information of the quantification and statistical estimation procedures of the :code:`dynast consensus`, :code:`dynast count` and :code:`dynast estimate` commands. Descriptions of :code:`dynast ref` and :code:`dynast align` commands are in :ref:`pipeline_usage`.
 
 .. image:: _static/steps.svg
 	:width: 700
 	:align: center
+
+Consensus procedure
+^^^^^^^^^^^^^^^^^^^
+:code:`dynast consensus` procedure generates consensus sequences for each mRNA molecule that was present in the sample. It relies on sequencing the same mRNA molecule (often distinguished using UMIs for UMI-based technologies, or start and end alignment positions for non-UMI technologies) multiple times, to obtain a more confident read sequence.
+
+Why don't we just perform UMI-deduplication (by just selecting a single read among the reads that share the same UMI) and call it a day? Though it seems counterintuitive, reads sharing the same UMI may originate from different regions of the same mRNA, as [Qiu2020]_ (scNT-seq) observed in `Extended Data Fig.1b <https://www.nature.com/articles/s41592-020-0935-4/figures/7>`_.
+
+.. image:: _static/scnt_umi.png
+	:width: 300
+	:align: center
+
+Therefore, simply selecting one read and discarding the rest will cause a bias toward unlabeled reads because the selected read may happen to have no conversions, while all the other (discarded) reads do. Therefore, we found it necessary to implement a consensus-calling procedure, which works in the following steps. Here, we assume cell barcodes are available (:code:`--barcode-tag` is provided), but the same procedure can be performed in the absence of cell barcodes by assuming all reads were from a single cell. Additionally, we will use the term *read* and *alignment* interchangeably because only a single alignment (see the note below) from each read will be considered.
+
+1. Alignments in the BAM are grouped into UMI groups. In the case of UMI-based technologies (:code:`--umi-tag` is provided), a UMI group is defined as the set of alignments that share the same cell barcode, UMI, and gene. For alignments with the :code:`--gene-tag` tag, assigning these into a UMI group is trivial. For alignments without this tag, it is assigned to the gene whose gene body fully contains the alignment. If multiple genes are applicable, the alignment is not assigned a UMI group and output to the resulting BAM as-is. For non-UMI-based technologies, the start and end positions of the alignment are used as a pseudo-UMI.
+2. For each UMI group, the consensus base is taken for every genomic location that is covered by at least one alignment in the group. The consensus base is defined as the base with the highest sum of quality scores of that base among all alignments in the group. Loosely, this is proportional to the conditional probability of each base being a sequencing error. If the consensus base score does not exceed the score specified with :code:`--quality`, then the reference base is taken instead. Once this is done for every covered genomic location, the consensus alignment is output to the BAM, and the UMI group is discarded (i.e. not written to the BAM).
+
+.. Note:: Only primary, not-duplicate, mapped BAM entries are considered (equivalent to the :code:`0x4`, :code:`0x100`, :code:`0x400` BAM flags being unset). For paired reads, only properly paired alignments (:code:`0x2` BAM flag being set) are considered. Additionally, if :code:`--barcode-tag` or :code:`--umi-tag` are provided, only BAM entries that have these tags are considered. Any alignments that do not satisfy all of these conditions are output as-is without any modifications.
 
 Count procedure
 ^^^^^^^^^^^^^^^
@@ -23,6 +40,8 @@ Count procedure
 1. All gene and transcript information are parsed from the gene annotation GTF (:code:`-g`) and saved as Python pickles :code:`genes.pkl.gz` and :code:`transcripts.pkl.gz`, respectively.
 2. All aligned reads are parsed from the input BAM and output to :code:`conversions.csv` and :code:`alignments.csv`. The former contains a line for every conversion, and the latter contains a line for every alignment. Note that no conversion filtering (:code:`--quality`) is performed in this step. Two :code:`.idx` files are also output, corresponding to each of these CSVs, which are used downstream for fast parsing. Splicing types are also assigned in this step if :code:`--no-splicing` was not provided.
 
+.. Note:: Only primary, not-duplicate, mapped BAM entries are considered (equivalent to the :code:`0x4`, :code:`0x100`, :code:`0x400` BAM flags being unset). For paired reads, only properly paired alignments (:code:`0x2` BAM flag being set) are considered. Additionally, if :code:`--barcode-tag` or :code:`--umi-tag` are provided, only BAM entries that have these tags are considered.
+
 .. _snp:
 
 :code:`snp`
@@ -37,7 +56,7 @@ This step is skipped if :code:`--snp-threshold` is not specified.
 :code:`quant`
 '''''''''''''
 1. For every read, the numbers of each conversion (A>C, A>G, A>T, C>A, etc.) and nucleotide content (how many of A, C, G, T there are in the region that the read aligned to) are counted. Any SNPs provided with :code:`--snp-csv` or detected from the :ref:`snp` step are not counted. If both are present, the union is used. Additionally, Any conversion with PHRED quality less than or equal to :code:`--quality` is not counted as a conversion.
-2. For UMI-based technologies, reads are deduplicated by the following order of priority: 1) read that aligns to the transcriptome (i.e. exon-only), 2) read that has the highest alignment score, and on ties, 3) read with the most conversions specified with :code:`--conversion`. If multiple conversions are provided, the sum is used. Reads are considered duplicates if they share the same barcode, UMI, and gene assignment. For plate-based technologies, read deduplication should have been performed in the alignment step (in the case of STAR, with the :code:`--soloUMIdedup Exact`), but in the case of multimapping reads, it becomes a bit more tricky. If a read is multimapping such that some alignments map to the transcriptome while some do not, the transcriptome alignment is taken (there can not be multiple transcriptome alignments, as this is a constraint within STAR). If none align to the transcriptome and the alignments are assigned to multiple genes, the read is dropped, as it is impossible to assign the read with confidence. If none align to the transcriptome and the alignments are assigned multiple velocity types, the velocity type is manually set to :code:`ambiguous` and the first alignment is kept. If none of these cases are true, the first alignment is kept. The final deduplicated/de-multimapped counts are output to :code:`counts_{conversions}.csv`, where :code:`{conversions}` is an underscore-delimited list of all conversions provided with :code:`--conversion`.
+2. For UMI-based technologies, reads are deduplicated by the following order of priority: 1) reads that have at least one conversion specified with :code:`--conversion`, 2) read that aligns to the transcriptome (i.e. exon-only), 3) read that has the highest alignment score, and 4) read with the most conversions specified with :code:`--conversion`. If multiple conversions are provided, the sum is used. Reads are considered duplicates if they share the same barcode, UMI, and gene assignment. For plate-based technologies, read deduplication should have been performed in the alignment step (in the case of STAR, with the :code:`--soloUMIdedup Exact`), but in the case of multimapping reads, it becomes a bit more tricky. If a read is multimapping such that some alignments map to the transcriptome while some do not, the transcriptome alignment is taken (there can not be multiple transcriptome alignments, as this is a constraint within STAR). If none align to the transcriptome and the alignments are assigned to multiple genes, the read is dropped, as it is impossible to assign the read with confidence. If none align to the transcriptome and the alignments are assigned multiple velocity types, the velocity type is manually set to :code:`ambiguous` and the first alignment is kept. If none of these cases are true, the first alignment is kept. The final deduplicated/de-multimapped counts are output to :code:`counts_{conversions}.csv`, where :code:`{conversions}` is an underscore-delimited list of all conversions provided with :code:`--conversion`.
 
 .. Note:: All bases in this file are relative to the forward genomic strand. For example, a read mapped to a gene on the reverse genomic strand should be complemented to get the actual bases.
 
