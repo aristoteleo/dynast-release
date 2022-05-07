@@ -179,19 +179,23 @@ def drop_multimappers(df_counts, conversions=None):
     return df_deduplicated[columns]
 
 
-def deduplicate_counts(df_counts, conversions=None):
+def deduplicate_counts(df_counts, conversions=None, use_conversions=True):
     """Deduplicate counts based on barcode, UMI, and gene.
 
     The order of priority is the following.
-    1. If `conversions` is provided, reads that have at least one such conversion
+    1. If `use_conversions=True`, reads that have at least one such conversion
     2. Reads that align to the transcriptome (exon only)
-    2. If `conversions` is provided, reads that have a larger sum of such conversions
+    3. Reads that have highest alignment score
+    4. If `conversions` is provided, reads that have a larger sum of such conversions
        If `conversions` is not provided, reads that have larger sum of all conversions
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
     :param conversions: conversions to prioritize, defaults to `None`
     :type conversions: list, optional
+    :param use_conversions: prioritize reads that have conversions first, defaults
+        to `True`
+    :type use_conversions: bool, optional
 
     :return: deduplicated counts dataframe
     :rtype: pandas.DataFrame
@@ -201,8 +205,7 @@ def deduplicate_counts(df_counts, conversions=None):
     sort_order = ['transcriptome', 'score', 'conversion_sum']
     to_remove = ['conversion_sum']
 
-    use_conversions = conversions is not None
-    if use_conversions:
+    if use_conversions and conversions is not None:
         df_counts['has_conversions'] = df_counts[conversions].sum(axis=1) > 0
         sort_order.insert(0, 'has_conversions')
         to_remove.append('has_conversions')
@@ -225,9 +228,9 @@ def drop_multimappers_part(counter, lock, split_path, out_path):
     return out_path
 
 
-def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None):
+def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None, use_conversions=True):
     deduplicate_counts(
-        read_counts(split_path), conversions=conversions
+        read_counts(split_path), conversions=conversions, use_conversions=use_conversions
     )[CSV_COLUMNS[1:]].to_csv(
         out_path, header=False, index=False
     )
@@ -420,6 +423,7 @@ def count_conversions(
     snps=None,
     quality=27,
     conversions=None,
+    dedup_use_conversions=True,
     n_threads=8,
     temp_dir=None
 ):
@@ -448,6 +452,9 @@ def count_conversions(
     :param conversions: conversions to prioritize when deduplicating only applicable
                         for UMI technologies, defaults to `None`
     :type conversions: list, optional
+    :param dedup_use_conversions: prioritize reads that have at least one conversion
+        when deduplicating, defaults to `True`
+    :type dedup_use_conversions: bool, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -570,6 +577,7 @@ def count_conversions(
             counter,
             lock,
             conversions=conversions,
+            use_conversions=dedup_use_conversions,
         ) if umi else partial(drop_multimappers_part, counter, lock), paths
     )
     pool.close()

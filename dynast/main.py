@@ -407,6 +407,7 @@ def setup_count_args(parser, parent):
         help='Indicate this is a control sample, which is used to detect SNPs.',
         action='store_true',
     )
+    parser_count.add_argument('--dedup-mode', help=argparse.SUPPRESS, type=str, choices=['auto', 'conversion', 'exon'])
     parser_count.add_argument(
         '--overwrite',
         help='Overwrite existing files.',
@@ -729,7 +730,8 @@ def parse_count(parser, args, temp_dir=None):
         nasc=args.nasc,
         overwrite=args.overwrite,
         velocity=not args.no_splicing,
-        strict_exon_overlap=args.exon_overlap == 'strict'
+        strict_exon_overlap=args.exon_overlap == 'strict',
+        dedup_mode=args.dedup_mode
     )
 
 

@@ -28,6 +28,7 @@ def count(
     temp_dir=None,
     velocity=True,
     strict_exon_overlap=False,
+    dedup_mode='auto',
     nasc=False,
     overwrite=False,
 ):
@@ -257,6 +258,19 @@ def count(
         f=set.union,
         default=set,
     )
+
+    # Figure out deduplication priority if set to auto
+    if umi_tag and dedup_mode == 'auto':
+        if config.BAM_CONSENSUS_READ_COUNT_TAG in tags:
+            dedup_mode = 'exon'
+            logger.info(f'Auto-detected deduplication mode: `{dedup_mode}`. Exonic reads will be prioritized. ')
+        else:
+            dedup_mode = 'conversion'
+            logger.info(
+                f'Auto-detected deduplication mode: `{dedup_mode}`. '
+                f'Reads with at least one of {all_conversions} conversions will be prioritized.'
+            )
+
     counts_path = preprocessing.count_conversions(
         conversions_path,
         alignments_path,
@@ -267,6 +281,7 @@ def count(
         snps=snps,
         quality=quality,
         conversions=all_conversions,
+        dedup_use_conversions=dedup_mode == 'conversion',
         n_threads=n_threads,
         temp_dir=temp_dir
     )

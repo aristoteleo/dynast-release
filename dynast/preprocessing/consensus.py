@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from . import bam
-from .. import utils
+from .. import config, utils
 from ..logging import logger
 
 BASES = ('A', 'C', 'G', 'T')
@@ -214,7 +214,7 @@ def call_consensus(
         if umi_tag:
             tags.append((umi_tag, umi))
         tags.extend([('AS', sum(read.get_tag('AS') for read in reads)), ('NH', 1), ('HI', 1), ('GX', gene),
-                     ('RN', len(reads))])
+                     (config.BAM_CONSENSUS_READ_COUNT_TAG, len(reads))])
         gn = gene_info.get('gene_name')
         if gn:
             tags.append(('GN', gn))
