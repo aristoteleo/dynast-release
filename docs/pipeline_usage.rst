@@ -135,6 +135,15 @@ Calling consensus sequences with :code:`consensus`
     required arguments:
       -g GTF                Path to GTF file used to generate the STAR index
 
+The resulting BAM will contain a collection of consensus alignments and a subset of original alignments (for those alignments for which a consensus could not be determined). The latter are identical to those in the original BAM, while the names of the former will be seemingly random sequences of letters and numbers (in reality, these are SHA256 checksums of the grouped read names). They will also contain the following modified BAM tags
+
+* :code:`AS` is now the *sum* of the alignment scores of the reads
+* :code:`HI`, the alignment index, is always 1
+
+and the follwing additional BAM tags.
+
+* :code:`RN` indicating how many reads were used to generate the consensus
+* :code:`RS`, :code:`RI` each containing a semicolon-delimited list of read names and their corresponding alignment indices (:code:`HI` tag in the original BAM) that were used to generate the consensus (only added if :code:`--add-RS-RI` is provided).
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
