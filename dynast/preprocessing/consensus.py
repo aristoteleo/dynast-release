@@ -16,7 +16,7 @@ BASES = ('A', 'C', 'G', 'T')
 BASE_IDX = {base: i for i, base in enumerate(BASES)}
 
 
-def call_consensus_from_reads(reads, header, quality=27):
+def call_consensus_from_reads(reads, header, quality=27, tags=None):
     """Call a single consensus alignment given a list of aligned reads.
 
     Reads must map to the same contig. Results are undefined otherwise.
@@ -44,6 +44,8 @@ def call_consensus_from_reads(reads, header, quality=27):
     :type header: pysam.AlignmentHeader
     :param quality: quality threshold, defaults to 27
     :type quality: int, optional
+    :param tags: additional tags to set, defaults to `None`
+    :type tags: dict, optional
 
     :return: (New pysam alignment of the consensus sequence)
     :rtype: pysam.AlignedSegment
@@ -142,7 +144,11 @@ def call_consensus_from_reads(reads, header, quality=27):
     al.reference_start = left_pos
     al.mapping_quality = 255
     al.cigarstring = ''.join(cigar)
-    al.set_tags([('MD', ''.join(md)), ('NM', nm)])
+
+    # Set tags
+    tags = tags or {}
+    tags.update({'MD': ''.join(md), 'NM': nm})
+    al.set_tags(list(tags.items()))
 
     # Make sure these are False
     al.is_unmapped = False
@@ -157,8 +163,7 @@ def call_consensus_from_reads(reads, header, quality=27):
 def call_consensus_from_reads_process(reads, header, tags, strand=None, quality=27):
     header = pysam.AlignmentHeader.from_dict(header)
     reads = [pysam.AlignedSegment.fromstring(read, header) for read in reads]
-    consensus = call_consensus_from_reads(reads, header, quality=quality)
-    consensus.set_tags(tags)
+    consensus = call_consensus_from_reads(reads, header, quality=quality, tags=tags)
     consensus.is_paired = False
     if strand == '-':
         consensus.is_reverse = True
@@ -208,19 +213,26 @@ def call_consensus(
         return genes
 
     def create_tags_and_strand(barcode, umi, gene_info, reads):
-        tags = []
+        tags = {}
         if barcode_tag:
-            tags.append((barcode_tag, barcode))
+            tags[barcode_tag] = barcode
         if umi_tag:
-            tags.append((umi_tag, umi))
-        tags.extend([('AS', sum(read.get_tag('AS') for read in reads)), ('NH', 1), ('HI', 1), ('GX', gene),
-                     (config.BAM_CONSENSUS_READ_COUNT_TAG, len(reads))])
+            tags[umi_tag] = umi
+        tags.update({
+            'AS': sum(read.get_tag('AS') for read in reads),
+            'NH': 1,
+            'HI': 1,
+            'GX': gene,
+            config.BAM_CONSENSUS_READ_COUNT_TAG: len(reads),
+        })
         gn = gene_info.get('gene_name')
         if gn:
-            tags.append(('GN', gn))
+            tags['GN'] = gn
         if add_RS_RI:
-            tags.extend([('RS', ';'.join(read.query_name for read in reads)),
-                         ('RI', ';'.join(str(read.get_tag('HI')) for read in reads))])
+            tags.update({
+                'RS': ';'.join(read.query_name for read in reads),
+                'RI': ';'.join(str(read.get_tag('HI')) for read in reads),
+            })
 
         # Figure out what strand the consensus should map to
         consensus_strand = None
