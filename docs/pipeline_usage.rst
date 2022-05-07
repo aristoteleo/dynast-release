@@ -143,7 +143,7 @@ The resulting BAM will contain a collection of consensus alignments and a subset
 and the follwing additional BAM tags.
 
 * :code:`RN` indicating how many reads were used to generate the consensus
-* :code:`RS`, :code:`RI` each containing a semicolon-delimited list of read names and their corresponding alignment indices (:code:`HI` tag in the original BAM) that were used to generate the consensus (only added if :code:`--add-RS-RI` is provided).
+* :code:`RS`, :code:`RI` each containing a semicolon-delimited list of read names and their corresponding alignment indices (:code:`HI` tag in the original BAM) that were used to generate the consensus (only added if :code:`--add-RS-RI` is provided)
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
