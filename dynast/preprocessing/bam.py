@@ -597,7 +597,7 @@ def sort_and_index_bam(bam_path, out_path, n_threads=8, temp_dir=None):
 
     # Check if BAM index exists and create one if it doesn't.
     bai_path = f'{bam_path}.bai'
-    if not utils.all_exists(bai_path):
+    if not utils.all_exists(bai_path) or not bam_sorted:
         logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
         pysam.index(bam_path, bai_path, '-@', str(n_threads))
 
