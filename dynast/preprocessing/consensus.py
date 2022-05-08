@@ -267,7 +267,7 @@ def call_consensus(
     # Start processes for consensus calling
     logger.debug(f'Spawning {n_threads} processes')
     manager = multiprocessing.Manager()
-    args_q = manager.Queue(1000 * n_threads)
+    args_q = manager.Queue(10000 * n_threads)
     results_q = manager.Queue()
     workers = [
         multiprocessing.Process(
