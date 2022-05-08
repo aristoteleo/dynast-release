@@ -15,12 +15,24 @@ Here, we assume the appropriate STAR index has already been built (see :ref:`ref
 
 This will run STAR alignment and output files to :code:`path/to/align/output`.
 
-Quantification
-^^^^^^^^^^^^^^
-The alignment BAM is generated at :code:`path/to/align/output/Aligned.sortedByCoord.out.bam`, which we provde as input to :code:`dynast count`. We also need to provide the gene annotation GTF that was used to generate the STAR index to :code:`-g`.
+Consensus
+^^^^^^^^^
+Optionally, we can call consensus sequences for each UMI using :code:`dynast consensus`. This command requires the alignment BAM and the gene annotation GTF that was used to generate the STAR index.
 
 .. code:: text
 
-	dynast count -g path/to/GTF.gtf --barcode-tag CB --umi-tag UB path/to/align/output/Aligned.sortedByCoord.out.bam -o path/to/count/output --conversion TC
+    dynast consensus -g path/to/GTF.gtf --barcode-tag CB --umi-tag UB path/to/align/output/Aligned.sortedByCoord.out.bam -o path/to/consensus/output
+
+This will create a new BAM file named :code:`path/to/consensus/output/consensus.bam`, which you can then use in the next step in place of the original alignment BAM.
+
+Quantification
+^^^^^^^^^^^^^^
+Finally, to quantify the number of labeled/unlabeled RNA, we run :code:`dynast count` with the appropriate alignment BAM and the gene annotation GTF that was used to generate the STAR index to :code:`-g`.
+
+.. code:: text
+
+	dynast count -g path/to/GTF.gtf --barcode-tag CB --umi-tag UB path/to/alignment.bam -o path/to/count/output --conversion TC
+
+where :code:`path/to/alignment.bam` should be :code:`path/to/align/output/Aligned.sortedByCoord.out.bam` if you did not run :code:`dynast consensus`, or :code:`path/to/consensus/output/consensus.bam` if you did.
 
 This will quantify all RNA species and write the count matrices to :code:`path/to/count/output/adata.h5ad`.

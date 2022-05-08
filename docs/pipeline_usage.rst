@@ -102,7 +102,7 @@ Calling consensus sequences with :code:`consensus`
 
     usage: dynast consensus [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF [-o OUT] [--umi-tag TAG]
                             [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
-                            [--quality QUALITY] [--add-RS-RI]
+                            [--quality QUALITY] [--barcodes TXT] [--add-RS-RI]
                             bam
 
     Generate consensus sequences
@@ -128,6 +128,7 @@ Calling consensus sequences with :code:`consensus`
       --quality QUALITY     Base quality threshold. When generating a consensus nucleotide at a certain position, the base
                             with smallest error probability below this quality threshold is chosen. If no base meets this
                             criteria, the reference base is chosen. (default: 27)
+      --barcodes TXT        Textfile containing filtered cell barcodes. Only these barcodes will be processed.
       --add-RS-RI           Add custom RS and RI tags to the output BAM, each of which contain a semi-colon delimited list
                             of read names (RS) and alignment indices (RI) of the reads and alignments from which the
                             consensus is derived. This option is useful for debugging.
@@ -154,7 +155,8 @@ Quantifying counts with :code:`count`
     usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
                         [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
                         [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-min-coverage THRESHOLD] [--snp-csv CSV]
-                        [--barcodes TXT] [--no-splicing | --exon-overlap {lenient,strict}] [--control] [--overwrite]
+                        [--barcodes TXT] [--no-splicing | --exon-overlap {lenient,strict}] [--control]
+                        [--dedup-mode {auto,conversion,exon}] [--overwrite]
                         bam
 
     Quantify unlabeled and labeled RNA
@@ -195,6 +197,11 @@ Quantifying counts with :code:`count`
                             reads as spliced if it only overlaps exons, or `lenient`, which assigns reads as spliced if it
                             does not overlap with any introns of at least one transcript. (default: lenient)
       --control             Indicate this is a control sample, which is used to detect SNPs.
+      --dedup-mode {auto,conversion,exon}
+                            Deduplication mode for UMI-based technologies (required `--umi-tag`). Available choices are:
+                            `auto`, `conversion`, `exon`. When `conversion` is used, reads that have at least one of the
+                            provided conversions is prioritized. When `exon` is used, exonic reads are prioritized. By
+                            default (`auto`), the BAM is inspected to select the appropriate mode.
       --overwrite           Overwrite existing files.
 
     required arguments:
@@ -219,6 +226,12 @@ The :code:`--conversion` argument is used to specify the type of conversion that
 Detecting and filtering SNPs
 ''''''''''''''''''''''''''''
 :code:`dynast count` has the ability to detect single-nucleotide polymorphisms (SNPs) by calculating the fraction of reads with a mutation at a certain genomic position. :code:`--snp-threshold` can be used to specify the proportion threshold greater than which a SNP will be called at that position. All conversions/mutations at the genomic positions with SNPs detected in this manner will be filtered out from further processing. In addition, a CSV file containing known SNP positions can be provided with the :code:`--snp-csv` argument. This argument accepts a CSV file containing two columns: contig (i.e. chromosome) and genomic position of known SNPs.
+
+Read deduplication modes
+''''''''''''''''''''''''
+The :code:`--dedup-mode` option is used to select how duplicate reads should be deduplicated for UMI-based technologies (i.e. :code:`--umi-tag` is provided). Two different modes are supported: :code:`conversion` and :code:`exon`. The former prioritizes reads that have at least one conversions provided by :code:`--conversion`. The latter prioritizes exonic reads. See :ref:`quant` for a more technical description of how deduplication is performed. Additionally, see :ref:`consensus_procedure` to get an idea of why selecting the correct option may be important.
+
+By default, the :code:`--dedup-mode` is set to :code:`auto`, which sets the deduplication mode to :code:`exon` if the input BAM is detected to be a consensus-called BAM (a BAM generated with :code:`dynast consensus`). Otherwise, it is set to :code:`conversion`. This option has no effect for non-UMI technologies.
 
 .. _estimate:
 

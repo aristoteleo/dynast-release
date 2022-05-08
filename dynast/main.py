@@ -414,7 +414,18 @@ def setup_count_args(parser, parent):
         help='Indicate this is a control sample, which is used to detect SNPs.',
         action='store_true',
     )
-    parser_count.add_argument('--dedup-mode', help=argparse.SUPPRESS, type=str, choices=['auto', 'conversion', 'exon'])
+    parser_count.add_argument(
+        '--dedup-mode',
+        help=(
+            'Deduplication mode for UMI-based technologies (required `--umi-tag`). '
+            'Available choices are: `auto`, `conversion`, `exon`. When `conversion` is used, '
+            'reads that have at least one of the provided conversions is prioritized. '
+            'When `exon` is used, exonic reads are prioritized. By default (`auto`), '
+            'the BAM is inspected to select the appropriate mode.'
+        ),
+        type=str,
+        choices=['auto', 'conversion', 'exon'],
+    )
     parser_count.add_argument(
         '--overwrite',
         help='Overwrite existing files.',
