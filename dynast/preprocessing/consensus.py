@@ -65,24 +65,36 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
     # It's possible to switch these to sparse matrices if memory becomes an issue.
     sequence = np.zeros((length, len(BASES)), dtype=np.uint32)
     reference = np.full(length, -1, dtype=np.int8)  # -1 means unobserved
+    deletions = 0
 
     for read in reads:
         read_sequence = read.query_sequence.upper()
         read_qualities = read.query_qualities
-        for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=True, with_seq=True):
-            read_base = read_sequence[read_i]
+        for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
+            # Insertion
+            if genome_i is None:
+                continue
+            i = genome_i - left_pos
             genome_base = _genome_base.upper()
-            if 'N' in (genome_base, read_base):
+            if genome_base == 'N':
+                continue
+            # Deletion
+            if read_i is None and reference[i] < 0:
+                reference[i] = BASE_IDX[genome_base]
+                deletions += 1
                 continue
 
-            i = genome_i - left_pos
+            read_base = read_sequence[read_i]
+            if read_base == 'N':
+                continue
+
             if reference[i] < 0:
                 reference[i] = BASE_IDX[genome_base]
             sequence[i, BASE_IDX[read_base]] += read_qualities[read_i]
 
     # Determine consensus
-    # Note that we ignore any insertions and deletions.
-    consensus_length = (reference >= 0).sum()
+    # Note that we ignore any insertions
+    consensus_length = (reference >= 0).sum() - deletions
     consensus = np.zeros(consensus_length, dtype=np.uint8)
     qualities = np.zeros(consensus_length, dtype=np.uint8)
     cigar = []
@@ -91,6 +103,7 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
     md = []
     md_n = 0
     md_zero = True
+    md_del = False
     nm = 0
     consensus_i = 0
     for i in range(length):
@@ -100,29 +113,52 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
         cigar_op = 'N'
         if ref >= 0:
             seq = sequence[i]
-            base = seq.argmax()
-            base_q = seq[base]
-            if base_q < quality:
-                base = ref
 
-            # We use the STAR convention of using M cigar operation to mean
-            # both matches AND mismatches, ignoring the X cigar operation exists.
-            cigar_op = 'M'
-
-            if ref == base:
-                md_n += 1
-                md_zero = False
-            else:
+            # Deletion
+            if (seq == 0).all():
+                cigar_op = 'D'
                 if md_n > 0 or md_zero:
                     md.append(str(md_n))
                     md_n = 0
-                md.append(BASES[ref])
-                md_zero = True
-                nm += 1
 
-            consensus[consensus_i] = base
-            qualities[consensus_i] = min(base_q, 42)  # Clip to maximum PHRED score
-            consensus_i += 1
+                if not md_del:
+                    md.append('^')
+                md.append(BASES[ref])
+                md_del = True
+
+            # Match
+            else:
+                md_del = False
+
+                # On ties, select reference if present. Otherwise, choose lexicographically.
+                base_q = seq.max()
+                if base_q < quality:
+                    base = ref
+                else:
+                    bases = (seq == base_q).nonzero()[0]
+                    if len(bases) > 0 and ref in bases:
+                        base = ref
+                    else:
+                        base = bases[0]
+
+                # We use the STAR convention of using M cigar operation to mean
+                # both matches AND mismatches, ignoring the X cigar operation exists.
+                cigar_op = 'M'
+
+                if ref == base:
+                    md_n += 1
+                    md_zero = False
+                else:
+                    if md_n > 0 or md_zero:
+                        md.append(str(md_n))
+                        md_n = 0
+                    md.append(BASES[ref])
+                    md_zero = True
+                    nm += 1
+
+                consensus[consensus_i] = base
+                qualities[consensus_i] = min(base_q, 42)  # Clip to maximum PHRED score
+                consensus_i += 1
 
         if cigar_op == last_cigar_op:
             cigar_n += 1
