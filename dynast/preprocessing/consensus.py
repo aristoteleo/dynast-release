@@ -71,16 +71,17 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
         read_qualities = read.query_qualities
         for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
             # Insertion
-            if genome_i is None:
+            if genome_i is None or _genome_base is None:
                 continue
             i = genome_i - left_pos
             genome_base = _genome_base.upper()
             if genome_base == 'N':
                 continue
             # Deletion
-            if read_i is None and reference[i] < 0:
-                reference[i] = BASE_IDX[genome_base]
-                deletions += 1
+            if read_i is None:
+                if reference[i] < 0:
+                    reference[i] = BASE_IDX[genome_base]
+                    deletions += 1
                 continue
 
             read_base = read_sequence[read_i]
@@ -93,7 +94,7 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
 
     # Determine consensus
     # Note that we ignore any insertions
-    consensus_length = (reference >= 0).sum() - deletions
+    consensus_length = (sequence > 0).any(axis=1).sum()
     consensus = np.zeros(consensus_length, dtype=np.uint8)
     qualities = np.zeros(consensus_length, dtype=np.uint8)
     cigar = []
@@ -248,22 +249,30 @@ def call_consensus(
                 genes.append(gene)
         return genes
 
-    def create_tags_and_strand(barcode, umi, gene_info, reads):
-        tags = {}
+    def create_tags_and_strand(barcode, umi, reads, gene_info):
+        tags = {
+            'AS': sum(read.get_tag('AS') for read in reads),
+            'NH': 1,
+            'HI': 1,
+            config.BAM_CONSENSUS_READ_COUNT_TAG: len(reads),
+        }
         if barcode_tag:
             tags[barcode_tag] = barcode
         if umi_tag:
             tags[umi_tag] = umi
-        tags.update({
-            'AS': sum(read.get_tag('AS') for read in reads),
-            'NH': 1,
-            'HI': 1,
-            'GX': gene,
-            config.BAM_CONSENSUS_READ_COUNT_TAG: len(reads),
-        })
-        gn = gene_info.get('gene_name')
-        if gn:
-            tags['GN'] = gn
+
+        if gene_tag:
+            gene_id = None
+            for read in reads:
+                if read.has_tag(gene_tag):
+                    gene_id = read.get_tag(gene_tag)
+                    break
+
+            if gene_id:
+                tags['GX'] = gene_id
+                gn = gene_info.get('gene_name')
+                if gn:
+                    tags['GN'] = gn
         if add_RS_RI:
             tags.update({
                 'RS': ';'.join(read.query_name for read in reads),
@@ -326,7 +335,7 @@ def call_consensus(
                     continue
 
                 barcode = read.get_tag(barcode_tag) if barcode_tag else None
-                if barcodes and barcode not in barcodes:
+                if barcode == '-' or (barcodes and barcode not in barcodes):
                     continue
 
                 contig = read.reference_name
@@ -399,7 +408,7 @@ def call_consensus(
                                         out.write(reads[0])
                                         continue
 
-                                    tags, consensus_strand = create_tags_and_strand(barcode, umi, gene_info, reads)
+                                    tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_info)
 
                                     # Save for multiprocessing later.
                                     args_q.put(([read.to_string()
@@ -433,7 +442,7 @@ def call_consensus(
                             out.write(reads[0])
                             continue
 
-                        tags, consensus_strand = create_tags_and_strand(barcode, umi, gene_infos[gene], reads)
+                        tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_infos[gene])
                         args_q.put(([read.to_string() for read in reads], header_dict, tags, consensus_strand))
 
             # Signal to workers to terminate once queue is depleted.

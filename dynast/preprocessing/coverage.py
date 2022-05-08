@@ -132,7 +132,7 @@ def calculate_coverage_contig(
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'
-            if barcodes and barcode not in barcodes:
+            if barcode == '-' or (barcodes and barcode not in barcodes):
                 continue
 
             read_id = read.query_name
