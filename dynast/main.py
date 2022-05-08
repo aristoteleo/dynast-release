@@ -233,6 +233,13 @@ def setup_consensus_args(parser, parent):
         default=27
     )
     parser_consensus.add_argument(
+        '--barcodes',
+        metavar='TXT',
+        help=('Textfile containing filtered cell barcodes. Only these barcodes will '
+              'be processed.'),
+        type=str,
+    )
+    parser_consensus.add_argument(
         '--add-RS-RI',
         help=(
             'Add custom RS and RI tags to the output BAM, each of which contain a '
@@ -659,6 +666,18 @@ def parse_consensus(parser, args, temp_dir=None):
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
+    # Read barcodes
+    barcodes = set()
+    if args.barcodes:
+        if not args.barcode_tag:
+            parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
+
+        with open(args.barcodes, 'r') as f:
+            barcodes = set(line.strip() for line in f if not line.isspace())
+        logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
+    else:
+        logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
+
     from .consensus import consensus
     consensus(
         args.bam,
@@ -668,6 +687,7 @@ def parse_consensus(parser, args, temp_dir=None):
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
+        barcodes=barcodes,
         quality=args.quality,
         add_RS_RI=args.add_RS_RI,
         n_threads=args.t,
@@ -685,10 +705,13 @@ def parse_count(parser, args, temp_dir=None):
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = None
+    barcodes = set()
     if args.barcodes:
+        if not args.barcode_tag:
+            parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
+
         with open(args.barcodes, 'r') as f:
-            barcodes = [line.strip() for line in f if not line.isspace()]
+            barcodes = set(line.strip() for line in f if not line.isspace())
         logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')

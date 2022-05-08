@@ -190,6 +190,7 @@ def call_consensus(
     umi_tag=None,
     barcode_tag=None,
     gene_tag='GX',
+    barcodes=None,
     quality=27,
     add_RS_RI=False,
     temp_dir=None,
@@ -287,11 +288,13 @@ def call_consensus(
             for i, read in tqdm(enumerate(f.fetch()), total=ngs.bam.count_bam(bam_path), ascii=True, smoothing=0.01,
                                 desc='Calling consensus'):
                 if skip_alignment(read, required_tags):
-                    out.write(read)
+                    continue
+
+                barcode = read.get_tag(barcode_tag) if barcode_tag else None
+                if barcodes and barcode not in barcodes:
                     continue
 
                 contig = read.reference_name
-                barcode = read.get_tag(barcode_tag) if barcode_tag else None
                 umi = read.get_tag(umi_tag) if umi_tag else None
 
                 read_id = read.query_name

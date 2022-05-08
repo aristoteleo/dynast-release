@@ -290,7 +290,7 @@ def count(
 
     if barcodes:
         count_barcodes = set(df_counts_uncomplemented['barcode'])
-        missing_barcodes = set(barcodes) - count_barcodes
+        missing_barcodes = barcodes - count_barcodes
         if missing_barcodes:
             logger.warning(
                 f'{len(missing_barcodes)} barcodes are missing from {counts_path}. '
