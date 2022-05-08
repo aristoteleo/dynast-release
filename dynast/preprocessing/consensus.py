@@ -54,8 +54,7 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
         raise Exception("Can not call consensus from reads mapping to multiple contigs.")
 
     # Pysam coordinates are [start, end)
-    reads = sorted(reads, key=lambda read: read.reference_start)
-    left_pos = reads[0].reference_start
+    left_pos = min(read.reference_start for read in reads)
     right_pos = max(read.reference_end for read in reads)
     length = right_pos - left_pos
 

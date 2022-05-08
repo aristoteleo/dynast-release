@@ -78,4 +78,3 @@ class TestConsensus(mixins.TestMixin, TestCase):
         self.assertEqual(14, result.reference_end)
         self.assertEqual('10M1D2M', result.cigarstring)
         self.assertEqual('5T4^A2', result.get_tag('MD'))
-        print(result.get_aligned_pairs(matches_only=True, with_seq=True))
