@@ -27,6 +27,74 @@ Therefore, simply selecting one read and discarding the rest will cause a bias t
 
 .. Note:: Only primary, not-duplicate, mapped BAM entries are considered (equivalent to the :code:`0x4`, :code:`0x100`, :code:`0x400` BAM flags being unset). For paired reads, only properly paired alignments (:code:`0x2` BAM flag being set) are considered. Additionally, if :code:`--barcode-tag` or :code:`--umi-tag` are provided, only BAM entries that have these tags are considered. Any alignments that do not satisfy all of these conditions are not written to the output BAM.
 
+Consensus rules
+'''''''''''''''
+
+Here are the rules that are used to select a consensus nucleotide for a certain genomic positions, assuming :code:`--quality 27`.
+
+1. Nucleotide with highest sum of base quality scores, given that the sum is greater than or equal to :code:`--quality`.
+
++---------------+------------+---------------+
+| Source        | Nucleotide | Quality score |
++===============+============+===============+
+| Reference     | A          | \-            |
++---------------+------------+---------------+
+| Read 1        | C          | 10            |
++---------------+------------+---------------+
+| Read 2        | C          | 20            |
++---------------+------------+---------------+
+| Read 3        | A          | 20            |
++---------------+------------+---------------+
+| **Consensus** | **C**      | **30**        |
++---------------+------------+---------------+
+
+
+2. Reference nucleotide, if all of the sum of quality scores are less than :code:`--quality`.
+
++---------------+------------+---------------+
+| Source        | Nucleotide | Quality score |
++===============+============+===============+
+| Reference     | A          | \-            |
++---------------+------------+---------------+
+| Read 1        | C          | 10            |
++---------------+------------+---------------+
+| Read 2        | C          | 10            |
++---------------+------------+---------------+
+| **Consensus** | **A**      | **20**        |
++---------------+------------+---------------+
+
+
+3. When there is a tie in the highest sum of base quality scores and the reference nucleotide is one of them, the reference nucleotide.
+
++---------------+------------+---------------+
+| Source        | Nucleotide | Quality score |
++===============+============+===============+
+| Reference     | A          | \-            |
++---------------+------------+---------------+
+| Read 1        | C          | 30            |
++---------------+------------+---------------+
+| Read 2        | A          | 30            |
++---------------+------------+---------------+
+| **Consensus** | **A**      | **30**        |
++---------------+------------+---------------+
+
+
+4.  When there is a tie in the highest sum of base quality scores and the reference nucleotide is not one of them, the first nucleotide in lexicographic order (A, C, G, T).
+
+
++---------------+------------+---------------+
+| Source        | Nucleotide | Quality score |
++===============+============+===============+
+| Reference     | T          | \-            |
++---------------+------------+---------------+
+| Read 1        | C          | 30            |
++---------------+------------+---------------+
+| Read 2        | A          | 30            |
++---------------+------------+---------------+
+| **Consensus** | **A**      | **30**        |
++---------------+------------+---------------+
+
+
 Count procedure
 ^^^^^^^^^^^^^^^
 :code:`dynast count` procedure consists of three steps:

@@ -47,7 +47,7 @@ Basic usage
 ^^^^^^^^^^^
 
 .. image:: _static/workflow.svg
-	:width: 600
+	:width: 700
 	:align: center
 
 Prerequisites:
