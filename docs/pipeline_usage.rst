@@ -80,6 +80,7 @@ UMI-based technologies
 For UMI-based technologies (such as Drop-seq, 10X Chromium, scNT-seq), the following BAM tags are written to the alignment BAM.
 
 * :code:`MD`
+* :code:`HI`, :code:`AS` for alignment index and score
 * :code:`CR`, :code:`CB` for raw and corrected barcodes
 * :code:`UR`, :code:`UB` for raw and corrected UMIs
 
@@ -87,12 +88,63 @@ For UMI-based technologies (such as Drop-seq, 10X Chromium, scNT-seq), the follo
 
 Plate-based technologies
 ''''''''''''''''''''''''
-For plate-based technologies (such as Smart-Seq), the following BAM tags are written to the alignment BAM.
+For plate-based technologies (such as Smart-Seq), the following BAM tags are written to the alignment BAM. See
 
-* :code:`MD` BAM tag
-* :code:`HI` BAM tag for paired reads
-* :code:`RG` BAM tag, indicating the sample name
+* :code:`MD`
+* :code:`HI`, :code:`AS` for alignment index and score
+* :code:`RG` indicating the sample name
 
+Calling consensus sequences with :code:`consensus`
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:code:`dynast consensus` parses the alignment BAM to generate consensus sequences for each sequenced mRNA molecule (see :ref:`consensus_procedure`).
+
+.. code-block:: text
+
+    usage: dynast consensus [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF [-o OUT] [--umi-tag TAG]
+                            [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
+                            [--quality QUALITY] [--barcodes TXT] [--add-RS-RI]
+                            bam
+
+    Generate consensus sequences
+
+    positional arguments:
+      bam                   Alignment BAM file that contains the appropriate UMI and barcode tags, specifiable with
+                            `--umi-tag`, and `--barcode-tag`.
+
+    optional arguments:
+      -h, --help            Show this help message and exit
+      --tmp TMP             Override default temporary directory
+      --keep-tmp            Do not delete the tmp directory
+      --verbose             Print debugging information
+      -t THREADS            Number of threads to use (default: 8)
+      -o OUT                Path to output directory (default: current directory)
+      --umi-tag TAG         BAM tag to use as unique molecular identifiers (UMI). If not provided, all reads are assumed
+                            to be unique. (default: None)
+      --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single
+                            cell. (default: None)
+      --gene-tag TAG        BAM tag to use as gene assignments (default: GX)
+      --strand {forward,reverse,unstranded}
+                            Read strandedness. (default: `forward`)
+      --quality QUALITY     Base quality threshold. When generating a consensus nucleotide at a certain position, the base
+                            with smallest error probability below this quality threshold is chosen. If no base meets this
+                            criteria, the reference base is chosen. (default: 27)
+      --barcodes TXT        Textfile containing filtered cell barcodes. Only these barcodes will be processed.
+      --add-RS-RI           Add custom RS and RI tags to the output BAM, each of which contain a semi-colon delimited list
+                            of read names (RS) and alignment indices (RI) of the reads and alignments from which the
+                            consensus is derived. This option is useful for debugging.
+
+    required arguments:
+      -g GTF                Path to GTF file used to generate the STAR index
+
+The resulting BAM will contain a collection of consensus alignments and a subset of original alignments (for those alignments for which a consensus could not be determined). The latter are identical to those in the original BAM, while the names of the former will be seemingly random sequences of letters and numbers (in reality, these are SHA256 checksums of the grouped read names). They will also contain the following modified BAM tags
+
+* :code:`AS` is now the *sum* of the alignment scores of the reads
+* :code:`HI`, the alignment index, is always 1
+
+and the follwing additional BAM tags.
+
+* :code:`RN` indicating how many reads were used to generate the consensus
+* :code:`RS`, :code:`RI` each containing a semicolon-delimited list of read names and their corresponding alignment indices (:code:`HI` tag in the original BAM) that were used to generate the consensus (only added if :code:`--add-RS-RI` is provided)
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -102,8 +154,9 @@ Quantifying counts with :code:`count`
 
     usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
                         [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
-                        [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-csv CSV] [--barcodes BARCODES]
-                        [--no-splicing] [--control] [--overwrite]
+                        [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-min-coverage THRESHOLD] [--snp-csv CSV]
+                        [--barcodes TXT] [--no-splicing | --exon-overlap {lenient,strict}] [--control]
+                        [--dedup-mode {auto,conversion,exon}] [--overwrite]
                         bam
 
     Quantify unlabeled and labeled RNA
@@ -131,13 +184,25 @@ Quantifying counts with :code:`count`
       --snp-threshold THRESHOLD
                             Conversions with (# conversions) / (# reads) greater than this threshold will be considered a
                             SNP and ignored. (default: no SNP detection)
+      --snp-min-coverage THRESHOLD
+                            For a conversion to be considered as a SNP, there must be at least this many reads mapping to
+                            that region. (default: 1)
       --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
-      --barcodes TXT   Textfile containing filtered cell barcodes. Only these barcodes will be processed.
+      --barcodes TXT        Textfile containing filtered cell barcodes. Only these barcodes will be processed.
       --no-splicing, --transcriptome-only
                             Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
                             are not assigned to the transcriptome.
+      --exon-overlap {lenient,strict}
+                            Algorithm to use to detect spliced reads (that overlap exons). May be `strict`, which assigns
+                            reads as spliced if it only overlaps exons, or `lenient`, which assigns reads as spliced if it
+                            does not overlap with any introns of at least one transcript. (default: lenient)
       --control             Indicate this is a control sample, which is used to detect SNPs.
-      --overwrite
+      --dedup-mode {auto,conversion,exon}
+                            Deduplication mode for UMI-based technologies (required `--umi-tag`). Available choices are:
+                            `auto`, `conversion`, `exon`. When `conversion` is used, reads that have at least one of the
+                            provided conversions is prioritized. When `exon` is used, exonic reads are prioritized. By
+                            default (`auto`), the BAM is inspected to select the appropriate mode.
+      --overwrite           Overwrite existing files.
 
     required arguments:
       -g GTF                Path to GTF file used to generate the STAR index
@@ -145,6 +210,8 @@ Quantifying counts with :code:`count`
                             The type of conversion(s) introduced at a single timepoint. Multiple conversions can be
                             specified with a comma-delimited list. For example, T>C and A>G is TC,AG. This option can be
                             specified multiple times (i.e. dual labeling), for each labeling timepoint.
+
+.. _basic_arguments:
 
 Basic arguments
 '''''''''''''''
@@ -159,6 +226,12 @@ The :code:`--conversion` argument is used to specify the type of conversion that
 Detecting and filtering SNPs
 ''''''''''''''''''''''''''''
 :code:`dynast count` has the ability to detect single-nucleotide polymorphisms (SNPs) by calculating the fraction of reads with a mutation at a certain genomic position. :code:`--snp-threshold` can be used to specify the proportion threshold greater than which a SNP will be called at that position. All conversions/mutations at the genomic positions with SNPs detected in this manner will be filtered out from further processing. In addition, a CSV file containing known SNP positions can be provided with the :code:`--snp-csv` argument. This argument accepts a CSV file containing two columns: contig (i.e. chromosome) and genomic position of known SNPs.
+
+Read deduplication modes
+''''''''''''''''''''''''
+The :code:`--dedup-mode` option is used to select how duplicate reads should be deduplicated for UMI-based technologies (i.e. :code:`--umi-tag` is provided). Two different modes are supported: :code:`conversion` and :code:`exon`. The former prioritizes reads that have at least one conversions provided by :code:`--conversion`. The latter prioritizes exonic reads. See :ref:`quant` for a more technical description of how deduplication is performed. Additionally, see :ref:`consensus_procedure` to get an idea of why selecting the correct option may be important.
+
+By default, the :code:`--dedup-mode` is set to :code:`auto`, which sets the deduplication mode to :code:`exon` if the input BAM is detected to be a consensus-called BAM (a BAM generated with :code:`dynast consensus`). Otherwise, it is set to :code:`conversion`. This option has no effect for non-UMI technologies.
 
 .. _estimate:
 
@@ -240,14 +313,16 @@ A typical workflow for a control sample is the following.
 
 .. code-block:: text
 
-  dynast count --control --snp-threshold 0.5 -o control_count --conversion TC -g GTF.gtf CONTROL.bam
-	dynast estimate --control -o control_estimate control_count
+    dynast count --control --snp-threshold 0.5 [...] -o control_count --conversion TC -g GTF.gtf CONTROL.bam
+    dynast estimate --control -o control_estimate control_count
+
+Where :code:`[...]` indicates the usual options that would be used for :code:`dynast count` if this were not control samples. See :ref:`basic_arguments` for these options.
 
 The :code:`dynast count` command detects SNPs from the control sample and outputs them to the file :code:`snps.csv` in the output directory :code:`control_count`. The :code:`dynast estimate` calculates the background conversion rate of unlabeled RNA to the file :code:`p_e.csv` in the output directory :code:`control_estimate`. These files can then be used as input when running the test sample.
 
 .. code-block:: text
 
-	dynast count --snp-csv control_count/snps.csv -o test_count --conversion TC -g GTF.gtf INPUT.bam
-	dynast estimate --p-e control_estimate/p_e.csv -o test_estimate test_count
+    dynast count --snp-csv control_count/snps.csv -o test_count [...] INPUT.bam
+    dynast estimate --p-e control_estimate/p_e.csv -o test_estimate test_count
 
 The above set of commands runs quantification and estimation on the test sample using the SNPs detected from the control sample (:code:`control_count/snps.csv`) and the background conversion rate estimated from the control sample (:code:`control_estimate/p_e.csv`).

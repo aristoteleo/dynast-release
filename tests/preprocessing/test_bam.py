@@ -59,7 +59,8 @@ class TestBam(mixins.TestMixin, TestCase):
                                  n_threads=1,
                                  temp_dir=self.temp_dir,
                                  nasc=False,
-                                 velocity=True
+                                 velocity=True,
+                                 strict_exon_overlap=True,
                              ))
 
             self.assertTrue(mixins.files_equal(self.umi_conversions_path, conversions_path))

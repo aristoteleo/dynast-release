@@ -91,20 +91,20 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     return rates_path
 
 
-def aggregate_counts(df_counts, aggregates_path, conversions=['TC']):
+def aggregate_counts(df_counts, aggregates_path, conversions=frozenset([('TC',)])):
     """Aggregate conversion counts for each pair of bases.
 
     :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
     :param aggregates_path: path to write aggregate CSV
     :type aggregates_path: str
-    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
     :type conversions: list, optional
 
     :return: path to aggregate CSV that was written
     :rtype: str
     """
-    flattened = list(utils.flatten_list(conversions))
+    flattened = list(utils.flatten_iter(conversions))
     bases = list(set(f[0] for f in flattened))
     df_combined = df_counts[['barcode', 'GX']].copy()
     df_combined['conversion'] = df_counts[flattened].sum(axis=1)

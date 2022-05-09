@@ -30,6 +30,12 @@ class TestConversion(mixins.TestMixin, TestCase):
         self.assertEqual(df_gene.iloc[0]['TC'], df_complemented_gene.iloc[0]['AG'])
         self.assertEqual(df_gene.iloc[0]['CG'], df_complemented_gene.iloc[0]['GC'])
 
+    def test_complement_counts_inverse(self):
+        df = pd.read_csv(self.umi_counts_path)
+        gene_infos = utils.read_pickle(self.umi_genes_path)
+        df_inverse = conversion.complement_counts(conversion.complement_counts(df, gene_infos), gene_infos)
+        pd.testing.assert_frame_equal(df, df_inverse[df.columns])
+
     def test_drop_multimappers(self):
         rows = [
             ['read1', 'BC', 'GX', 'unassigned', True, 0] + [0] * len(conversion.COLUMNS),
@@ -110,6 +116,19 @@ class TestConversion(mixins.TestMixin, TestCase):
         ]
         df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX', 'score'] + conversion.COLUMNS + ['transcriptome'])
         df_deduplicated = conversion.deduplicate_counts(df)
+        self.assertEqual(1, df_deduplicated.shape[0])
+        self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
+
+    def test_deduplicate_counts_desired_conversion(self):
+        rows = [
+            ['barcode', 'umi', 'GX', 0] + [1] * len(conversion.CONVERSION_COLUMNS) +
+            [0] * len(conversion.BASE_COLUMNS) + [True],
+            ['barcode', 'umi', 'GX', 0] + [0] * len(conversion.CONVERSION_COLUMNS) +
+            [0] * len(conversion.BASE_COLUMNS) + [True],
+        ]
+        rows[1][4] = 100
+        df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX', 'score'] + conversion.COLUMNS + ['transcriptome'])
+        df_deduplicated = conversion.deduplicate_counts(df, conversions=['TC'])
         self.assertEqual(1, df_deduplicated.shape[0])
         self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
 

@@ -26,7 +26,7 @@ flatten_dict_values = ngs.utils.flatten_dict_values
 mkstemp = ngs.utils.mkstemp
 all_exists = ngs.utils.all_exists
 flatten_dictionary = ngs.utils.flatten_dictionary
-flatten_list = ngs.utils.flatten_list
+flatten_iter = ngs.utils.flatten_iter
 merge_dictionaries = ngs.utils.merge_dictionaries
 write_pickle = ngs.utils.write_pickle
 read_pickle = ngs.utils.read_pickle
@@ -251,7 +251,7 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
     with ngs.progress.progress(total=total, unit_scale=True, desc=desc) as pbar:
         previous_progress = 0
         while any(not async_result.ready() for async_result in async_results):
-            time.sleep(0.1)
+            time.sleep(0.01)
             progress = counter.value
             pbar.update(progress - previous_progress)
             pbar.refresh()
@@ -378,7 +378,7 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
     return matrix.tocsr()
 
 
-def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=['TC']):
+def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=('TC',)):
     """Split counts dataframe into two count matrices by a column.
 
     :param df_counts: counts dataframe
@@ -391,21 +391,21 @@ def split_counts(df_counts, barcodes, features, barcode_column='barcode', featur
     :type barcode_column: str, optional
     :param feature_column: column in counts dataframe to use as features, defaults to `GX`
     :type feature_column: str, optional
-    :param conversions: conversion(s) in question, defaults to `['TC']`
-    :type conversions: list, optional
+    :param conversions: conversion(s) in question, defaults to `('TC',)`
+    :type conversions: tuple, optional
 
     :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
     :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
     """
     matrix_unlabeled = counts_to_matrix(
-        df_counts[(df_counts[conversions] == 0).all(axis=1)],
+        df_counts[(df_counts[list(conversions)] == 0).all(axis=1)],
         barcodes,
         features,
         barcode_column=barcode_column,
         feature_column=feature_column
     )
     matrix_labeled = counts_to_matrix(
-        df_counts[(df_counts[conversions] > 0).any(axis=1)],
+        df_counts[(df_counts[list(conversions)] > 0).any(axis=1)],
         barcodes,
         features,
         barcode_column=barcode_column,
@@ -449,12 +449,12 @@ def split_matrix(matrix, pis, barcodes, features):
     return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
 
 
-def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
+def results_to_adata(df_counts, conversions=frozenset([('TC',)]), gene_infos=None, pis=None):
     """Compile all results to a single anndata.
 
     :param df_counts: counts dataframe, with complemented reverse strand bases
     :type df_counts: pandas.DataFrame
-    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
     :type conversions: list, optional
     :param gene_infos: dictionary containing gene information, defaults to `None`
     :type gene_infos: dict, optional
@@ -466,7 +466,7 @@ def results_to_adata(df_counts, conversions=['TC'], gene_infos=None, pis=None):
     """
     pis = pis or {}
     gene_infos = gene_infos or {}
-    all_conversions = sorted(flatten_list(conversions))
+    all_conversions = sorted(flatten_iter(conversions))
     transcriptome_exists = df_counts['transcriptome'].any()
     transcriptome_only = df_counts['transcriptome'].all()
     velocities = df_counts['velocity'].unique()

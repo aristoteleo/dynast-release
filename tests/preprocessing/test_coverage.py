@@ -1,8 +1,6 @@
 import os
 from unittest import mock, TestCase
 
-import pandas as pd
-
 import dynast.preprocessing.bam as bam
 import dynast.preprocessing.coverage as coverage
 
@@ -16,10 +14,17 @@ class TestCoverage(mixins.TestMixin, TestCase):
 
     def test_calculate_coverage(self):
         coverage_path = os.path.join(self.temp_dir, 'coverage.csv')
+        df_alignments = bam.read_alignments(self.control_alignments_path)
+        df_conversions = bam.read_conversions(self.control_conversions_path)
+        alignments = bam.select_alignments(df_alignments)
+        df_conversions = df_conversions[[
+            key in alignments for key in df_conversions[['read_id', 'index']].itertuples(index=False, name=None)
+        ]]
+        df_conversions = df_conversions.loc[df_conversions['conversion'].isin(('TC', 'AG')), ['contig', 'genome_i']]
+
         conversions = {
             contig: set(df_part['genome_i'])
-            for contig, df_part in pd.read_csv(self.control_conversions_path, usecols=['contig', 'genome_i']
-                                               ).drop_duplicates().groupby('contig')
+            for contig, df_part in df_conversions.groupby('contig', sort=False, observed=True)
         }
         alignments = bam.select_alignments(bam.read_alignments(self.control_alignments_path))
         with mock.patch('dynast.preprocessing.coverage.utils.display_progress_with_counter'):
@@ -33,7 +38,6 @@ class TestCoverage(mixins.TestMixin, TestCase):
                     umi_tag='UB',
                     barcode_tag='CB',
                     barcodes=None,
-                    n_threads=2,
                     temp_dir=self.temp_dir,
                     velocity=True,
                 )

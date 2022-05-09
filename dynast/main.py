@@ -6,10 +6,10 @@ import sys
 import warnings
 
 from . import __version__
-# from .config import RE_CHOICES
+from .config import BAM_GENE_TAG
 from .logging import logger
 from .technology import TECHNOLOGIES_MAP
-from .utils import flatten_list, patch_mp_connection_bpo_17560
+from .utils import flatten_iter, patch_mp_connection_bpo_17560
 
 
 def print_technologies():
@@ -133,7 +133,7 @@ def setup_align_args(parser, parent):
         help=('Path to file of whitelisted barcodes to correct to. '
               'If not provided, all barcodes are used.'),
     )
-    parser_align.add_argument('--overwrite', help='Overwrite existing alignment files', action='store_true')
+    parser_align.add_argument('--overwrite', help='Overwrite existing files.', action='store_true')
     parser_align.add_argument(
         '--STAR-overrides', metavar='ARGUMENTS', help='Arguments to pass directly to STAR.', type=str, default=None
     )
@@ -154,6 +154,110 @@ def setup_align_args(parser, parent):
     )
 
     return parser_align
+
+
+def setup_consensus_args(parser, parent):
+    """Helper function to set up a subparser for the `consensus` command.
+
+    :param parser: argparse parser to add the `consensus` command to
+    :type args: argparse.ArgumentParser
+    :param parent: argparse parser parent of the newly added subcommand.
+                   used to inherit shared commands/flags
+    :type args: argparse.ArgumentParser
+
+    :return: the newly added parser
+    :rtype: argparse.ArgumentParser
+    """
+    parser_consensus = parser.add_parser(
+        'consensus',
+        description='Generate consensus sequences',
+        help='Generate consensus sequences',
+        parents=[parent],
+    )
+    parser_consensus._actions[0].help = parser_consensus._actions[0].help.capitalize()
+
+    required_consensus = parser_consensus.add_argument_group('required arguments')
+    required_consensus.add_argument(
+        '-g', metavar='GTF', help='Path to GTF file used to generate the STAR index', type=str, required=True
+    )
+    parser_consensus.add_argument(
+        '-o',
+        metavar='OUT',
+        help='Path to output directory (default: current directory)',
+        type=str,
+        default='.',
+    )
+    parser_consensus.add_argument(
+        '--umi-tag',
+        metavar='TAG',
+        help=(
+            'BAM tag to use as unique molecular identifiers (UMI). If not provided, '
+            'all reads are assumed to be unique. (default: None)'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_consensus.add_argument(
+        '--barcode-tag',
+        metavar='TAG',
+        help=(
+            'BAM tag to use as cell barcodes. If not provided, all reads are '
+            'assumed to be from a single cell. (default: None)'
+        ),
+        type=str,
+        default=None,
+    )
+    parser_consensus.add_argument(
+        '--gene-tag',
+        metavar='TAG',
+        help=f'BAM tag to use as gene assignments (default: {BAM_GENE_TAG})',
+        type=str,
+        default=BAM_GENE_TAG,
+    )
+    parser_consensus.add_argument(
+        '--strand',
+        help='Read strandedness. (default: `forward`)',
+        choices=['forward', 'reverse', 'unstranded'],
+        default='forward',
+    )
+    parser_consensus.add_argument(
+        '--quality',
+        metavar='QUALITY',
+        help=(
+            'Base quality threshold. When generating a consensus nucleotide at a '
+            'certain position, the base with smallest error probability below this '
+            'quality threshold is chosen. If no base meets this criteria, the '
+            'reference base is chosen. (default: 27)'
+        ),
+        type=int,
+        default=27
+    )
+    parser_consensus.add_argument(
+        '--barcodes',
+        metavar='TXT',
+        help=('Textfile containing filtered cell barcodes. Only these barcodes will '
+              'be processed.'),
+        type=str,
+    )
+    parser_consensus.add_argument(
+        '--add-RS-RI',
+        help=(
+            'Add custom RS and RI tags to the output BAM, each of which contain a '
+            'semi-colon delimited list of read names (RS) and alignment indices (RI) '
+            'of the reads and alignments from which the consensus is derived. This '
+            'option is useful for debugging.'
+        ),
+        action='store_true'
+    )
+    parser_consensus.add_argument(
+        'bam',
+        help=(
+            'Alignment BAM file that contains the appropriate UMI and barcode tags, '
+            'specifiable with `--umi-tag`, and `--barcode-tag`.'
+        ),
+        type=str,
+    )
+    return parser_consensus
 
 
 def setup_count_args(parser, parent):
@@ -222,9 +326,9 @@ def setup_count_args(parser, parent):
     parser_count.add_argument(
         '--gene-tag',
         metavar='TAG',
-        help='BAM tag to use as gene assignments (default: GX)',
+        help=f'BAM tag to use as gene assignments (default: {BAM_GENE_TAG})',
         type=str,
-        default='GX',
+        default=BAM_GENE_TAG,
     )
     parser_count.add_argument(
         '--strand',
@@ -254,6 +358,16 @@ def setup_count_args(parser, parent):
         default=False,
     )
     parser_count.add_argument(
+        '--snp-min-coverage',
+        metavar='THRESHOLD',
+        help=(
+            'For a conversion to be considered as a SNP, there must be at least '
+            'this many reads mapping to that region. (default: 1)'
+        ),
+        type=int,
+        default=1,
+    )
+    parser_count.add_argument(
         '--snp-csv',
         metavar='CSV',
         help=('CSV file of two columns: contig (i.e. chromosome) and genome position '
@@ -268,7 +382,8 @@ def setup_count_args(parser, parent):
               'be processed.'),
         type=str,
     )
-    parser_count.add_argument(
+    splicing_group = parser_count.add_mutually_exclusive_group()
+    splicing_group.add_argument(
         '--no-splicing',
         '--transcriptome-only',
         help=(
@@ -276,6 +391,18 @@ def setup_count_args(parser, parent):
             'and ignore reads that are not assigned to the transcriptome.'
         ),
         action='store_true'
+    )
+    splicing_group.add_argument(
+        '--exon-overlap',
+        help=(
+            'Algorithm to use to detect spliced reads (that overlap exons). '
+            'May be `strict`, which assigns reads as spliced if it only overlaps '
+            'exons, or `lenient`, which assigns reads as spliced if it does not '
+            'overlap with any introns of at least one transcript. (default: lenient)'
+        ),
+        type=str,
+        choices=['lenient', 'strict'],
+        default='lenient',
     )
     parser_count.add_argument(
         '--nasc',
@@ -288,8 +415,20 @@ def setup_count_args(parser, parent):
         action='store_true',
     )
     parser_count.add_argument(
+        '--dedup-mode',
+        help=(
+            'Deduplication mode for UMI-based technologies (required `--umi-tag`). '
+            'Available choices are: `auto`, `conversion`, `exon`. When `conversion` is used, '
+            'reads that have at least one of the provided conversions is prioritized. '
+            'When `exon` is used, exonic reads are prioritized. By default (`auto`), '
+            'the BAM is inspected to select the appropriate mode.'
+        ),
+        type=str,
+        choices=['auto', 'conversion', 'exon'],
+    )
+    parser_count.add_argument(
         '--overwrite',
-        help='',
+        help='Overwrite existing files.',
         action='store_true',
     )
     parser_count.add_argument(
@@ -529,6 +668,44 @@ def parse_align(parser, args, temp_dir=None):
     )
 
 
+def parse_consensus(parser, args, temp_dir=None):
+    """Parser for the `consensus` command.
+    :param args: Command-line arguments dictionary, as parsed by argparse
+    :type args: dict
+    """
+    # Check quality
+    if args.quality < 0 or args.quality > 41:
+        parser.error('`--quality` must be in [0, 42)')
+
+    # Read barcodes
+    barcodes = set()
+    if args.barcodes:
+        if not args.barcode_tag:
+            parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
+
+        with open(args.barcodes, 'r') as f:
+            barcodes = set(line.strip() for line in f if not line.isspace())
+        logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
+    else:
+        logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
+
+    from .consensus import consensus
+    consensus(
+        args.bam,
+        args.g,
+        args.o,
+        strand=args.strand,
+        umi_tag=args.umi_tag,
+        barcode_tag=args.barcode_tag,
+        gene_tag=args.gene_tag,
+        barcodes=barcodes,
+        quality=args.quality,
+        add_RS_RI=args.add_RS_RI,
+        n_threads=args.t,
+        temp_dir=temp_dir,
+    )
+
+
 def parse_count(parser, args, temp_dir=None):
     """Parser for the `count` command.
     :param args: Command-line arguments dictionary, as parsed by argparse
@@ -539,10 +716,13 @@ def parse_count(parser, args, temp_dir=None):
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = None
+    barcodes = set()
     if args.barcodes:
+        if not args.barcode_tag:
+            parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
+
         with open(args.barcodes, 'r') as f:
-            barcodes = [line.strip() for line in f if not line.isspace()]
+            barcodes = set(line.strip() for line in f if not line.isspace())
         logger.warning(f'Ignoring cell barcodes not in the {len(barcodes)} barcodes provided by `--barcodes`')
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
@@ -556,9 +736,12 @@ def parse_count(parser, args, temp_dir=None):
     conversions = []
     for arg in args.conversion:
         conversions.append(arg.upper().split(','))
-    flattened = list(flatten_list(conversions))
+    flattened = list(flatten_iter(conversions))
     if len(set(flattened)) != len(flattened):
         parser.error('duplicate conversions are not allowed for `--conversion`')
+
+    # Convert conversions to frozenset of tuples.
+    conversions = frozenset(tuple(conv) for conv in conversions)
 
     from .count import count
     count(
@@ -574,12 +757,15 @@ def parse_count(parser, args, temp_dir=None):
         quality=args.quality,
         conversions=conversions,
         snp_threshold=args.snp_threshold,
+        snp_min_coverage=args.snp_min_coverage,
         snp_csv=args.snp_csv,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
         overwrite=args.overwrite,
         velocity=not args.no_splicing,
+        strict_exon_overlap=args.exon_overlap == 'strict',
+        dedup_mode=args.dedup_mode
     )
 
 
@@ -670,6 +856,7 @@ def parse_estimate(parser, args, temp_dir=None):
 COMMAND_TO_FUNCTION = {
     'ref': parse_ref,
     'align': parse_align,
+    'consensus': parse_consensus,
     'count': parse_count,
     'estimate': parse_estimate,
 }
@@ -697,11 +884,13 @@ def main():
     # Command parsers
     parser_ref = setup_ref_args(subparsers, parent)
     parser_align = setup_align_args(subparsers, parent)
+    parser_consensus = setup_consensus_args(subparsers, parent)
     parser_count = setup_count_args(subparsers, parent)
     parser_estimate = setup_estimate_args(subparsers, parent)
     command_to_parser = {
         'ref': parser_ref,
         'align': parser_align,
+        'consensus': parser_consensus,
         'count': parser_count,
         'estimate': parser_estimate,
     }

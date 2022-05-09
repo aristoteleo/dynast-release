@@ -45,7 +45,7 @@ def estimate(
                 f'({_conversions} != {conversions}).'
             )
     logger.info(f'Conversions: {" ".join(",".join(convs) for convs in conversions)}')
-    all_conversions = sorted(utils.flatten_list(conversions))
+    all_conversions = sorted(utils.flatten_iter(conversions))
 
     # Read each counts dataframe and suffix barcodes if needed
     dfs = []
@@ -150,7 +150,7 @@ def estimate(
     p_e_path = os.path.join(out_dir, constants.P_E_FILENAME)
     if control_p_e:
         logger.info('`--p-e` provided. No background mutation rate estimation will be done.')
-        df_barcodes = df_counts[p_key].drop_duplicates().reset_index(drop=True)
+        df_barcodes = df_counts[[p_key]].drop_duplicates().reset_index(drop=True)
         df_barcodes['p_e'] = control_p_e
         df_barcodes.to_csv(p_e_path, header=[p_key, 'p_e'], index=False)
     else:

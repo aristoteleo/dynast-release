@@ -1,0 +1,8 @@
+{
+    "version": "0.1.2",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast estimate SRR11683995_count --cell-threshold 0 --cell-gene-threshold 1 -o SRR11683995_estimate_with_control --verbose --reads total -t 1 --p-e SRR11683995_estimate_control/p_e.csv",
+    "start_time": "2022-05-06T14:11:27.456034",
+    "end_time": "2022-05-06T14:12:50.899634",
+    "elapsed": 83.4436
+}

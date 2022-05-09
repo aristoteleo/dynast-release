@@ -1,0 +1,8 @@
+{
+    "version": "0.1.2",
+    "workdir": "/mnt/c/Users/phoen/Documents/GitHub/dynast-release/tests/fixtures",
+    "call": "/home/lioscro/miniconda3/bin/dynast count -g /mnt/e/references/human/ensembl/Homo_sapiens.GRCh38.101.gtf --barcode-tag CB --umi-tag UB SRR11683995_align/Aligned.sortedByCoord.out.bam -o SRR11683995_count_control -t 1 --verbose --control --conversion TC --snp-threshold 0.5 --overwrite",
+    "start_time": "2022-05-02T15:02:18.899690",
+    "end_time": "2022-05-02T15:03:45.275246",
+    "elapsed": 86.375556
+}

@@ -1,6 +1,5 @@
 import re
-import shutil
-import tempfile
+from collections import Counter
 from functools import partial
 
 import pysam
@@ -28,18 +27,22 @@ def read_coverage(coverage_path):
     """
     coverage = {}
     with open(coverage_path, 'r') as f:
-        f.readline()
-        for line in f:
+        for i, line in enumerate(f):
             groups = COVERAGE_PARSER.match(line).groupdict()
-            contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
-            coverage.setdefault(contig, {})[genome_i] = count
+            try:
+                contig, genome_i, count = groups['contig'], int(groups['genome_i']), int(groups['coverage'])
+                coverage.setdefault(contig, {})[genome_i] = count
+            except ValueError as e:
+                if i == 0:
+                    continue
+                raise e
     return coverage
 
 
 def calculate_coverage_contig(
-    bam_path,
     counter,
     lock,
+    bam_path,
     contig,
     indices,
     alignments=None,
@@ -54,13 +57,13 @@ def calculate_coverage_contig(
     """Calculate converage for a specific contig. This function is designed to
     be called as a separate process.
 
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
     :param counter: counter that keeps track of how many reads have been processed
     :type counter: multiprocessing.Value
     :param lock: semaphore for the `counter` so that multiple processes do not
                  modify it at the same time
     :type lock: multiprocessing.Lock
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
     :param contig: only reads that map to this contig will be processed
     :type contig: str
     :param indices: genomic positions to consider
@@ -79,18 +82,23 @@ def calculate_coverage_contig(
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
-    :param update_every: update the counter every this many reads, defaults to `50000`
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+    :param update_every: update the counter every this many reads, defaults to `30000`
     :type update_every: int, optional
     :param velocity: whether or not velocities were assigned
     :type velocity: bool, optional
 
-    :return: coverage CSV path
-    :rtype: str
+    :return: coverag
+    :rtype: dict
     """
-    coverage_path = utils.mkstemp(dir=temp_dir)
 
+    def skip_alignment(read, tags):
+        return read.is_secondary or read.is_unmapped or read.is_duplicate or any(not read.has_tag(tag) for tag in tags)
+
+    coverage_path = utils.mkstemp(dir=temp_dir)
     paired = {}
-    coverage = {}
+    coverage = Counter()
 
     required_tags = []
     if not velocity:
@@ -104,27 +112,27 @@ def calculate_coverage_contig(
     with pysam.AlignmentFile(bam_path, 'rb', threads=2) as bam, \
         open(coverage_path, 'w') as coverage_out:
         for read in bam.fetch(contig):
-            n_lines = 0
             n += 1
-            if n % update_every == 0:
-                # Flush
-                for genome_i in sorted(coverage.keys()):
+            if n == update_every:
+                with lock:
+                    counter.value += update_every
+                n = 0
+
+            if len(coverage) > 1000000:
+                # NOTE: dictionary keys are sorted by insertion order
+                for genome_i in list(coverage.keys()):
                     if genome_i < read.reference_start:
-                        n_lines += 1
                         coverage_out.write(f'{contig},{genome_i},{coverage[genome_i]}\n')
                         del coverage[genome_i]
+
                     else:
                         break
 
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
-
-            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate or read.is_unmapped:
+            if skip_alignment(read, required_tags):
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'
-            if barcodes and barcode not in barcodes:
+            if barcode == '-' or (barcodes and barcode not in barcodes):
                 continue
 
             read_id = read.query_name
@@ -141,22 +149,24 @@ def calculate_coverage_contig(
                     paired[key] = reference_positions
                     continue
 
-                reference_positions += paired[key]
+                reference_positions = list(set(reference_positions + paired[key]))
                 del paired[key]
 
-            for genome_i in list(set(reference_positions)):
+            for genome_i in reference_positions:
                 if genome_i in indices:
-                    if genome_i not in coverage:
-                        coverage[genome_i] = 0
                     coverage[genome_i] += 1
 
-        n_lines = 0
-        for genome_i in sorted(coverage.keys()):
-            n_lines += 1
-            coverage_out.write(f'{contig},{genome_i},{coverage[genome_i]}\n')
-    lock.acquire()
-    counter.value += n % update_every
-    lock.release()
+        for genome_i, cover in coverage.items():
+            coverage_out.write(f'{contig},{genome_i},{cover}\n')
+
+    with lock:
+        counter.value += n
+    del coverage
+    del indices
+    if alignments:
+        del alignments
+    if barcodes:
+        del barcodes
 
     return coverage_path
 
@@ -170,7 +180,6 @@ def calculate_coverage(
     barcode_tag=None,
     gene_tag='GX',
     barcodes=None,
-    n_threads=8,
     temp_dir=None,
     velocity=True,
 ):
@@ -197,8 +206,6 @@ def calculate_coverage(
     :param barcodes: list of barcodes to be considered. All barcodes are considered
                      if not provided, defaults to `None`
     :type barcodes: list, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int
     :param temp_dir: path to temporary directory, defaults to `None`
     :type temp_dir: str, optional
     :param velocity: whether or not velocities were assigned
@@ -216,36 +223,42 @@ def calculate_coverage(
             if index.total > 0:
                 contigs.append(index.contig)
 
-    logger.debug(f'Spawning {n_threads} processes')
-    pool, counter, lock = utils.make_pool_with_counter(n_threads)
+    # Turns out coverage calculation per read is fast enough that we end
+    # up being IO-bound if we use multiprocessing. So, we just process
+    # sequentially (per contig) here instead.
+    # We create a new pool because we still want to be able to keep track of
+    # the current progress.
+    pool, counter, lock = utils.make_pool_with_counter(1)
     async_result = pool.starmap_async(
         partial(
             calculate_coverage_contig,
-            bam_path,
             counter,
             lock,
+            bam_path,
             alignments=alignments,
             umi_tag=umi_tag,
             barcode_tag=barcode_tag,
             gene_tag=gene_tag,
             barcodes=barcodes,
-            temp_dir=tempfile.mkdtemp(dir=temp_dir),
             velocity=velocity
         ), [(contig, conversions.get(contig, set())) for contig in contigs]
     )
     pool.close()
 
     # Display progres bar
-    logger.debug(f'Processing contigs {contigs} from BAM')
     utils.display_progress_with_counter(counter, n_reads, async_result)
     pool.join()
 
-    # Combine csvs
+    logger.debug('Combining results')
+    coverage = {}
+    for coverage_part_path in async_result.get():
+        cov = read_coverage(coverage_part_path)
+        coverage = utils.merge_dictionaries(coverage, cov)
+
     logger.debug(f'Writing coverage to {coverage_path}')
-    with open(coverage_path, 'wb') as coverage_out:
-        coverage_out.write(b'contig,genome_i,coverage\n')
-        for coverage_part_path in async_result.get():
-            with open(coverage_part_path, 'rb') as f:
-                shutil.copyfileobj(f, coverage_out)
+    with open(coverage_path, 'w') as coverage_out:
+        coverage_out.write('contig,genome_i,coverage\n')
+        for (contig, genome_i), cover in utils.flatten_dictionary(coverage):
+            coverage_out.write(f'{contig},{genome_i},{cover}\n')
 
     return coverage_path

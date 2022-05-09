@@ -26,7 +26,7 @@ Please note that not all features may be stable when using the development versi
 
 Command-line structure
 ^^^^^^^^^^^^^^^^^^^^^^
-Dynast consists of four commands that represent four steps of the pipeline: :code:`ref`, :code:`align`, :code:`count`, :code:`estimate`. This modularity allows users to add additional preprocessing between steps as they see fit. For instance, a user may wish to run a custom step to mark and remove duplicates after the :code:`align` step.
+Dynast consists of four commands that represent four steps of the pipeline: :code:`ref`, :code:`align`, :code:`consensus`, :code:`count`, :code:`estimate`. This modularity allows users to add additional preprocessing between steps as they see fit. For instance, a user may wish to run a custom step to mark and remove duplicates after the :code:`align` step.
 
 +------------------+-------------------------------------------------------------------+
 | Command          | Description                                                       |
@@ -34,6 +34,8 @@ Dynast consists of four commands that represent four steps of the pipeline: :cod
 | :code:`ref`      | Build a STAR index from a reference genome FASTA and GTF.         |
 +------------------+-------------------------------------------------------------------+
 | :code:`align`    | Align FASTQs into an alignment BAM.                               |
++------------------+-------------------------------------------------------------------+
+| :code:`consensus`| Call consensus sequence for each sequenced mRNA molecule.         |
 +------------------+-------------------------------------------------------------------+
 | :code:`count`    | Quantify unlabeled and labeled RNA.                               |
 +------------------+-------------------------------------------------------------------+
@@ -72,6 +74,16 @@ Next, we align the FASTQs to the genome.
 	dynast align -i STAR -o align -x TECHNOLOGY CDNA_FASTQ BARCODE_UMI_FASTQ
 
 where :code:`align` is the directory to which to save alignment files, and :code:`TECHNOLOGY` is a scRNA-seq technology. A list of supported technologies can be found by running :code:`dynast --list`. :code:`BARCODE_UMI_FASTQ` is the FASTQ containing the barcode and UMI sequences, whereas the :code:`CDNA_FASTQ` is the FASTQ containing the biological cDNA sequences.
+
+[Optional] Consensus
+''''''''''''''''''''
+Optionally, we can call consensus sequences for each sequenced mRNA molecule.
+
+.. code-block::
+
+	dynast consensus -g Mus_musculus.GRCm38.102.gtf.gz --barcode-tag CB --umi-tag UB -o consensus align/Aligned.sortedByCoord.out.bam
+
+where :code:`consensus` is the directory to which to save the consensus-called BAM. Once the above command finishes, the :code:`consensus` directory will contain a new BAM file that can be used as input to the following step.
 
 Quantify
 ''''''''

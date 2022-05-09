@@ -25,7 +25,7 @@ def read_p_e(p_e_path, group_by=None):
     return dict(df.set_index(group_by)['p_e'])
 
 
-def estimate_p_e_control(df_counts, p_e_path, conversions=['TC']):
+def estimate_p_e_control(df_counts, p_e_path, conversions=frozenset([('TC',)])):
     """Estimate background mutation rate of unlabeled RNA for a control sample
     by simply calculating the average mutation rate.
 
@@ -34,13 +34,13 @@ def estimate_p_e_control(df_counts, p_e_path, conversions=['TC']):
     :type df_counts: pandas.DataFrame
     :param p_e_path: path to output CSV containing p_e estimates
     :type p_e_path: str
-    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
     :type conversions: list, optional
 
     :return: path to output CSV containing p_e estimates
     :rtype: str
     """
-    flattened = list(utils.flatten_list(conversions))
+    flattened = list(utils.flatten_iter(conversions))
     bases = list(set(f[0] for f in flattened))
     p_e = df_counts[flattened].sum().sum() / df_counts[bases].sum().sum()
     with open(p_e_path, 'w') as f:
@@ -48,7 +48,7 @@ def estimate_p_e_control(df_counts, p_e_path, conversions=['TC']):
     return p_e_path
 
 
-def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
+def estimate_p_e(df_counts, p_e_path, conversions=frozenset([('TC',)]), group_by=None):
     """Estimate background mutation rate of unabeled RNA by calculating the
     average mutation rate of all three nucleotides other than `conversion[0]`.
 
@@ -57,7 +57,7 @@ def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     :type df_counts: pandas.DataFrame
     :param p_e_path: path to output CSV containing p_e estimates
     :type p_e_path: str
-    :param conversions: conversion(s) in question, defaults to `['TC']`
+    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
     :type conversions: list, optional
     :param group_by: columns to group by, defaults to `None`
     :type group_by: list, optional
@@ -65,7 +65,7 @@ def estimate_p_e(df_counts, p_e_path, conversions=['TC'], group_by=None):
     :return: path to output CSV containing p_e estimates
     :rtype: str
     """
-    flattened = list(utils.flatten_list(conversions))
+    flattened = list(utils.flatten_iter(conversions))
     bases = sorted(set(f[0] for f in flattened))
     if group_by is not None:
         df_sum = df_counts.groupby(group_by, sort=False, observed=True).sum(numeric_only=True).astype(np.uint32)

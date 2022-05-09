@@ -25,17 +25,18 @@ class TestSnp(mixins.TestMixin, TestCase):
                 self.control_conversions_path,
                 self.control_conversions_index_path,
                 alignments=alignments,
-                quality=27,
+                quality=35,
                 n_threads=2,
             )
 
         df = pd.read_csv(self.control_conversions_path)
         conversions_truth = {}
         df_indexed = df.set_index(['read_id', 'index'])
-        df_selected = df_indexed[(df_indexed['quality'] > 27) & (df_indexed.index.isin(alignments))].reset_index()
-        for (contig, genome_i), count in dict(df_selected.groupby(['contig', 'genome_i']).size()).items():
-            conversions_truth.setdefault(contig,
-                                         {})[genome_i] = conversions_truth.setdefault(contig, {}).get(genome_i, 0) + 1
+        df_selected = df_indexed[(df_indexed['quality'] > 35) & (df_indexed.index.isin(alignments))].reset_index()
+        for (contig, genome_i, conversion), count in dict(df_selected.groupby(['contig', 'genome_i',
+                                                                               'conversion']).size()).items():
+            conversions_truth.setdefault(conversion, {}).setdefault(contig, {}).setdefault(genome_i, 0)
+            conversions_truth[conversion][contig][genome_i] += 1
         self.assertEqual(conversions_truth, conversions)
 
     def test_detect_snps(self):
@@ -51,6 +52,7 @@ class TestSnp(mixins.TestMixin, TestCase):
                     cov,
                     snps_path,
                     alignments=alignments,
+                    conversions={'TC', 'AG'},
                     quality=27,
                     threshold=0.5,
                     n_threads=2

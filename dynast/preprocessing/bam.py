@@ -12,7 +12,7 @@ import pysam
 from .. import config, utils
 from ..logging import logger
 
-CONVERSION_CSV_COLUMNS = ['read_id', 'index', 'contig', 'genome_i', 'original', 'converted', 'quality']
+CONVERSION_CSV_COLUMNS = ['read_id', 'index', 'contig', 'genome_i', 'conversion', 'quality']
 ALIGNMENT_COLUMNS = [
     'read_id', 'index', 'barcode', 'umi', 'GX', 'A', 'C', 'G', 'T', 'velocity', 'transcriptome', 'score'
 ]
@@ -70,8 +70,8 @@ def read_conversions(conversions_path, *args, **kwargs):
             'index': np.uint8,
             'contig': 'category',
             'genome_i': np.uint32,
-            'original': 'category',
-            'converted': 'category',
+            'conversion': 'category',
+            'quality': np.uint8
         },
         na_filter=False,
         *args,
@@ -96,6 +96,9 @@ def select_alignments(df_alignments):
     if umi:
         df_deduplicated = df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last')
     else:
+        # TODO: This part can probably be removed because BAM parsing only considers
+        # primary alignments now.
+
         # Drop any multimappers where none map to the transcriptome and
         # are assigned multiple genes
         df_sorted['not_transcriptome'] = ~df_sorted['transcriptome']
@@ -127,7 +130,8 @@ def parse_read_contig(
     temp_dir=None,
     update_every=2000,
     nasc=False,
-    velocity=True
+    velocity=True,
+    strict_exon_overlap=False,
 ):
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
@@ -173,10 +177,17 @@ def parse_read_contig(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
+    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
+        as spliced, defaults to `False`
+    :type strict_exon_overlap: bool, optional
 
     :return: (path to conversions, path to conversions index, path to alignments)
     :rtype: (str, str, str)
     """
+
+    def skip_alignment(read, tags):
+        return read.is_secondary or read.is_unmapped or read.is_duplicate or any(not read.has_tag(tag) for tag in tags)
+
     # Sort genes by segment positions
     if velocity:
         gene_order = sorted(gene_infos.keys(), key=lambda gene: tuple(gene_infos[gene]['segment']))
@@ -222,9 +233,9 @@ def parse_read_contig(
                 if not any_exon_overlap and not any_intron_overlap:
                     continue
 
-            if any_exon_only and not any_intron_overlap:
+            if any_exon_only and (not strict_exon_overlap or not any_intron_overlap):
                 assigned_gene, assigned_type = gene, 'spliced'
-            elif not any_exon_only and any_intron_overlap:
+            elif any_intron_overlap and (not strict_exon_overlap or not any_exon_only):
                 assigned_gene, assigned_type = gene, 'unspliced'
             else:
                 assigned_gene, assigned_type = gene, 'ambiguous'
@@ -263,10 +274,10 @@ def parse_read_contig(
 
             # Update every some interval. Updating every loop is very slow.
             n += 1
-            if n % update_every == 0:
-                lock.acquire()
-                counter.value += update_every
-                lock.release()
+            if n == update_every:
+                with lock:
+                    counter.value += update_every
+                n = 0
 
                 # Update gene order (remove genes we no longer have to consider)
                 # We take advantage of the fact that gene_order contains genes sorted
@@ -287,13 +298,12 @@ def parse_read_contig(
                     if to_remove > 0:
                         gene_order = gene_order[to_remove:]
 
-            # Skip reads that do not contain these tags
-            if any(not read.has_tag(tag) for tag in required_tags) or read.is_duplicate or read.is_unmapped:
+            # Skip reads
+            if skip_alignment(read, required_tags):
                 continue
 
             barcode = read.get_tag(barcode_tag) if barcode_tag else 'NA'
-            # If barcodes are provided, skip any barcodes not in the list.
-            if barcodes and barcode not in barcodes:
+            if barcode == '-' or (barcodes and barcode not in barcodes):
                 continue
 
             read_id = read.query_name
@@ -317,7 +327,7 @@ def parse_read_contig(
                     continue
 
                 mate = paired[key]
-                mate_sequence = mate.seq.upper()
+                mate_sequence = mate.query_sequence.upper()
                 mate_qualities = mate.query_qualities
                 mate_reference = mate.get_reference_sequence().upper()
                 mate_reference_positions = mate.get_reference_positions()
@@ -359,7 +369,7 @@ def parse_read_contig(
             umi = read.get_tag(umi_tag) if umi_tag else 'NA'
             gx_assigned = read.has_tag(gene_tag)
             gx = read.get_tag(gene_tag) if gx_assigned else ''
-            sequence = read.seq.upper()
+            sequence = read.query_sequence.upper()
             qualities = read.query_qualities
             reference = read.get_reference_sequence().upper()
             counts += Counter(reference)
@@ -368,7 +378,18 @@ def parse_read_contig(
             assignment = 'unassigned'
             if velocity:
                 read_strand = None
-                if strand == 'forward':
+                if read.is_paired:
+                    if read.is_read1:  # R1 is mapped after R2
+                        if strand == 'forward':
+                            read_strand = '+' if read.is_reverse else '-'
+                        elif strand == 'reverse':
+                            read_strand = '-' if read.is_reverse else '+'
+                    else:  # R1 is mapped before R2
+                        if strand == 'forward':
+                            read_strand = '-' if read.is_reverse else '+'
+                        elif strand == 'reverse':
+                            read_strand = '+' if read.is_reverse else '-'
+                elif strand == 'forward':
                     read_strand = '-' if read.is_reverse else '+'
                 elif strand == 'reverse':
                     read_strand = '+' if read.is_reverse else '-'
@@ -401,7 +422,7 @@ def parse_read_contig(
 
                     conversions_out.write(
                         f'{read_id},{alignment_index},{contig},{genome_i},'
-                        f'{genome_base},{read_base},{quality}\n'
+                        f'{genome_base}{read_base},{quality}\n'
                     )
 
             # Flush cached conversions
@@ -409,7 +430,7 @@ def parse_read_contig(
                 n_lines += 1
                 conversions_out.write(
                     f'{read_id},{alignment_index},{contig},{genome_i},'
-                    f'{genome_base},{read_base},{quality}\n'
+                    f'{genome_base}{read_base},{quality}\n'
                 )
 
             # Add to index if lines were written
@@ -422,14 +443,43 @@ def parse_read_contig(
                 f'{assignment},{gx_assigned},{alignment_score}\n'
             )
 
-    lock.acquire()
-    counter.value += n % update_every
-    lock.release()
+    with lock:
+        counter.value += n
 
     # Save index
     index_path = utils.write_pickle(index, index_path, protocol=4)
 
+    if gene_infos:
+        del gene_infos
+    if transcript_infos:
+        del transcript_infos
+    if barcodes:
+        del barcodes
+
     return conversions_path, index_path, alignments_path
+
+
+def get_tags_from_bam(bam_path, n_reads=100000, n_threads=8):
+    """Utility function to retrieve all read tags present in a BAM.
+
+    :param bam_path: path to BAM
+    :type bam_path: str
+    :param n_reads: number of reads to consider, defaults to `100000`
+    :type n_reads: int, optional
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+
+    :return: set of all tags found
+    :rtype: set
+    """
+    tags = []
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch(until_eof=True)):
+            for (tag, _) in read.get_tags():
+                tags.append(tag)
+            if i + 1 >= n_reads:
+                break
+    return set(tags)
 
 
 def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
@@ -485,6 +535,117 @@ def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
+def check_bam_contains_secondary(bam_path, n_reads=100000, n_threads=8):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch()):
+            if read.is_secondary:
+                return True
+
+            if i + 1 >= n_reads:
+                break
+    return False
+
+
+def check_bam_contains_unmapped(bam_path):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for index in bam.get_index_statistics():
+            if index.unmapped > 0:
+                return True
+    return False
+
+
+def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8):
+    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+        for i, read in enumerate(bam.fetch()):
+            if read.is_duplicate:
+                return True
+
+            if i + 1 >= n_reads:
+                break
+    return False
+
+
+def sort_and_index_bam(bam_path, out_path, n_threads=8, temp_dir=None):
+    """Sort and index BAM.
+
+    If the BAM is already sorted, the sorting step is skipped.
+
+    :param bam_path: path to alignment BAM file to sort
+    :type bam_path: str
+    :param out_path: path to output sorted BAM
+    :type out_path: str
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+
+    :return: path to sorted and indexed BAM
+    :rtype: str
+    """
+    bam_sorted = False
+    with pysam.AlignmentFile(bam_path, 'rb') as f:
+        if f.header.get('HD', {}).get('SO') == 'coordinate':
+            bam_sorted = True
+
+    if not bam_sorted:
+        logger.info(f'Sorting {bam_path} with samtools to {out_path}')
+        args = ['-o', out_path, '-@', str(n_threads)]
+        if temp_dir:
+            args.extend(['-T', temp_dir])
+        pysam.sort(bam_path, *args)
+        bam_path = out_path
+
+    # Check if BAM index exists and create one if it doesn't.
+    bai_path = f'{bam_path}.bai'
+    if not utils.all_exists(bai_path) or not bam_sorted:
+        logger.info(f'Indexing {bam_path} with samtools to {bai_path}')
+        pysam.index(bam_path, bai_path, '-@', str(n_threads))
+
+    return bam_path
+
+
+def split_bam(bam_path, n, n_threads=8, temp_dir=None):
+    """Split BAM into n parts.
+
+    :param bam_path: path to alignment BAM file
+    :type bam_path: str
+    :param n: number of splits
+    :type n: int
+    :param n_threads: number of threads, defaults to `8`
+    :type n_threads: int, optional
+    :param temp_dir: path to temporary directory, defaults to `None`
+    :type temp_dir: str, optional
+
+    :return: List of tuples containing (split BAM path, number of reads)
+    :rtype: list
+    """
+    # Filter for properly paired reads if BAM contains paired reads
+    if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
+        logger.debug('BAM contains paired reads. Filtering out non-properly paired reads')
+        bam_path = ngs.bam.filter_bam(
+            bam_path,
+            lambda read: read.is_proper_pair if read.is_paired else True,
+            utils.mkstemp(temp_dir, delete=True),
+            n_threads=n_threads,
+            show_progress=False,
+        )
+        pysam.index(bam_path, f'{bam_path}.bai', '-@', str(n_threads))
+
+    logger.debug(f'Splitting BAM into {n} parts')
+    splits = list(
+        ngs.bam.split_bam(
+            bam_path,
+            utils.mkstemp(temp_dir, delete=True),
+            n=n,
+            n_threads=n_threads,
+            show_progress=True,
+        ).values()
+    )
+    for path, _ in splits:
+        pysam.index(path, f'{path}.bai', '-@', str(n_threads))
+    return splits
+
+
 def parse_all_reads(
     bam_path,
     conversions_path,
@@ -501,7 +662,9 @@ def parse_all_reads(
     temp_dir=None,
     nasc=False,
     control=False,
-    velocity=True
+    velocity=True,
+    strict_exon_overlap=False,
+    return_splits=False,
 ):
     """Parse all reads in a BAM and extract conversion, content and alignment
     information as CSVs.
@@ -545,62 +708,32 @@ def parse_all_reads(
     :param velocity: whether or not to assign a velocity type to each read,
                      defaults to `True`
     :type velocity: bool, optional
+    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
+        as spliced, defaults to `False`
+    :type strict_exon_overlap: bool, optional
+    :param return_splits: return BAM splits for later reuse, defaults to `True`
+    :type return_splits: bool, optional
 
     :return: (path to conversions, path to alignments, path to conversions index)
-    :rtype: (str, str, str)
+             If `return_splits` is True, then there is an additional return value, which
+             is a list of tuples containing split BAM paths and number of reads
+             in each BAM.
+    :rtype: (str, str, str) or (str, str, str, list)
     """
-    logger.debug('Checking if BAM has required tags')
-    tags = config.BAM_REQUIRED_TAGS.copy()
-    if barcode_tag:
-        tags.append(barcode_tag)
-    if umi_tag:
-        tags.append(umi_tag)
-    if gene_tag:
-        tags.append(gene_tag)
-    all_exists, not_found = check_bam_tags_exist(bam_path, tags, config.BAM_PEEK_READS, n_threads=n_threads)
-    if not all_exists:
-        raise Exception(
-            f'First {config.BAM_PEEK_READS} reads in the BAM do not contain the following required tags: '
-            f'{", ".join(not_found)}. '
-        )
-
     contig_genes = {}
     contig_transcripts = {}
     for gene_id, gene_info in gene_infos.items():
         contig_genes.setdefault(gene_info['chromosome'], []).append(gene_id)
         contig_transcripts.setdefault(gene_info['chromosome'], []).extend(gene_info['transcripts'])
 
-    # Filter for properly paired reads if BAM contains paired reads
-    if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
-        logger.debug('BAM contains paired reads. Filtering out non-properly paired reads')
-        bam_path = ngs.bam.filter_bam(
-            bam_path,
-            lambda read: read.is_proper_pair if read.is_paired else True,
-            utils.mkstemp(temp_dir, delete=True),
-            n_threads=n_threads,
-            show_progress=False,
-        )
-        pysam.index(bam_path, f'{bam_path}.bai', '-@', str(n_threads))
-
-    if n_threads > 1:
-        n_splits = min(n_threads * 8, utils.get_file_descriptor_limit() - 10)
-        logger.debug(f'Splitting BAM into {n_splits} parts')
-        splits = ngs.bam.split_bam(
-            bam_path,
-            utils.mkstemp(temp_dir, delete=True),
-            n=n_splits,
-            n_threads=n_threads,
-            show_progress=True,
-        )
-        for path, _ in splits.values():
-            pysam.index(path, f'{path}.bai', '-@', str(n_threads))
-
-    else:
-        splits = {'0': (bam_path, ngs.bam.count_bam(bam_path))}
+    splits = split_bam(
+        bam_path, min(n_threads * 8,
+                      utils.get_file_descriptor_limit() - 10), n_threads=n_threads, temp_dir=temp_dir
+    ) if n_threads > 1 else [(bam_path, ngs.bam.count_bam(bam_path))]
 
     # Add argument per contig
     args = []
-    for path, _ in splits.values():
+    for path, _ in splits:
         with pysam.AlignmentFile(path, 'rb') as f:
             for index in f.get_index_statistics():
                 if index.total > 0:
@@ -629,12 +762,13 @@ def parse_all_reads(
             temp_dir=tempfile.mkdtemp(dir=temp_dir),
             nasc=nasc,
             velocity=velocity,
+            strict_exon_overlap=strict_exon_overlap,
         ), args
     )
     pool.close()
 
     # Display progres bar
-    utils.display_progress_with_counter(counter, sum(value[1] for value in splits.values()), async_result)
+    utils.display_progress_with_counter(counter, sum(value[1] for value in splits), async_result)
     pool.join()
 
     # Combine csvs
@@ -663,4 +797,5 @@ def parse_all_reads(
     logger.debug(f'Writing conversions index to {index_path}')
     index_path = utils.write_pickle(index, index_path)
 
-    return conversions_path, alignments_path, index_path
+    return (conversions_path, alignments_path,
+            index_path) if not return_splits else (conversions_path, alignments_path, index_path, splits)

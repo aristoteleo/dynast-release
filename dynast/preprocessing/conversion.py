@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from functools import partial
 
+import ngs_tools as ngs
 import numpy as np
 import pandas as pd
 
@@ -15,8 +16,7 @@ CONVERSIONS_PARSER = re.compile(
     (?P<index>[^,]*),
     (?P<contig>[^,]*),
     (?P<genome_i>[^,]*),
-    (?P<original>[^,]*),
-    (?P<converted>[^,]*),
+    (?P<conversion>[^,]*),
     (?P<quality>[^,]*)\n
     $''', re.VERBOSE
 )
@@ -39,18 +39,18 @@ ALIGNMENTS_PARSER = re.compile(
 )
 
 CONVERSION_IDX = {
-    ('A', 'C'): 0,
-    ('A', 'G'): 1,
-    ('A', 'T'): 2,
-    ('C', 'A'): 3,
-    ('C', 'G'): 4,
-    ('C', 'T'): 5,
-    ('G', 'A'): 6,
-    ('G', 'C'): 7,
-    ('G', 'T'): 8,
-    ('T', 'A'): 9,
-    ('T', 'C'): 10,
-    ('T', 'G'): 11,
+    'AC': 0,
+    'AG': 1,
+    'AT': 2,
+    'CA': 3,
+    'CG': 4,
+    'CT': 5,
+    'GA': 6,
+    'GC': 7,
+    'GT': 8,
+    'TA': 9,
+    'TC': 10,
+    'TG': 11,
 }
 BASE_IDX = {
     'A': 12,
@@ -58,7 +58,11 @@ BASE_IDX = {
     'G': 14,
     'T': 15,
 }
-CONVERSION_COLUMNS = [''.join(pair) for pair in sorted(CONVERSION_IDX.keys())]
+CONVERSION_COMPLEMENT = {
+    conversion: ngs.sequence.complement_sequence(conversion, reverse=False)
+    for conversion in CONVERSION_IDX.keys()
+}
+CONVERSION_COLUMNS = sorted(CONVERSION_IDX.keys())
 BASE_COLUMNS = sorted(BASE_IDX.keys())
 COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome', 'score']
@@ -108,11 +112,11 @@ def complement_counts(df_counts, gene_infos):
         if col in COLUMNS:
             continue
         other_columns.append(col)
-    df_counts['strand'] = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand'])
+    forward_strand = df_counts['GX'].map(lambda gx: gene_infos[gx]['strand']) == '+'
 
     columns = other_columns + COLUMNS
-    df_forward = df_counts[df_counts.strand == '+'][columns]
-    df_reverse = df_counts[df_counts.strand == '-'][columns]
+    df_forward = df_counts[forward_strand][columns]
+    df_reverse = df_counts[~forward_strand][columns]
 
     df_reverse.columns = other_columns + CONVERSION_COLUMNS[::-1] + BASE_COLUMNS[::-1]
     df_reverse = df_reverse[columns]
@@ -125,6 +129,9 @@ def drop_multimappers(df_counts, conversions=None):
     * some map to the transcriptome while some do not -- drop non-transcriptome alignments
     * none map to the transcriptome AND aligned to multiple genes -- drop all
     * none map to the transcriptome AND assigned multiple velocity types -- set to ambiguous
+
+    TODO: This function can probably be removed because BAM parsing only considers
+    primary alignments now.
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
@@ -172,35 +179,45 @@ def drop_multimappers(df_counts, conversions=None):
     return df_deduplicated[columns]
 
 
-def deduplicate_counts(df_counts, conversions=None):
+def deduplicate_counts(df_counts, conversions=None, use_conversions=True):
     """Deduplicate counts based on barcode, UMI, and gene.
 
     The order of priority is the following.
-    1. Reads that align to the transcriptome (exon only)
-    2. If `conversions` is provided, reads that have a larger sum of such conversions
+    1. If `use_conversions=True`, reads that have at least one such conversion
+    2. Reads that align to the transcriptome (exon only)
+    3. Reads that have highest alignment score
+    4. If `conversions` is provided, reads that have a larger sum of such conversions
        If `conversions` is not provided, reads that have larger sum of all conversions
 
     :param df_counts: counts dataframe
     :type df_counts: pandas.DataFrame
     :param conversions: conversions to prioritize, defaults to `None`
     :type conversions: list, optional
+    :param use_conversions: prioritize reads that have conversions first, defaults
+        to `True`
+    :type use_conversions: bool, optional
 
     :return: deduplicated counts dataframe
     :rtype: pandas.DataFrame
     """
-    columns = list(df_counts.columns)
     df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
+    # Deduplication priority.
+    sort_order = ['transcriptome', 'score', 'conversion_sum']
+    to_remove = ['conversion_sum']
 
-    # Sort by transcriptome last, longest alignment last, least conversion first
-    df_sorted = df_counts.sort_values(['transcriptome', 'score', 'conversion_sum']).drop(columns='conversion_sum')
-    df_counts.drop(columns='conversion_sum', inplace=True)
+    if use_conversions and conversions is not None:
+        df_counts['has_conversions'] = df_counts[conversions].sum(axis=1) > 0
+        sort_order.insert(0, 'has_conversions')
+        to_remove.append('has_conversions')
 
-    # Always select transcriptome read if there are duplicates
-    df_deduplicated = df_sorted.drop_duplicates(
-        subset=['barcode', 'umi', 'GX'], keep='last'
-    ).sort_values(['barcode', 'umi', 'GX']).reset_index(drop=True)
+    # Sort by has desired conversion(s) last, transcriptome last,
+    # best alignment last, most conversions last
+    df_sorted = df_counts.sort_values(sort_order).drop(columns=to_remove)
 
-    return df_deduplicated[columns]
+    # Restore input dataframe.
+    df_counts.drop(columns=to_remove, inplace=True)
+
+    return df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last').reset_index(drop=True)
 
 
 def drop_multimappers_part(counter, lock, split_path, out_path):
@@ -211,9 +228,9 @@ def drop_multimappers_part(counter, lock, split_path, out_path):
     return out_path
 
 
-def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None):
+def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None, use_conversions=True):
     deduplicate_counts(
-        read_counts(split_path), conversions=conversions
+        read_counts(split_path), conversions=conversions, use_conversions=use_conversions
     )[CSV_COLUMNS[1:]].to_csv(
         out_path, header=False, index=False
     )
@@ -282,10 +299,11 @@ def count_no_conversions(
             if not line:
                 break
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
             if pos in positions:
                 continue
 
@@ -298,7 +316,7 @@ def count_no_conversions(
                 f'{groups["velocity"]},{groups["transcriptome"]},{groups["score"]}\n'
             )
     lock.acquire()
-    counter.value += n % update_every
+    counter.value += n
     lock.release()
 
     return count_path
@@ -349,23 +367,24 @@ def count_conversions_part(
     :rtype: tuple
     """
 
-    def is_snp(g):
+    def is_snp(gx, conversion, contig, genome_i):
         if not snps:
             return False
-        return int(g['genome_i']) in snps.get(g['contig'], set())
+        return genome_i in snps.get(conversion, {}).get(contig, set())
 
     count_path = utils.mkstemp(dir=temp_dir)
 
     n = 0
-    with open(conversions_path, 'r') as f, open(alignments_path) as f_alignments, open(count_path, 'w') as out:
+    with open(conversions_path, 'r') as f, open(alignments_path, 'r') as f_alignments, open(count_path, 'w') as out:
         for pos, n_lines, pos2 in index:
             f.seek(pos)
             f_alignments.seek(pos2)
             n += 1
-            if n % update_every == 0:
+            if n == update_every:
                 lock.acquire()
                 counter.value += update_every
                 lock.release()
+                n = 0
 
             alignment = ALIGNMENTS_PARSER.match(f_alignments.readline()).groupdict()
             if barcodes and alignment['barcode'] not in barcodes:
@@ -373,10 +392,13 @@ def count_conversions_part(
             counts = [0] * (len(CONVERSION_IDX) + len(BASE_IDX))
             for base, i in BASE_IDX.items():
                 counts[i] = alignment[base]
+            gx = alignment['GX']
             for _ in range(n_lines):
                 groups = CONVERSIONS_PARSER.match(f.readline()).groupdict()
-                if int(groups['quality']) > quality and not is_snp(groups):
-                    counts[CONVERSION_IDX[(groups['original'], groups['converted'])]] += 1
+                conversion = groups["conversion"]
+                if int(groups['quality']) > quality and not is_snp(gx, conversion, groups['contig'], int(
+                        groups['genome_i'])):
+                    counts[CONVERSION_IDX[conversion]] += 1
 
             out.write(
                 f'{groups["read_id"]},{alignment["barcode"]},{alignment["umi"]},'
@@ -385,7 +407,7 @@ def count_conversions_part(
             )
 
         lock.acquire()
-        counter.value += n % update_every
+        counter.value += n
         lock.release()
 
     return count_path
@@ -401,6 +423,7 @@ def count_conversions(
     snps=None,
     quality=27,
     conversions=None,
+    dedup_use_conversions=True,
     n_threads=8,
     temp_dir=None
 ):
@@ -429,6 +452,9 @@ def count_conversions(
     :param conversions: conversions to prioritize when deduplicating only applicable
                         for UMI technologies, defaults to `None`
     :type conversions: list, optional
+    :param dedup_use_conversions: prioritize reads that have at least one conversion
+        when deduplicating, defaults to `True`
+    :type dedup_use_conversions: bool, optional
     :param quality: only count conversions with PHRED quality greater than this value,
                     defaults to `27`
     :type quality: int, optional
@@ -502,7 +528,8 @@ def count_conversions(
     logger.debug(f'Loading combined counts from {combined_path}')
     df_counts = complement_counts(read_counts(combined_path), gene_infos)
     umi = all(df_counts['umi'] != 'NA')
-    barcode_counts = dict(df_counts['barcode'].value_counts(sort=False))
+    barcode_groupby = df_counts.groupby('barcode', sort=False, observed=True)
+    barcode_counts = dict(barcode_groupby.size())
     split_paths = []
     current_split_path = None
     current_split_f = None
@@ -510,8 +537,7 @@ def count_conversions(
     # Split barcodes into approximately `config.COUNTS_SPLIT_THRESHOLD` bins.
     # Note that a single barcode may have more than this many reads.
     try:
-        for barcode in barcode_counts.keys():
-            df_counts_barcode = df_counts[df_counts['barcode'] == barcode]
+        for barcode, df_counts_barcode in barcode_groupby:
             # Make its own split
             if barcode_counts[barcode] > config.COUNTS_SPLIT_THRESHOLD:
                 split_path = utils.mkstemp(dir=temp_dir)
@@ -551,6 +577,7 @@ def count_conversions(
             counter,
             lock,
             conversions=conversions,
+            use_conversions=dedup_use_conversions,
         ) if umi else partial(drop_multimappers_part, counter, lock), paths
     )
     pool.close()
