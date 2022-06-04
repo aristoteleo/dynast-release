@@ -3,14 +3,14 @@ import multiprocessing
 import queue
 from hashlib import sha256
 
-import pysam
 import ngs_tools as ngs
 import numpy as np
+import pysam
 from tqdm import tqdm
 
-from . import bam
 from .. import config, utils
 from ..logging import logger
+from . import bam
 
 BASES = ('A', 'C', 'G', 'T')
 BASE_IDX = {base: i for i, base in enumerate(BASES)}

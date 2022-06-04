@@ -1,7 +1,7 @@
 import random
 import tempfile
 from collections import Counter
-from concurrent.futures import as_completed, ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
 
 import matplotlib.pyplot as plt

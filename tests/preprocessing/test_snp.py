@@ -1,5 +1,5 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
 import pandas as pd
 

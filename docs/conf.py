@@ -12,6 +12,7 @@
 #
 import os
 import sys
+
 docs_dir = os.path.abspath(os.path.dirname(__file__))
 root_dir = os.path.dirname(docs_dir)
 dynast_dir = os.path.join(root_dir, 'dynast')

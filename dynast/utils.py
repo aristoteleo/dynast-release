@@ -10,8 +10,8 @@ from contextlib import contextmanager
 import anndata
 import ngs_tools as ngs
 import numpy as np
-import psutil
 import pandas as pd
+import psutil
 from scipy import sparse
 
 from . import config

@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from .conversion import BASE_IDX, COLUMNS
 from .. import utils
 from ..logging import logger
+from .conversion import BASE_IDX, COLUMNS
 
 
 def read_rates(rates_path):
