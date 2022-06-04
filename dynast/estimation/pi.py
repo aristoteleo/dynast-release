@@ -228,7 +228,7 @@ def estimate_pi(
     :return: path to pi output
     :rtype: str
     """
-    df_full = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)]
+    df_full = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)].copy()
 
     model = model or pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
 

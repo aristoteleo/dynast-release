@@ -2,7 +2,8 @@
 
 test:
 	rm -f .coverage
-	nosetests --verbose --with-coverage --cover-package dynast tests/* tests/preprocessing/* tests/estimation/*
+	pytest -vv tests/ --cov=dynast
+	coverage combine --append
 
 check:
 	flake8 dynast && echo OK
