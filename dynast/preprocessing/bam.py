@@ -155,7 +155,7 @@ def parse_read_contig(
                              required if `velocity=True`, defaults to `None`
     :type transcript_infos: dictionary
     :param strand: strandedness of the sequencing protocol, defaults to `forward`,
-                   may be one of the following: `forward`, `reverse`, `None` (unstranded)
+                   may be one of the following: `forward`, `reverse`, `unstranded`
     :type strand: str, optional
     :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
                     `umi` column, defaults to `None`

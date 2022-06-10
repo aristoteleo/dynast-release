@@ -657,7 +657,7 @@ def parse_align(parser, args, temp_dir=None):
     if args.strand == 'auto':
         strand = STRAND_MAP[technology.chemistry.strand]
         logger.info(
-            f'Auto-detected strandedness `{strand}` for technology `{technology.name}. '
+            f'Auto-detected strandedness `{strand}` for technology `{technology.name}`. '
             'Use `--strand` to override.'
         )
 
