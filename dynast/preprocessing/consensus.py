@@ -280,8 +280,8 @@ def call_consensus(
             })
 
         # Figure out what strand the consensus should map to
-        consensus_strand = None
         gene_strand = gene_info['strand']
+        consensus_strand = gene_strand
         if strand == 'forward':
             consensus_strand = gene_strand
         elif strand == 'reverse':

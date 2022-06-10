@@ -8,7 +8,7 @@ import warnings
 from . import __version__
 from .config import BAM_GENE_TAG
 from .logging import logger
-from .technology import TECHNOLOGIES_MAP
+from .technology import STRAND_MAP, TECHNOLOGIES_MAP, detect_strand
 from .utils import flatten_iter, patch_mp_connection_bpo_17560
 
 
@@ -16,7 +16,7 @@ def print_technologies():
     """Displays a list of supported technologies along with whether a whitelist
     is provided for that technology.
     """
-    headers = ['name', 'whitelist', 'barcode', 'umi', 'cDNA']
+    headers = ['name', 'whitelist', 'barcode', 'umi', 'cDNA', 'strand']
     rows = [headers]
 
     print('List of supported single-cell technologies\n')
@@ -26,11 +26,10 @@ def print_technologies():
         t = TECHNOLOGIES_MAP[key]
         chem = t.chemistry
         row = [
-            t.name,
-            'yes' if chem.has_whitelist else '',
+            t.name, 'yes' if chem.has_whitelist else '',
             ' '.join(str(_def) for _def in chem.cell_barcode_parser) if chem.has_cell_barcode else '',
             ' '.join(str(_def) for _def in chem.umi_parser) if chem.has_umi else '',
-            ' '.join(str(_def) for _def in chem.cdna_parser),
+            ' '.join(str(_def) for _def in chem.cdna_parser), chem.strand.name
         ]
         rows.append(row)
 
@@ -123,9 +122,9 @@ def setup_align_args(parser, parent):
     )
     parser_align.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected depending on the technology.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_align.add_argument(
         '-w',
@@ -216,9 +215,9 @@ def setup_consensus_args(parser, parent):
     )
     parser_consensus.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected from the BAM.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_consensus.add_argument(
         '--quality',
@@ -332,9 +331,9 @@ def setup_count_args(parser, parent):
     )
     parser_count.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected from the BAM.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_count.add_argument(
         '--quality',
@@ -653,6 +652,15 @@ def parse_align(parser, args, temp_dir=None):
         # Clean
         overrides = {arg: parts[0] if len(parts) == 1 else parts for arg, parts in overrides.items()}
 
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = STRAND_MAP[technology.chemistry.strand]
+        logger.info(
+            f'Auto-detected strandedness `{strand}` for technology `{technology.name}. '
+            'Use `--strand` to override.'
+        )
+
     from .align import align
     align(
         args.fastqs,
@@ -660,7 +668,7 @@ def parse_align(parser, args, temp_dir=None):
         args.o,
         technology,
         whitelist_path=args.w,
-        strand=args.strand,
+        strand=strand,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
@@ -689,12 +697,21 @@ def parse_consensus(parser, args, temp_dir=None):
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
 
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = detect_strand(args.bam)
+        if strand is None:
+            parser.error('Failed to auto-detect strandedness from BAM. Use `--strand` to provide strandedness.')
+        else:
+            logger.info(f'Auto-detected strandedness: {strand}. Use `--strand` to override.')
+
     from .consensus import consensus
     consensus(
         args.bam,
         args.g,
         args.o,
-        strand=args.strand,
+        strand=strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
@@ -743,12 +760,21 @@ def parse_count(parser, args, temp_dir=None):
     # Convert conversions to frozenset of tuples.
     conversions = frozenset(tuple(conv) for conv in conversions)
 
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = detect_strand(args.bam)
+        if strand is None:
+            parser.error('Failed to auto-detect strandedness from BAM. Use `--strand` to provide strandedness.')
+        else:
+            logger.info(f'Auto-detected strandedness: {strand}. Use `--strand` to override.')
+
     from .count import count
     count(
         args.bam,
         args.g,
         args.o,
-        strand=args.strand,
+        strand=strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
