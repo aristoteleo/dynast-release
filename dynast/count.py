@@ -312,6 +312,6 @@ def count(
         adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
         logger.info(f'Combining results into Anndata object at {adata_path}')
         adata = utils.results_to_adata(df_counts_complemented, conversions, gene_infos=gene_infos)
-        adata.write(adata_path)
+        adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)

@@ -336,6 +336,6 @@ def estimate(
             adata.obs[f'pi_c_{key}_{convs_key}'] = adata.obs[pi_key].map(pi_cs[key][tuple(convs)])
     adata.obs.set_index('barcode', inplace=True)
 
-    adata.write(adata_path)
+    adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)
