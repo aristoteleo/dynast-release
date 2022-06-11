@@ -1,37 +1,32 @@
 import math
 import os
 import tempfile
+from typing import Dict, Optional
 
 from . import utils
 from .logging import logger
 
 
 def STAR_genomeGenerate(
-    fasta_path,
-    gtf_path,
-    index_dir,
-    n_threads=8,
-    memory=16 * 1024**3,
-    temp_dir=None,
-):
+        fasta_path: str,
+        gtf_path: str,
+        index_dir: str,
+        n_threads: int = 8,
+        memory: int = 16 * 1024**3,
+        temp_dir: Optional[str] = None,
+) -> Dict[str, str]:
     """Generate a STAR index from a reference.
 
-    :param fasta_path: path to genome fasta
-    :type fasta_path: str
-    :param gtf_path: path to GTF annotation
-    :type gtf_path: str
-    :param index_dir: path to output STAR index
-    :type index_dir: str
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param memory: *suggested* memory to use (this is not guaranteed), in bytes,
-                   defaults to `16 * 1024**3`
-    :type memory: int, optional
-    :param temp_dir: temporary directory, defaults to `None`
-    :type temp_dir: str, optional
+    Args:
+        fasta_path: Path to genome fasta
+        gtf_path: Path to GTF annotation
+        index_dir: Path to output STAR index
+        n_threads: Number of threads, defaults to `8`
+        memory: *Suggested* memory to use (this is not guaranteed), in bytes
+        temp_dir: Temporary directory
 
-    :return: dictionary of generated index
-    :rtype: dictionary
+    Retuurns:
+        Dictionary of generated index
     """
     if fasta_path.endswith('.gz'):
         plaintext_path = utils.mkstemp(dir=temp_dir)
@@ -100,7 +95,24 @@ def STAR_genomeGenerate(
 
 
 @logger.namespaced('ref')
-def ref(fasta_path, gtf_path, index_dir, n_threads=8, memory=16 * 1024**3, temp_dir=None):
+def ref(
+    fasta_path: str,
+    gtf_path: str,
+    index_dir: str,
+    n_threads: int = 8,
+    memory: int = 16 * 1024**3,
+    temp_dir: Optional[str] = None
+):
+    """Main interface for the `ref command.
+
+    Args:
+        fasta_path: Path to genome fasta
+        gtf_path: Path to GTF annotation
+        index_dir: Path to output STAR index
+        n_threads: Number of threads, defaults to `8`
+        memory: *Suggested* memory to use (this is not guaranteed), in bytes
+        temp_dir: Temporary directory
+    """
     logger.info(f'Indexing FASTA {fasta_path} and GTF {gtf_path} with STAR')
     index_dir = STAR_genomeGenerate(
         fasta_path, gtf_path, index_dir, n_threads=n_threads, memory=memory, temp_dir=temp_dir

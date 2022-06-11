@@ -15,43 +15,11 @@ from ..preprocessing import aggregation, conversion
 
 
 def generate_sequence(k, seed=None):
-    """Generate a random genome sequence of length `k`.
-
-    :param k: length of the sequence
-    :type k: int
-    :param seed: random seed, defaults to `None`
-    :type seed: int, optional
-
-    :return: a random sequence
-    :rtype: str
-    """
     random.seed(seed)
     return ''.join(random.choices(conversion.BASE_COLUMNS, k=k))
 
 
 def simulate_reads(sequence, p_e, p_c, pi, l=100, n=100, seed=None):  # noqa
-    """Simulate `n` reads of length `l` from a sequence.
-
-    :param sequence: sequence to generate the reads from
-    :type sequence: str
-    :param p_e: background specific mutation rate. This is the rate a specific
-                base mutates to another specific base (i.e. T>C, A>G, ...)
-    :type p_e: float
-    :param p_c: T>C mutation rate in labeled RNA
-    :type p_c: float
-    :param pi: fraction of labeled RNA
-    :type pi: float
-    :param l: length of each read, defaults to `100`
-    :type l: int, optional
-    :param n: number of reads to simulate, defaults to `100`
-    :type n: int, optional
-    :param seed: random seed, defaults to `None`
-    :type seed: int, optional
-
-    :return: a dataframe with each read as a row and the number of conversions and
-             base content as the columns
-    :rtype: pandas.DataFrame
-    """
     generator = np.random.RandomState(seed)
 
     n_new = int(n * pi)
@@ -131,8 +99,6 @@ def estimate(
     model=None,
     nasc=False,
 ):
-    """
-    """
     # p_e
     if estimate_p_e:
         if nasc:

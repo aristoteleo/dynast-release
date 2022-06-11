@@ -1,8 +1,10 @@
 import datetime as dt
 import os
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 import pystan
+from typing_extensions import Literal
 
 from . import config, constants, estimation, preprocessing, utils
 from .logging import logger
@@ -11,23 +13,43 @@ from .stats import Stats
 
 @logger.namespaced('estimate')
 def estimate(
-    count_dirs,
-    out_dir,
-    reads='complete',
-    groups=None,
-    ignore_groups_for_pi=True,
-    genes=None,
-    downsample=None,
-    downsample_mode='uniform',
-    cell_threshold=1000,
-    cell_gene_threshold=16,
-    control_p_e=None,
-    control=False,
-    n_threads=8,
-    temp_dir=None,
-    nasc=False,
-    seed=None,
+    count_dirs: List[str],
+    out_dir: str,
+    reads: Union[Literal['complete'], List[Literal['total', 'transcriptome', 'spliced', 'unspliced']]] = 'complete',
+    groups: Optional[List[Dict[str, str]]] = None,
+    ignore_groups_for_pi: bool = True,
+    genes: Optional[List[str]] = None,
+    downsample: Optional[Union[int, float]] = None,
+    downsample_mode: Literal['uniform', 'cell', 'group'] = 'uniform',
+    cell_threshold: int = 1000,
+    cell_gene_threshold: int = 16,
+    control_p_e: Optional[float] = None,
+    control: bool = False,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
+    nasc: bool = False,
+    seed: Optional[int] = None,
 ):
+    """Main interface for the `estimate` command.
+
+    Args:
+        count_dirs: Paths to directories containing `count` command output
+        out_dir: Output directory
+        reads: What read group(s) to quantify
+        groups: Cell groups
+        ignore_groups_for_pi: Ignore cell groups for pi estimation
+        genes: Genes to consider
+        downsample: Downsample factor (float) or number (int)
+        donsample_mode: Downsampling mode
+        cell_threshold: Run estimation only for cells with at least this many counts
+        cell_gene_threshold: Run estimation for cell-genes with at least this many counts
+        control_p_e: Old RNA conversion rate (p_e), estimated from control samples
+        control: Whether this is a control sample
+        n_threads: Number of threads
+        temp_dir: Temporary directory
+        nasc: Whether to match NASC-seq pipeline behavior
+        seed: Random seed
+    """
     stats = Stats()
     stats.start()
     stats_path = os.path.join(
@@ -200,6 +222,7 @@ def estimate(
             df = df_counts[df_counts['velocity'] == key]
 
         for convs in conversions:
+            convs = sorted(convs)
             other_convs = list(set(all_conversions) - set(convs))
             aggregates_paths.setdefault(key, {})[tuple(convs)] = preprocessing.aggregate_counts(
                 df[(df[other_convs] == 0).all(axis=1)] if other_convs else df,
@@ -210,6 +233,7 @@ def estimate(
     # Estimate p_c
     p_c_paths = {}
     for convs in conversions:
+        convs = sorted(convs)
         p_c_path = os.path.join(out_dir, f'{constants.P_C_PREFIX}_{"_".join(convs)}.csv')
         logger.info(f'Estimating {convs} conversion rate in labeled RNA per {p_key} to {p_c_path}')
         df_aggregates = preprocessing.read_aggregates(
@@ -231,6 +255,7 @@ def estimate(
     pi_c_paths = {}
     for key in reads:
         for convs in conversions:
+            convs = sorted(convs)
             pi_c_path = os.path.join(out_dir, f'pi_c_{key}_{"_".join(convs)}.csv')
             logger.info(
                 f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key} to {pi_c_path}'
@@ -272,6 +297,7 @@ def estimate(
     pi_paths = {}
     for key in reads:
         for convs in conversions:
+            convs = sorted(convs)
             pi_path = os.path.join(out_dir, f'pi_{key}_{"_".join(convs)}.csv')
             logger.info(
                 f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key}-gene to {pi_path}'
@@ -329,6 +355,7 @@ def estimate(
     adata.obs.reset_index(inplace=True)
     adata.obs['p_e'] = adata.obs[p_key].map(p_es).astype('float')
     for convs in conversions:
+        convs = sorted(convs)
         convs_key = "_".join(convs)
         adata.obs[f'p_c_{convs_key}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype('float')
 

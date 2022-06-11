@@ -1,7 +1,9 @@
 import datetime as dt
 import os
+from typing import FrozenSet, List, Optional
 
 import ngs_tools as ngs
+from typing_extensions import Literal
 
 from . import config, constants, preprocessing, utils
 from .logging import logger
@@ -10,28 +12,55 @@ from .stats import Stats
 
 @logger.namespaced('count')
 def count(
-    bam_path,
-    gtf_path,
-    out_dir,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    control=False,
-    quality=27,
-    conversions=frozenset([('TC',)]),
-    snp_threshold=0.5,
-    snp_min_coverage=1,
-    snp_csv=None,
-    n_threads=8,
-    temp_dir=None,
-    velocity=True,
-    strict_exon_overlap=False,
-    dedup_mode='auto',
-    nasc=False,
-    overwrite=False,
+    bam_path: str,
+    gtf_path: str,
+    out_dir: str,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    control: bool = False,
+    quality: int = 27,
+    conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+    snp_threshold: float = 0.5,
+    snp_min_coverage: int = 1,
+    snp_csv: Optional[str] = None,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
+    velocity: bool = True,
+    strict_exon_overlap: bool = False,
+    dedup_mode: Literal['auto', 'exon', 'conversion'] = 'auto',
+    nasc: bool = False,
+    overwrite: bool = False,
 ):
+    """Main interface for the `count` command.
+
+    Args:
+        bam_path: Path to BAM
+        gtf_path: Path to GTF
+        out_dir: Path to output directory
+        strand: Strandedness of technology
+        umi_tag: BAM tag to use as UMIs
+        barcode_tag: BAM tag to use as barcodes
+        gene_tag: BAM tag to use as genes
+        barcodes: List of barcodes to consider
+        control: Whether this is a control sample
+        quality: Quality threshold in detecting conversions
+        conversions: Set of conversions to quantify
+        snp_threshold: Call genomic locations that have greater than this proportion of
+            specific conversions as a SNP
+        snp_min_coverage: Only consider genomic locations with at least this many mapping
+            reads for SNP calling
+        snp_csv: CSV containing SNPs
+        n_threads: Number of threads to use
+        temp_dir: Temporary directory
+        velocity: Whether to quantify spliced/unspliced RNA
+        strict_exon_overlap: Whether spliced/unspliced RNA quantification is strict
+        dedup_mode: UMI deduplication mode
+        nasc: Whether to match NASC-seq pipeline behavior
+        overwrite: Overwrite existing files
+    """
     stats = Stats()
     stats.start()
     stats_path = os.path.join(

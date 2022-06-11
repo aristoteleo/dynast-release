@@ -232,6 +232,8 @@ def call_consensus(
     temp_dir=None,
     n_threads=8
 ):
+    """
+    """
 
     def skip_alignment(read, tags):
         return read.is_secondary or read.is_unmapped or any(not read.has_tag(tag) for tag in tags)

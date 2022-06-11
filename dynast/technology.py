@@ -1,8 +1,10 @@
 import re
 from collections import namedtuple
+from typing import Optional
 
 import ngs_tools as ngs
 import pysam
+from typing_extensions import Literal
 
 Technology = namedtuple('Technology', ['name', 'chemistry', 'additional_args'])
 
@@ -36,15 +38,14 @@ STRAND_MAP = {
 BAM_STRAND_PARSER = re.compile('(--readStrand|--soloStrand)(=| +)(?P<strand>Forward|Reverse|Unstranded)')
 
 
-def detect_strand(bam_path):
+def detect_strand(bam_path: str) -> Optional[Literal['forward', 'reverse', 'unstranded']]:
     """Attempt to detect strandness by parsing the BAM header.
 
-    :param bam_path: Path to BAM
-    :type bam_path: str
+    Args:
+        bam_path: Path to BAM
 
-    :return: 'unstranded', 'forward', or 'reverse if the strand was successfully detected.
-        `None` otherwise.
-    :rtype: str, optional
+    Returns:
+        'unstranded', 'forward', or 'reverse if the strand was successfully detected. `None` otherwise.
     """
     with pysam.AlignmentFile(bam_path, 'rb') as f:
         pg = f.header.get('PG')

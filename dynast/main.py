@@ -4,10 +4,12 @@ import os
 import shutil
 import sys
 import warnings
+from typing import Optional
 
 from . import __version__
 from .config import BAM_GENE_TAG
 from .logging import logger
+from .preprocessing import CONVERSION_COMPLEMENT
 from .technology import STRAND_MAP, TECHNOLOGIES_MAP, detect_strand
 from .utils import flatten_iter, patch_mp_connection_bpo_17560
 
@@ -47,17 +49,16 @@ def print_technologies():
     sys.exit(1)
 
 
-def setup_ref_args(parser, parent):
+def setup_ref_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `ref` command.
 
-    :param parser: argparse parser to add the `ref` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `ref` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_ref = parser.add_parser(
         'ref',
@@ -92,7 +93,17 @@ def setup_ref_args(parser, parent):
     return parser_ref
 
 
-def setup_align_args(parser, parent):
+def setup_align_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Helper function to set up a subparser for the `align` command.
+
+    Args:
+        parser: Argparse parser to add the `align` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
+
+    Returns:
+        The newly added parser
+    """
     parser_align = parser.add_parser(
         'align',
         description='Align FASTQs',
@@ -155,17 +166,16 @@ def setup_align_args(parser, parent):
     return parser_align
 
 
-def setup_consensus_args(parser, parent):
+def setup_consensus_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `consensus` command.
 
-    :param parser: argparse parser to add the `consensus` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `consensus` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_consensus = parser.add_parser(
         'consensus',
@@ -259,17 +269,16 @@ def setup_consensus_args(parser, parent):
     return parser_consensus
 
 
-def setup_count_args(parser, parent):
+def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `count` command.
 
-    :param parser: argparse parser to add the `count` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `count` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_count = parser.add_parser(
         'count',
@@ -293,7 +302,8 @@ def setup_count_args(parser, parent):
             'timepoint.'
         ),
         action='append',
-        required=True
+        required=True,
+        choices=sorted(CONVERSION_COMPLEMENT.keys())
     )
     parser_count.add_argument(
         '-o',
@@ -442,17 +452,16 @@ def setup_count_args(parser, parent):
     return parser_count
 
 
-def setup_estimate_args(parser, parent):
+def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `estimate` command.
 
-    :param parser: argparse parser to add the `estimate` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `estimate` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_estimate = parser.add_parser(
         'estimate',
@@ -577,10 +586,13 @@ def setup_estimate_args(parser, parent):
     return parser_estimate
 
 
-def parse_ref(parser, args, temp_dir=None):
+def parse_ref(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `ref` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     if os.path.exists(args.i):
         parser.error(
@@ -676,10 +688,13 @@ def parse_align(parser, args, temp_dir=None):
     )
 
 
-def parse_consensus(parser, args, temp_dir=None):
+def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `consensus` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     # Check quality
     if args.quality < 0 or args.quality > 41:
@@ -723,10 +738,13 @@ def parse_consensus(parser, args, temp_dir=None):
     )
 
 
-def parse_count(parser, args, temp_dir=None):
+def parse_count(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `count` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     # Check quality
     if args.quality < 0 or args.quality > 41:
@@ -758,7 +776,7 @@ def parse_count(parser, args, temp_dir=None):
         parser.error('duplicate conversions are not allowed for `--conversion`')
 
     # Convert conversions to frozenset of tuples.
-    conversions = frozenset(tuple(conv) for conv in conversions)
+    conversions = frozenset(frozenset(conv) for conv in conversions)
 
     # Detect strand
     strand = args.strand
@@ -795,7 +813,14 @@ def parse_count(parser, args, temp_dir=None):
     )
 
 
-def parse_estimate(parser, args, temp_dir=None):
+def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
+    """Parser for the `estimate` command.
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
+    """
     # Check control constraints
     if args.control and args.p_e:
         parser.error('`--control` and `--p-e` can not be used together')

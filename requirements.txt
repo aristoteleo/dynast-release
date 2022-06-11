@@ -8,3 +8,4 @@ pysam>=0.16.0.1
 pystan==2.19.1.1
 scipy>=1.5.2
 tqdm>=4.50.0
+typing-extensions>=4.1.1

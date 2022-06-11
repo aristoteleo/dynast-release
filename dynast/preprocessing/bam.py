@@ -1,13 +1,16 @@
+import multiprocessing
 import os
 import shutil
 import tempfile
 from collections import Counter
 from functools import partial
+from typing import List, Optional, Set, Tuple, Union
 
 import ngs_tools as ngs
 import numpy as np
 import pandas as pd
 import pysam
+from typing_extensions import Literal
 
 from .. import config, utils
 from ..logging import logger
@@ -18,16 +21,16 @@ ALIGNMENT_COLUMNS = [
 ]
 
 
-def read_alignments(alignments_path, *args, **kwargs):
+def read_alignments(alignments_path: str, *args, **kwargs) -> pd.DataFrame:
     """Read alignments CSV as a pandas DataFrame.
 
     Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
 
-    :param alignments_path: path to alignments CSV
-    :type alignments_path: str
+    Args:
+        alignments_path: path to alignments CSV
 
-    :return: conversions dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Conversions dataframe
     """
     df = pd.read_csv(
         alignments_path,
@@ -52,16 +55,16 @@ def read_alignments(alignments_path, *args, **kwargs):
     return df
 
 
-def read_conversions(conversions_path, *args, **kwargs):
+def read_conversions(conversions_path: str, *args, **kwargs) -> pd.DataFrame:
     """Read conversions CSV as a pandas DataFrame.
 
     Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
 
-    :param conversions_path: path to conversions CSV
-    :type conversions_path: str
+    Args:
+        conversions_path: Path to conversions CSV
 
-    :return: conversions dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Conversions dataframe
     """
     df = pd.read_csv(
         conversions_path,
@@ -80,16 +83,16 @@ def read_conversions(conversions_path, *args, **kwargs):
     return df
 
 
-def select_alignments(df_alignments):
+def select_alignments(df_alignments: pd.DataFrame) -> Set[Tuple[str, str]]:
     """Select alignments among duplicates. This function performs preliminary
     deduplication and returns a list of tuples (read_id, alignment index) to
     use for coverage calculation and SNP detection.
 
-    :param df_alignments: alignments dataframe
-    :type df_alignments: pandas.DataFrame
+    Args:
+        df_alignments: Alignments dataframe
 
-    :return: set of (read_id, alignment index) that were selected
-    :rtype: set
+    Returns:
+        Set of (read_id, alignment index) that were selected
     """
     df_sorted = df_alignments.sort_values(['transcriptome', 'score'])
     umi = all(df_alignments['umi'] != 'NA')
@@ -116,73 +119,55 @@ def select_alignments(df_alignments):
 
 
 def parse_read_contig(
-    counter,
-    lock,
-    bam_path,
-    contig,
-    gene_infos=None,
-    transcript_infos=None,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    temp_dir=None,
-    update_every=2000,
-    nasc=False,
-    velocity=True,
-    strict_exon_overlap=False,
-):
+        counter: multiprocessing.Value,
+        lock: multiprocessing.Lock,
+        bam_path: str,
+        contig: str,
+        gene_infos: Optional[dict] = None,
+        transcript_infos: Optional[dict] = None,
+        strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+        umi_tag: Optional[str] = None,
+        barcode_tag: Optional[str] = None,
+        gene_tag: str = 'GX',
+        barcodes: Optional[List[str]] = None,
+        temp_dir: Optional[str] = None,
+        update_every: int = 2000,
+        nasc: bool = False,
+        velocity: bool = True,
+        strict_exon_overlap: bool = False,
+) -> Tuple[str, str, str]:
     """Parse all reads mapped to a contig, outputing conversion
     information as temporary CSVs. This function is designed to be called as a
     separate process.
 
-    :param counter: counter that keeps track of how many reads have been processed
-    :type counter: multiprocessing.Value
-    :param lock: semaphore for the `counter` so that multiple processes do not
-                 modify it at the same time
-    :type lock: multiprocessing.Lock
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
-    :param contig: only reads that map to this contig will be processed
-    :type contig: str
-    :param gene_infos: dictionary containing gene information, as returned by
-                       `preprocessing.gtf.parse_gtf`, required if `velocity=True`,
-                       defaults to `None`
-    :type gene_infos: dictionary
-    :param transcript_infos: dictionary containing transcript information,
-                             as returned by `preprocessing.gtf.parse_gtf`,
-                             required if `velocity=True`, defaults to `None`
-    :type transcript_infos: dictionary
-    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
-                   may be one of the following: `forward`, `reverse`, `unstranded`
-    :type strand: str, optional
-    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
-                    `umi` column, defaults to `None`
-    :type umi_tag: str, optional
-    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
-                        is output in the `barcode` column, defaults to `None`
-    :type barcode_tag: str, optional
-    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
-    :type gene_tag: str, optional
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param update_every: update the counter every this many reads, defaults to `5000`
-    :type update_every: int, optional
-    :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
-    :type nasc: bool, optional
-    :param velocity: whether or not to assign a velocity type to each read,
-                     defaults to `True`
-    :type velocity: bool, optional
-    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
-        as spliced, defaults to `False`
-    :type strict_exon_overlap: bool, optional
+    Args:
+        counter: Counter that keeps track of how many reads have been processed
+        lock: Semaphore for the `counter` so that multiple processes do not
+            modify it at the same time
+        bam_path: Path to alignment BAM file
+        contig: Only reads that map to this contig will be processed
+        gene_infos: Dictionary containing gene information, as returned by
+            `preprocessing.gtf.parse_gtf`, required if `velocity=True`
+        transcript_infos: Dictionary containing transcript information,
+            as returned by `preprocessing.gtf.parse_gtf`, required if `velocity=True`
+        strand: Strandedness of the sequencing protocol, defaults to `forward`,
+            may be one of the following: `forward`, `reverse`, `unstranded`
+        umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+            `umi` column
+        barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+            is output in the `barcode` column
+        gene_tag: BAM tag that encodes gene assignment
+        barcodes: List of barcodes to be considered. All barcodes are considered
+            if not provided
+        temp_dir: Path to temporary directory
+        update_every: Update the counter every this many reads, defaults to `5000`
+        nasc: Flag to change behavior to match NASC-seq pipeline, defaults to `False`
+        velocity: Whether or not to assign a velocity type to each read
+        strict_exon_overlap: Whether to use a stricter algorithm to assin reads
+            as spliced
 
-    :return: (path to conversions, path to conversions index, path to alignments)
-    :rtype: (str, str, str)
+    Returns:
+        (path to conversions, path to conversions index, path to alignments)
     """
 
     def skip_alignment(read, tags):
@@ -459,21 +444,19 @@ def parse_read_contig(
     return conversions_path, index_path, alignments_path
 
 
-def get_tags_from_bam(bam_path, n_reads=100000, n_threads=8):
+def get_tags_from_bam(bam_path: str, n_reads: int = 100000, n_threads: int = 8) -> Set[str]:
     """Utility function to retrieve all read tags present in a BAM.
 
-    :param bam_path: path to BAM
-    :type bam_path: str
-    :param n_reads: number of reads to consider, defaults to `100000`
-    :type n_reads: int, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
+    Args:
+        bam_path: Path to BAM
+        n_reads: Number of reads to consider
+        n_threads: Number of threads
 
-    :return: set of all tags found
-    :rtype: set
+    Returns:
+        Set of all tags found
     """
     tags = []
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+    with pysam.AlignmentFile(bam_path, 'rb', threads=n_threads) as bam:
         for i, read in enumerate(bam.fetch(until_eof=True)):
             for (tag, _) in read.get_tags():
                 tags.append(tag)
@@ -482,24 +465,24 @@ def get_tags_from_bam(bam_path, n_reads=100000, n_threads=8):
     return set(tags)
 
 
-def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
+def check_bam_tags_exist(bam_path: str,
+                         tags: List[str],
+                         n_reads: int = 100000,
+                         n_threads: int = 8) -> Tuple[bool, List[str]]:
     """Utility function to check if BAM tags exists in a BAM within the first
     `n_reads` reads.
 
-    :param bam_path: path to BAM
-    :type bam_path: str
-    :param tags: tags to check for
-    :type tags: list
-    :param n_reads: number of reads to consider, defaults to `100000`
-    :type n_reads: int, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
+    Args:
+        bam_path: Path to BAM
+        tags: Tags to check for
+        n_reads: Number of reads to consider
+        n_threads: Number of threads
 
-    :return: (whether all tags were found, list of not found tags)
-    :rtype: (bool, list)
+    Returns:
+        (whether all tags were found, list of not found tags)
     """
     tags_found = {tag: False for tag in tags}
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+    with pysam.AlignmentFile(bam_path, 'rb', threads=n_threads) as bam:
         for i, read in enumerate(bam.fetch()):
             for tag in tags:
                 if read.has_tag(tag):
@@ -512,20 +495,17 @@ def check_bam_tags_exist(bam_path, tags, n_reads=100000, n_threads=8):
     return False, [tag for tag in tags_found if not tags_found[tag]]
 
 
-def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
+def check_bam_is_paired(bam_path: str, n_reads: int = 100000, n_threads: int = 8) -> bool:
     """Utility function to check if BAM has paired reads.
 
-    :param bam_path: path to BAM
-    :type bam_path: str
-    :param n_reads: number of reads to consider, defaults to `100000`
-    :type n_reads: int, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
+        bam_path: Path to BAM
+        n_reads: Number of reads to consider
+        n_threads: Number of threads
 
-    :return: whether paired reads were detected
-    :rtype: bool
+    Returns:
+        Whether paired reads were detected
     """
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+    with pysam.AlignmentFile(bam_path, 'rb', threads=n_threads) as bam:
         for i, read in enumerate(bam.fetch()):
             if read.is_paired:
                 return True
@@ -535,8 +515,17 @@ def check_bam_is_paired(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
-def check_bam_contains_secondary(bam_path, n_reads=100000, n_threads=8):
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+def check_bam_contains_secondary(bam_path: str, n_reads: int = 100000, n_threads: int = 8) -> bool:
+    """Check whether BAM contains secondary alignments.
+
+        bam_path: Path to BAM
+        n_reads: Number of reads to consider
+        n_threads: Number of threads
+
+    Returns:
+        Whether secondary alignments were detected
+    """
+    with pysam.AlignmentFile(bam_path, 'rb', threads=n_threads) as bam:
         for i, read in enumerate(bam.fetch()):
             if read.is_secondary:
                 return True
@@ -546,7 +535,14 @@ def check_bam_contains_secondary(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
-def check_bam_contains_unmapped(bam_path):
+def check_bam_contains_unmapped(bam_path: str) -> bool:
+    """Check whether BAM contains unmapped reads.
+
+        bam_path: Path to BAM
+
+    Returns:
+        Whether unmapped reads were detected
+    """
     with pysam.AlignmentFile(bam_path, 'rb') as bam:
         for index in bam.get_index_statistics():
             if index.unmapped > 0:
@@ -554,8 +550,17 @@ def check_bam_contains_unmapped(bam_path):
     return False
 
 
-def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8):
-    with pysam.AlignmentFile(bam_path, 'rb') as bam:
+def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8) -> bool:
+    """Check whether BAM contains duplicates.
+
+        bam_path: Path to BAM
+        n_reads: Number of reads to consider
+        n_threads: Number of threads
+
+    Returns:
+        Whether duplicates were detected
+    """
+    with pysam.AlignmentFile(bam_path, 'rb', threads=n_threads) as bam:
         for i, read in enumerate(bam.fetch()):
             if read.is_duplicate:
                 return True
@@ -565,22 +570,19 @@ def check_bam_contains_duplicate(bam_path, n_reads=100000, n_threads=8):
     return False
 
 
-def sort_and_index_bam(bam_path, out_path, n_threads=8, temp_dir=None):
+def sort_and_index_bam(bam_path: str, out_path: str, n_threads: int = 8, temp_dir: Optional[str] = None) -> str:
     """Sort and index BAM.
 
     If the BAM is already sorted, the sorting step is skipped.
 
-    :param bam_path: path to alignment BAM file to sort
-    :type bam_path: str
-    :param out_path: path to output sorted BAM
-    :type out_path: str
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
+    Args:
+        bam_path: Path to alignment BAM file to sort
+        out_path: Path to output sorted BAM
+        n_threads: Number of threads
+        temp_dir: Path to temporary directory
 
-    :return: path to sorted and indexed BAM
-    :rtype: str
+    Returns:
+        Path to sorted and indexed BAM
     """
     bam_sorted = False
     with pysam.AlignmentFile(bam_path, 'rb') as f:
@@ -604,20 +606,17 @@ def sort_and_index_bam(bam_path, out_path, n_threads=8, temp_dir=None):
     return bam_path
 
 
-def split_bam(bam_path, n, n_threads=8, temp_dir=None):
+def split_bam(bam_path: str, n: int, n_threads: int = 8, temp_dir: Optional[str] = None) -> List[Tuple[str, int]]:
     """Split BAM into n parts.
 
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
-    :param n: number of splits
-    :type n: int
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
+    Args:
+        bam_path: Path to alignment BAM file
+        n: Number of splits
+        n_threads: Number of threads
+        temp_dir: Path to temporary directory
 
-    :return: List of tuples containing (split BAM path, number of reads)
-    :rtype: list
+    Returns:
+        List of tuples containing (split BAM path, number of reads)
     """
     # Filter for properly paired reads if BAM contains paired reads
     if check_bam_is_paired(bam_path, config.BAM_PEEK_READS, n_threads=n_threads):
@@ -647,78 +646,58 @@ def split_bam(bam_path, n, n_threads=8, temp_dir=None):
 
 
 def parse_all_reads(
-    bam_path,
-    conversions_path,
-    alignments_path,
-    index_path,
-    gene_infos,
-    transcript_infos,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    n_threads=8,
-    temp_dir=None,
-    nasc=False,
-    control=False,
-    velocity=True,
-    strict_exon_overlap=False,
-    return_splits=False,
-):
+        bam_path: str,
+        conversions_path: str,
+        alignments_path: str,
+        index_path: str,
+        gene_infos: dict,
+        transcript_infos: dict,
+        strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+        umi_tag: Optional[str] = None,
+        barcode_tag: Optional[str] = None,
+        gene_tag: str = 'GX',
+        barcodes: Optional[List[str]] = None,
+        n_threads: int = 8,
+        temp_dir: Optional[str] = None,
+        nasc: bool = False,
+        control: bool = False,
+        velocity: bool = True,
+        strict_exon_overlap: bool = False,
+        return_splits: bool = False,
+) -> Union[Tuple[str, str, str], Tuple[str, str, str, List[Tuple[str, int]]]]:
     """Parse all reads in a BAM and extract conversion, content and alignment
     information as CSVs.
 
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
-    :param conversions_path: path to output information about reads that have conversions
-    :type conversions_path: str
-    :param alignments_path: path to alignments information about reads
-    :type alignments_path: str
-    :param index_path: path to conversions index
-    :type index_path: str
-    :param no_index_path: path to no conversions index
-    :type no_index_path: str
-    :param gene_infos: dictionary containing gene information, as returned by
-                       `ngs.gtf.genes_and_transcripts_from_gtf`
-    :type gene_infos: dictionary
-    :param transcript_infos: dictionary containing transcript information,
-                             as returned by `ngs.gtf.genes_and_transcripts_from_gtf`
-    :type transcript_infos: dictionary
-    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
-                   may be one of the following: `forward`, `reverse`, `unstranded`
-    :type strand: str, optional
-    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
-                    `umi` column, defaults to `None`
-    :type umi_tag: str, optional
-    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
-                        is output in the `barcode` column, defaults to `None`
-    :type barcode_tag: str, optional
-    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
-    :type gene_tag: str, optional
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param nasc: flag to change behavior to match NASC-seq pipeline, defaults to `False`
-    :type nasc: bool, optional
-    :param velocity: whether or not to assign a velocity type to each read,
-                     defaults to `True`
-    :type velocity: bool, optional
-    :param strict_exon_overlap: Whether to use a stricter algorithm to assin reads
-        as spliced, defaults to `False`
-    :type strict_exon_overlap: bool, optional
-    :param return_splits: return BAM splits for later reuse, defaults to `True`
-    :type return_splits: bool, optional
+        bam_path: Path to alignment BAM file
+        conversions_path: Path to output information about reads that have conversions
+        alignments_path: Path to alignments information about reads
+        index_path: Path to conversions index
+        no_index_path: Path to no conversions index
+        gene_infos: Dictionary containing gene information, as returned by
+            `ngs.gtf.genes_and_transcripts_from_gtf`
+        transcript_infos: Dictionary containing transcript information,
+            as returned by `ngs.gtf.genes_and_transcripts_from_gtf`
+        strand: Strandedness of the sequencing protocol, defaults to `forward`,
+            may be one of the following: `forward`, `reverse`, `unstranded`
+        umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+            `umi` column
+        barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+            is output in the `barcode` column
+        gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+        barcodes: List of barcodes to be considered. All barcodes are considered
+            if not provided
+        n_threads: Number of threads
+        temp_dir: Path to temporary directory
+        nasc: Flag to change behavior to match NASC-seq pipeline
+        velocity: Whether or not to assign a velocity type to each read
+        strict_exon_overlap: Whether to use a stricter algorithm to assign reads as spliced
+        return_splits: return BAM splits for later reuse
 
-    :return: (path to conversions, path to alignments, path to conversions index)
-             If `return_splits` is True, then there is an additional return value, which
-             is a list of tuples containing split BAM paths and number of reads
-             in each BAM.
-    :rtype: (str, str, str) or (str, str, str, list)
+    Returns:
+        (path to conversions, path to alignments, path to conversions index)
+            If `return_splits` is True, then there is an additional return value, which
+            is a list of tuples containing split BAM paths and number of reads
+            in each BAM.
     """
     contig_genes = {}
     contig_transcripts = {}

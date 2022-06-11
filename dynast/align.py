@@ -1,54 +1,43 @@
 import os
 import tempfile
+from typing import Dict, List, Optional
 
 import ngs_tools as ngs
+from typing_extensions import Literal
 
 from . import config, constants, utils
 from .logging import logger
+from .technology import Technology
 
 
 def STAR_solo(
-    fastqs,
-    index_dir,
-    out_dir,
-    technology,
-    whitelist_path=None,
-    strand='forward',
-    n_threads=8,
-    temp_dir=None,
-    nasc=False,
-    overrides=None,
-):
+        fastqs: List[str],
+        index_dir: str,
+        out_dir: str,
+        technology: Technology,
+        whitelist_path: Optional[str] = None,
+        strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+        n_threads: int = 8,
+        temp_dir: Optional[str] = None,
+        nasc: bool = False,
+        overrides: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
     """Align FASTQs with STARsolo.
 
-    :param fastqs: list of path to FASTQs. Order matters -- STAR assumes the
-                   UMI and barcode are in read 2
-    :type fastqs: list
-    :param index_dir: path to directory containing STAR index
-    :type index_dir: str
-    :param out_dir: path to directory to place STAR output
-    :type out_dir: str
-    :param technology: a `Technology` object defined in `technology.py`
-    :type technology: collections.namedtuple
-    :param whitelist_path: path to textfile containing barcode whitelist,
-                           defaults to `None`
-    :type whitelist_path: str, optional
-    :param strand: strandedness of the sequencing protocol, defaults to `forward`,
-                   may be one of the following: `forward`, `reverse`, `unstranded`
-    :type strand: str, optional
-    :param n_threads: number of threads to use, defaults to `8`
-    :type n_threads: int, optional
-    :param temp_dir: STAR temporary directory, defaults to `None`, which
-                     uses the system temporary directory
-    :type temp_dir: str, optional
-    :param nasc: whether or not to use STAR configuration used in NASC-seq pipeline,
-                 defaults to `False`
-    :type nasc: bool, optional
-    :param overrides: STAR command-line argument overrides, defaults to `None`
-    :type overrides: dictionary, optional
-
-    :return: dictionary containing output files
-    :rtype: dict
+    Args:
+        fastqs: List of path to FASTQs. Order matters -- STAR assumes the
+            UMI and barcode are in read 2
+        index_dir: Path to directory containing STAR index
+        out_dir: Path to directory to place STAR output
+        technology: Technology specification
+        whitelist_path: Path to textfile containing barcode whitelist
+        strand: Strandedness of the sequencing protocol
+            may be one of the following: `forward`, `reverse`, `unstranded`
+        n_threads: Number of threads to use
+        temp_dir: STAR temporary directory, defaults to `None`, which
+            uses the system temporary directory
+        nasc: Whether or not to use STAR configuration used in NASC-seq pipeline
+        overrides: STAR command-line argument overrides
     """
     logger.info('Aligning the following FASTQs with STAR')
     for fastq in fastqs:
@@ -166,17 +155,34 @@ def STAR_solo(
 
 @logger.namespaced('align')
 def align(
-    fastqs,
-    index_dir,
-    out_dir,
-    technology,
-    whitelist_path=None,
-    strand='forward',
-    n_threads=8,
-    temp_dir=None,
-    nasc=False,
-    overrides=None,
+    fastqs: List[str],
+    index_dir: str,
+    out_dir: str,
+    technology: Technology,
+    whitelist_path: Optional[str] = None,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
+    nasc: bool = False,
+    overrides: Optional[Dict[str, str]] = None,
 ):
+    """Main interface for the `align` command.
+
+    Args:
+        fastqs: List of path to FASTQs. Order matters -- STAR assumes the
+            UMI and barcode are in read 2
+        index_dir: Path to directory containing STAR index
+        out_dir: Path to directory to place STAR output
+        technology: Technology specification
+        whitelist_path: Path to textfile containing barcode whitelist
+        strand: Strandedness of the sequencing protocol
+            may be one of the following: `forward`, `reverse`, `unstranded`
+        n_threads: Number of threads to use
+        temp_dir: STAR temporary directory, defaults to `None`, which
+            uses the system temporary directory
+        nasc: Whether or not to use STAR configuration used in NASC-seq pipeline
+        overrides: STAR command-line argument overrides
+    """
     os.makedirs(out_dir, exist_ok=True)
 
     # Check memory.

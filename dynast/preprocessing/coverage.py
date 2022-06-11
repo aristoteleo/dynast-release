@@ -1,6 +1,8 @@
+import multiprocessing
 import re
 from collections import Counter
 from functools import partial
+from typing import Dict, List, Optional, Set, Tuple
 
 import pysam
 
@@ -16,14 +18,14 @@ COVERAGE_PARSER = re.compile(
 )
 
 
-def read_coverage(coverage_path):
+def read_coverage(coverage_path: str) -> Dict[str, Dict[int, int]]:
     """Read coverage CSV as a dictionary.
 
-    :param coverage_path: path to coverage CSV
-    :type coverage_path: str
+    Args:
+        coverage_path: Path to coverage CSV
 
-    :return: coverage as a nested dictionary
-    :rtype: dict
+    Returns:
+        Coverage as a nested dictionary
     """
     coverage = {}
     with open(coverage_path, 'r') as f:
@@ -40,57 +42,44 @@ def read_coverage(coverage_path):
 
 
 def calculate_coverage_contig(
-    counter,
-    lock,
-    bam_path,
-    contig,
-    indices,
-    alignments=None,
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    temp_dir=None,
-    update_every=50000,
-    velocity=True
-):
+        counter: multiprocessing.Value,
+        lock: multiprocessing.Lock,
+        bam_path: str,
+        contig: str,
+        indices: List[Tuple[int, int, int]],
+        alignments: Set[Tuple[str, int]] = None,
+        umi_tag: Optional[str] = None,
+        barcode_tag: Optional[str] = None,
+        gene_tag: str = 'GX',
+        barcodes: Optional[List[str]] = None,
+        temp_dir: Optional[str] = None,
+        update_every: int = 50000,
+        velocity: bool = True
+) -> str:
     """Calculate converage for a specific contig. This function is designed to
     be called as a separate process.
 
-    :param counter: counter that keeps track of how many reads have been processed
-    :type counter: multiprocessing.Value
-    :param lock: semaphore for the `counter` so that multiple processes do not
-                 modify it at the same time
-    :type lock: multiprocessing.Lock
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
-    :param contig: only reads that map to this contig will be processed
-    :type contig: str
-    :param indices: genomic positions to consider
-    :type indices: list
-    :param alignments: set of (read_id, alignment_index) tuples to process. All
-        alignments are processed if this option is not provided.
-    :type alignments: set, optional
-    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
-                    `umi` column, defaults to `None`
-    :type umi_tag: str, optional
-    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
-                        is output in the `barcode` column, defaults to `None`
-    :type barcode_tag: str, optional
-    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
-    :type gene_tag: str, optional
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param update_every: update the counter every this many reads, defaults to `30000`
-    :type update_every: int, optional
-    :param velocity: whether or not velocities were assigned
-    :type velocity: bool, optional
+    Args:
+        counter: Counter that keeps track of how many reads have been processed
+        lock: Semaphore for the `counter` so that multiple processes do not
+            modify it at the same time
+        bam_path: Path to alignment BAM file
+        contig: Only reads that map to this contig will be processed
+        indices: Genomic positions to consider
+        alignments: Set of (read_id, alignment_index) tuples to process. All
+            alignments are processed if this option is not provided.
+        umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+            `umi` column
+        barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+            is output in the `barcode` column
+        gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
+        barcodes: List of barcodes to be considered. All barcodes are considered if not provided
+        temp_dir: Path to temporary directory
+        update_every: Update the counter every this many reads
+        velocity: Whether or not velocities were assigned
 
-    :return: coverag
-    :rtype: dict
+    Returns:
+        Path to coverage CSV
     """
 
     def skip_alignment(read, tags):
@@ -172,47 +161,37 @@ def calculate_coverage_contig(
 
 
 def calculate_coverage(
-    bam_path,
-    conversions,
-    coverage_path,
-    alignments=None,
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    temp_dir=None,
-    velocity=True,
-):
+        bam_path: str,
+        conversions: Dict[str, Set[int]],
+        coverage_path: str,
+        alignments: Optional[List[Tuple[str, int]]] = None,
+        umi_tag: Optional[str] = None,
+        barcode_tag: Optional[str] = None,
+        gene_tag: str = 'GX',
+        barcodes: Optional[List[str]] = None,
+        temp_dir: Optional[str] = None,
+        velocity: bool = True,
+) -> str:
     """Calculate coverage of each genomic position per barcode.
 
-    :param bam_path: path to alignment BAM file
-    :type bam_path: str
-    :param conversions: dictionary of contigs as keys and sets of genomic positions
-                        as values that indicates positions where conversions were observed
-    :type conversions: dictionary
-    :param coverage_path: path to write coverage CSV
-    :type coverage_path: str
-    :param alignments: set of (read_id, alignment_index) tuples to process. All
-        alignments are processed if this option is not provided.
-    :type alignments: set, optional
-    :param umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
-                    `umi` column, defaults to `None`
-    :type umi_tag: str, optional
-    :param barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
-                        is output in the `barcode` column, defaults to `None`
-    :type barcode_tag: str, optional
-    :param gene_tag: BAM tag that encodes gene assignment, defaults to `GX`
-    :type gene_tag: str, optional
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param velocity: whether or not velocities were assigned
-    :type velocity: bool, optional
+    Args:
+        bam_path: Path to alignment BAM file
+        conversions: Dictionary of contigs as keys and sets of genomic positions
+            as values that indicates positions where conversions were observed
+        coverage_path: Path to write coverage CSV
+        alignments: Set of (read_id, alignment_index) tuples to process. All
+            alignments are processed if this option is not provided.
+        umi_tag: BAM tag that encodes UMI, if not provided, `NA` is output in the
+            `umi` column
+        barcode_tag: BAM tag that encodes cell barcode, if not provided, `NA`
+            is output in the `barcode` column
+        gene_tag: BAM tag that encodes gene assignment
+        barcodes: List of barcodes to be considered. All barcodes are considered if not provided
+        temp_dir: Path to temporary directory
+        velocity: Whether or not velocities were assigned
 
-    :return: coverage CSV path
-    :rtype: str
+    Returns:
+        Path to coverage CSV
     """
     logger.debug(f'Extracting contigs from BAM {bam_path}')
     contigs = []

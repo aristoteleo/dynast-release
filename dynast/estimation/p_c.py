@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -9,16 +10,15 @@ from .. import utils
 from ..logging import logger
 
 
-def read_p_c(p_c_path, group_by=None):
+def read_p_c(p_c_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[str, Tuple[str, ...]], float]:
     """Read p_c CSV as a dictionary, with `group_by` columns as keys.
 
-    :param p_c_path: path to CSV containing p_c values
-    :type p_c_path: str
-    :param group_by: columns to group by, defaults to `None`
-    :type group_by: list, optional
+    Args:
+        p_c_path: Path to CSV containing p_c values
+        group_by: Columns to group by, defaults to `None`
 
-    :return: dictionary with `group_by` columns as keys (tuple if multiple)
-    :rtype: dictionary
+    Returns:
+        Dictionary with `group_by` columns as keys (tuple if multiple)
     """
     if group_by is None:
         with open(p_c_path, 'r') as f:
@@ -29,41 +29,37 @@ def read_p_c(p_c_path, group_by=None):
 
 
 @njit
-def binomial_pmf(k, n, p):
+def binomial_pmf(k: int, n: int, p: int) -> float:
     """Numbaized binomial PMF function for faster calculation.
 
-    :param k: number of successes
-    :type k: int
-    :param n: number of trials
-    :type n: int
-    :param p: probability of success
-    :type p: float
+    Args:
+        k: Number of successes
+        n: Number of trials
+        p: Probability of success
 
-    :return: probability of observing `k` successes in `n` trials with probability
-             of success `p`
-    :rtype: float
+    Returns:
+        Probability of observing `k` successes in `n` trials with probability
+            of success `p`
     """
     coef = np.prod(np.arange(k)[::-1] + (n - k + 1)) / (np.prod(np.arange(k) + 1))
     return coef * (p**k) * ((1 - p)**(n - k))
 
 
-def expectation_maximization_nasc(values, p_e, threshold=0.01):
+def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: float = 0.01) -> float:
     """NASC-seq pipeline variant of the EM algorithm to estimate average
     conversion rate in labeled RNA.
 
-    :param values: array of three columns encoding a sparse array in
-                   (row, column, value) format, zero-indexed, where
-                       row:    number of conversions
-                       column: nucleotide content
-                       value:  number of reads
-    :type values: numpy.ndarray
-    :param p_e: background mutation rate of unlabeled RNA
-    :type p_e: float
-    :param threshold: filter threshold, defaults to `0.01`
-    :type threshold: float, optional
+    Args:
+        values: array of three columns encoding a sparse array in (row, column, value) format,
+            zero-indexed, where
+            row:    number of conversions
+            column: nucleotide content
+            value:  number of reads
+        p_e: Background mutation rate of unlabeled RNA
+        threshold: Filter threshold
 
-    :return: estimated conversion rate
-    :rtype: float
+    Returns:
+        Estimated conversion rate
     """
     sp = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1]))).tolil()
     mask = []
@@ -113,7 +109,9 @@ def expectation_maximization_nasc(values, p_e, threshold=0.01):
     return p_c
 
 
-def expectation_maximization(values, p_e, p_c=0.1, threshold=0.01, max_iters=300):
+def expectation_maximization(
+        values: np.ndarray, p_e: float, p_c: float = 0.1, threshold: float = 0.01, max_iters: int = 300
+) -> float:
     """Run EM algorithm to estimate average conversion rate in labeled RNA.
 
     This function runs the following two steps.
@@ -123,23 +121,19 @@ def expectation_maximization(values, p_e, p_c=0.1, threshold=0.01, max_iters=300
        stimation.
     See https://doi.org/10.1093/bioinformatics/bty256.
 
-    :param values: array of three columns encoding a sparse array in
-                   (row, column, value) format, zero-indexed, where
-                       row:    number of conversions
-                       column: nucleotide content
-                       value:  number of reads
-    :type values: numpy.ndarray
-    :param p_e: background mutation rate of unlabeled RNA
-    :type p_e: float
-    :param p_c: initial p_c value, defaults to `0.1`
-    :type p_c: float, optional
-    :param threshold: filter threshold, defaults to `0.01`
-    :type threshold: float, optional
-    :param max_iters: maximum number of EM iterations, defaults to `300`
-    :type max_iters: int, optional
+    Args:
+        values: array of three columns encoding a sparse array in (row, column, value) format,
+            zero-indexed, where
+            row:    number of conversions
+            column: nucleotide content
+            value:  number of reads
+        p_e: Background mutation rate of unlabeled RNA
+        p_c: Initial p_c value
+        threshold: Filter threshold
+        max_iters: Maximum number of EM iterations
 
-    :return: estimated conversion rate
-    :rtype: float
+    Returns:
+        Estimated conversion rate
     """
     sp = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1]))).tolil()
     mask = []
@@ -182,27 +176,28 @@ def expectation_maximization(values, p_e, p_c=0.1, threshold=0.01, max_iters=300
     return p_c
 
 
-def estimate_p_c(df_aggregates, p_e, p_c_path, group_by=None, threshold=1000, n_threads=8, nasc=False):
+def estimate_p_c(
+        df_aggregates: pd.DataFrame,
+        p_e: float,
+        p_c_path: str,
+        group_by: Optional[List[str]] = None,
+        threshold: int = 1000,
+        n_threads: int = 8,
+        nasc: bool = False
+) -> str:
     """Estimate the average conversion rate in labeled RNA.
 
-    :param df_aggregates: Pandas dataframe containing aggregate values
-    :type df_aggregates: pandas.DataFrame
-    :param p_e: background mutation rate of unlabeled RNA
-    :type p_e: float
-    :param p_c_path: path to output CSV containing p_c estimates
-    :type p_c_path: str
-    :param group_by: columns to group by, defaults to `None`
-    :type group_by: list, optional
-    :param threshold: read count threshold, defaults to `1000`
-    :type threshold: int, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param nasc: flag to indicate whether to use NASC-seq pipeline variant of
-                 the EM algorithm, defaults to `False`
-    :type nasc: bool, optional
+    Args:
+        df_aggregates: Pandas dataframe containing aggregate values
+        p_e: Background mutation rate of unlabeled RNA
+        p_c_path: Path to output CSV containing p_c estimates
+        group_by: Columns to group by
+        threshold: Read count threshold
+        n_threads: Number of threads
+        nasc: Flag to indicate whether to use NASC-seq pipeline variant of the EM algorithm
 
-    :return: path to output CSV containing p_c estimates
-    :rtype: str
+    Returns:
+        Path to output CSV containing p_c estimates
     """
     em_func = expectation_maximization_nasc if nasc else expectation_maximization
     values = df_aggregates[['conversion', 'base', 'count']].values

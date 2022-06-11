@@ -1,3 +1,4 @@
+import concurrent
 import functools
 import multiprocessing
 import os
@@ -6,6 +7,7 @@ import sys
 import time
 from concurrent.futures import as_completed
 from contextlib import contextmanager
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Tuple, Union
 
 import anndata
 import ngs_tools as ngs
@@ -66,12 +68,12 @@ class suppress_stdout_stderr:
             os.close(fd)
 
 
-def get_STAR_binary_path():
+def get_STAR_binary_path() -> str:
     """Get the path to the platform-dependent STAR binary included with
     the installation.
 
-    :return: path to the binary
-    :rtype: str
+    Returns:
+        Path to the binary
     """
     bin_filename = 'STAR.exe' if config.PLATFORM == 'windows' else 'STAR'
     path = os.path.join(config.BINS_DIR, config.PLATFORM, 'STAR', bin_filename)
@@ -80,31 +82,30 @@ def get_STAR_binary_path():
     return path
 
 
-def get_STAR_version():
+def get_STAR_version() -> str:
     """Get the provided STAR version.
 
-    :return: version string
-    :rtype: str
+    Returns:
+        Version string
     """
     p, stdout, stderr = run_executable([get_STAR_binary_path(), '--version'], quiet=True, returncode=1)
     version = stdout.strip()
     return version
 
 
-def combine_arguments(args, additional):
+def combine_arguments(args: Dict[str, Any], additional: Dict[str, Any]) -> Dict[str, Any]:
     """Combine two dictionaries representing command-line arguments.
 
     Any duplicate keys will be merged according to the following procedure:
     1. If the value in both dictionaries are lists, the two lists are combined.
     2. Otherwise, the value in the first dictionary is OVERWRITTEN.
 
-    :param args: original command-line arguments
-    :type args: dictionary
-    :param additional: additional command-line arguments
-    :type additional: dictionary
+    Args:
+        args: Original command-line arguments
+        additional: Additional command-line arguments
 
-    :return: combined command-line arguments
-    :rtype: dictionary
+    Returns:
+        Combined command-line arguments
     """
     new_args = args.copy()
 
@@ -120,14 +121,14 @@ def combine_arguments(args, additional):
     return new_args
 
 
-def arguments_to_list(args):
+def arguments_to_list(args: Dict[str, Any]) -> List[Any]:
     """Convert a dictionary of command-line arguments to a list.
 
-    :param args: command-line arguments
-    :type args: dictionary
+    Args:
+        args: Command-line arguments
 
-    :return: list of command-line arguments
-    :rtype: list
+    Returns:
+        List of command-line arguments
     """
     arguments = []
     for key, value in args.items():
@@ -139,12 +140,12 @@ def arguments_to_list(args):
     return arguments
 
 
-def get_file_descriptor_limit():
+def get_file_descriptor_limit() -> int:
     """Get the current value for the maximum number of open file descriptors
     in a platform-dependent way.
 
-    :return: the current value of the maximum number of open file descriptors.
-    :rtype: int
+    Returns:
+        The current value of the maximum number of open file descriptors.
     """
     if config.PLATFORM == 'windows':
         import win32file
@@ -154,7 +155,7 @@ def get_file_descriptor_limit():
         return resource.getrlimit(resource.RLIMIT_NOFILE)[0]
 
 
-def get_max_file_descriptor_limit():
+def get_max_file_descriptor_limit() -> int:
     """Get the maximum allowed value for the maximum number of open file
     descriptors.
 
@@ -165,8 +166,8 @@ def get_max_file_descriptor_limit():
 
     Similarly, on MacOS, we return a hardcoded 10240.
 
-    :return: maximum allowed value for the maximum number of open file descriptors
-    :rtype: int
+    Returns:
+        Maximum allowed value for the maximum number of open file descriptors
     """
     if config.PLATFORM == 'windows':
         return 8192
@@ -178,16 +179,16 @@ def get_max_file_descriptor_limit():
 
 
 @contextmanager
-def increase_file_descriptor_limit(limit):
+def increase_file_descriptor_limit(limit: int):
     """Context manager that can be used to temporarily increase the maximum
     number of open file descriptors for the current process. The original
     value is restored when execution exits this function.
 
     This is required when running STAR with many threads.
 
-    :param limit: maximum number of open file descriptors will be increased to
-                  this value for the duration of the context
-    :type limit: int
+    Args:
+        limit: Maximum number of open file descriptors will be increased to
+            this value for the duration of the context
     """
     old = None
     if config.PLATFORM == 'windows':
@@ -210,23 +211,23 @@ def increase_file_descriptor_limit(limit):
                 resource.setrlimit(resource.RLIMIT_NOFILE, old)
 
 
-def get_available_memory():
+def get_available_memory() -> int:
     """Get total amount of available memory (total memory - used memory) in bytes.
 
-    :return: available memory in bytes
-    :rtype: int
+    Returns:
+        Available memory in bytes
     """
     return psutil.virtual_memory().available
 
 
-def make_pool_with_counter(n_threads):
+def make_pool_with_counter(n_threads: int) -> Tuple[multiprocessing.Pool, multiprocessing.Value, multiprocessing.Lock]:
     """Create a new Process pool with a shared progress counter.
 
-    :param n_threads: number of processes
-    :type n_threads: int
+    Args:
+        n_threads: Number of processes
 
-    :return: (Process pool, progress counter, lock)
-    :rtype: (multiprocessing.Pool, multiprocessing.Value, multiprocessing.Lock)
+    Returns:
+        Tuple of (Process pool, progress counter, lock)
     """
     manager = multiprocessing.Manager()
     counter = manager.Value('I', 0)
@@ -235,18 +236,17 @@ def make_pool_with_counter(n_threads):
     return pool, counter, lock
 
 
-def display_progress_with_counter(counter, total, *async_results, desc=None):
+def display_progress_with_counter(
+    counter: multiprocessing.Value, total: int, *async_results, desc: Optional[str] = None
+):
     """Display progress bar for displaying multiprocessing progress.
 
-    :param counter: progress counter
-    :type counter: multiprocessing.Value
-    :param total: maximum number of units of processing
-    :type total: int
-    :param *async_results: multiprocessing results to monitor. These are used to
-                           determine when all processes are done.
-    :type *async_results: multiprocessing.pool.AsyncResult
-    :param desc: progress bar description, defaults to `None`
-    :type desc: str, optional
+    Args:
+        counter: Progress counter
+        total: Maximum number of units of processing
+        *async_results: Multiprocessing results to monitor. These are used to
+            determine when all processes are done.
+        desc: Progress bar description
     """
     with ngs.progress.progress(total=total, unit_scale=True, desc=desc) as pbar:
         previous_progress = 0
@@ -258,11 +258,11 @@ def display_progress_with_counter(counter, total, *async_results, desc=None):
             previous_progress = progress
 
 
-def as_completed_with_progress(futures):
+def as_completed_with_progress(futures: Iterable[concurrent.futures.Future]):
     """Wrapper around `concurrent.futures.as_completed` that displays a progress bar.
 
-    :param futures: iterator of `concurrent.futures.Future` objects
-    :type futures: iterable
+    Args:
+        Iterator of `concurrent.futures.Future` objects
     """
     with ngs.progress.progress(total=len(futures)) as pbar:
         for future in as_completed(futures):
@@ -270,20 +270,18 @@ def as_completed_with_progress(futures):
             pbar.update(1)
 
 
-def split_index(index, n=8):
+def split_index(index: List[Tuple[int, int, int]], n: int = 8) -> List[List[Tuple[int, int, int]]]:
     """Split a conversions index, which is a list of tuples (file position,
     number of lines, alignment position), one for each read, into `n`
     approximately equal parts. This function is used to split the conversions
     CSV for multiprocessing.
 
-    :param index: index
-    :type index: list
-    :param n: number of splits, defaults to `8`
-    :type n: int, optional
+    Args:
+        index: index
+        n: Number of splits, defaults to `8`
 
-    :return: list of parts, where each part is a list of
-        (file position, number of lines, alignment position) tuples
-    :rtype: list
+    Returns:
+        List of parts
     """
     n_lines = sum(idx[1] for idx in index)
     target = (n_lines // n) + 1  # add one to prevent underflow
@@ -306,27 +304,29 @@ def split_index(index, n=8):
     return parts
 
 
-def downsample_counts(df_counts, proportion=None, count=None, seed=None, group_by=None):
+def downsample_counts(
+        df_counts: pd.DataFrame,
+        proportion: Optional[float] = None,
+        count: Optional[int] = None,
+        seed: Optional[int] = None,
+        group_by: Optional[List[str]] = None
+) -> pd.DataFrame:
     """Downsample the given counts dataframe according to the ``proportion`` or
     ``count`` arguments. One of these two must be provided, but not both. The dataframe
     is assumed to be UMI-deduplicated.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param proportion: proportion of reads (UMIs) to keep, defaults to None
-    :type proportion: float, optional
-    :param count: absolute number of reads (UMIs) to keep, defaults to None
-    :type count: int, optional
-    :param seed: random seed, defaults to None
-    :type seed: int, optional
-    :param group_by: Columns in the counts dataframe to use to group entries.
-        When this is provided, UMIs are no longer sampled at random, but instead
-        grouped by this argument, and only groups that have more than ``count`` UMIs
-        are downsampled.
-    :type group_by: list, optional
+    Args:
+        df_counts: Counts dataframe
+        proportion: Proportion of reads (UMIs) to keep
+        count: Absolute number of reads (UMIs) to keep
+        seed: Random seed
+        group_by: Columns in the counts dataframe to use to group entries.
+            When this is provided, UMIs are no longer sampled at random, but instead
+            grouped by this argument, and only groups that have more than ``count`` UMIs
+            are downsampled.
 
-    :return: downsampled counts dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Downsampled counts dataframe
     """
     rng = np.random.default_rng(seed)
     if not group_by:
@@ -347,24 +347,26 @@ def downsample_counts(df_counts, proportion=None, count=None, seed=None, group_b
         return pd.concat(dfs)
 
 
-def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX'):
+def counts_to_matrix(
+        df_counts: pd.DataFrame,
+        barcodes: List[str],
+        features: List[str],
+        barcode_column: str = 'barcode',
+        feature_column: str = 'GX'
+) -> sparse.csr_matrix:
     """Convert a counts dataframe to a sparse counts matrix.
 
     Counts are assumed to be appropriately deduplicated.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param barcodes: list of barcodes that will map to the rows
-    :type barcodes: list
-    :param features: list of features (i.e. genes) that will map to the columns
-    :type features: list
-    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
-    :type barcode_column: str
-    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
-    :type feature_column: str
+    Args:
+        df_counts: Counts dataframe
+        barcodes: List of barcodes that will map to the rows
+        features: List of features (i.e. genes) that will map to the columns
+        barcode_column: Column in counts dataframe to use as barcodes, defaults to `barcode`
+        feature_column: Column in counts dataframe to use as features, defaults to `GX`
 
-    :return: sparse counts matrix
-    :rtype: scipy.sparse.csrmatrix
+    Returns:
+        Sparse counts matrix
     """
     # Transform to index for fast lookup
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
@@ -378,24 +380,26 @@ def counts_to_matrix(df_counts, barcodes, features, barcode_column='barcode', fe
     return matrix.tocsr()
 
 
-def split_counts(df_counts, barcodes, features, barcode_column='barcode', feature_column='GX', conversions=('TC',)):
+def split_counts(
+    df_counts: pd.DataFrame,
+    barcodes: List[str],
+    features: List[str],
+    barcode_column: str = 'barcode',
+    feature_column: str = 'GX',
+    conversions: FrozenSet[str] = frozenset({'TC'})
+) -> Tuple[sparse.csr_matrix, sparse.csr_matrix]:
     """Split counts dataframe into two count matrices by a column.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param barcodes: list of barcodes that will map to the rows
-    :type barcodes: list
-    :param features: list of features (i.e. genes) that will map to the columns
-    :type features: list
-    :param barcode_column: column in counts dataframe to use as barcodes, defaults to `barcode`
-    :type barcode_column: str, optional
-    :param feature_column: column in counts dataframe to use as features, defaults to `GX`
-    :type feature_column: str, optional
-    :param conversions: conversion(s) in question, defaults to `('TC',)`
-    :type conversions: tuple, optional
+    Args:
+        df_counts: Counts dataframe
+        barcodes: List of barcodes that will map to the rows
+        features: List of features (i.e. genes) that will map to the columns
+        barcode_column: Column in counts dataframe to use as barcodes
+        feature_column: Column in counts dataframe to use as features
+        conversions: Conversion(s) in question
 
-    :return: (count matrix of `conversion==0`, count matrix of `conversion>0`)
-    :rtype: (scipy.sparse.csrmatrix, scipy.sparse.csrmatrix)
+    Returns:
+        count matrix of `conversion==0`, count matrix of `conversion>0`
     """
     matrix_unlabeled = counts_to_matrix(
         df_counts[(df_counts[list(conversions)] == 0).all(axis=1)],
@@ -414,20 +418,20 @@ def split_counts(df_counts, barcodes, features, barcode_column='barcode', featur
     return matrix_unlabeled, matrix_labeled
 
 
-def split_matrix(matrix, pis, barcodes, features):
+def split_matrix(
+        matrix: Union[np.ndarray, sparse.spmatrix], pis: Dict[Tuple[str, str], float], barcodes: List[str],
+        features: List[str]
+) -> Tuple[sparse.csr_matrix, sparse.csr_matrix, sparse.csr_matrix]:
     """Split the given matrix based on provided fraction of new RNA.
 
-    :param matrix: matrix to split
-    :type matrix: numpy.ndarray or scipy.sparse.spmatrix
-    :param pis: dictionary containing pi estimates
-    :type pis: dictionary
-    :param barcodes: all barcodes
-    :type barcodes: list
-    :param features: all features (i.e. genes)
-    :type features: list
+    Args:
+        matrix: Matrix to split
+        pis: Dictionary containing pi estimates
+        barcodes: All barcodes
+        features: All features (i.e. genes)
 
-    :return: (matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA)
-    :rtype: (scipy.sparse.spmatrix, scipy.sparse.spmatrix, scipy.sparse.spmatrix)
+    Returns:
+        matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA
     """
     unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
     labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
@@ -449,20 +453,22 @@ def split_matrix(matrix, pis, barcodes, features):
     return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
 
 
-def results_to_adata(df_counts, conversions=frozenset([('TC',)]), gene_infos=None, pis=None):
+def results_to_adata(
+        df_counts: pd.DataFrame,
+        conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+        gene_infos: Optional[dict] = None,
+        pis: Optional[Dict[Tuple[str, str], float]] = None
+) -> anndata.AnnData:
     """Compile all results to a single anndata.
 
-    :param df_counts: counts dataframe, with complemented reverse strand bases
-    :type df_counts: pandas.DataFrame
-    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
-    :type conversions: list, optional
-    :param gene_infos: dictionary containing gene information, defaults to `None`
-    :type gene_infos: dict, optional
-    :param pis: dictionary of estimated pis, defaults to `None`
-    :type pis: dict, optional
+    Args:
+        df_counts: Counts dataframe, with complemented reverse strand bases
+        conversions: Conversion(s) in question, defaults to `frozenset([('TC',)])`
+        gene_infos: Dictionary containing gene information, defaults to `None`
+        pis: Dictionary of estimated pis, defaults to `None`
 
-    :return: anndata containing all results
-    :rtype: anndata.AnnData
+    Returns:
+        Anndata containing all results
     """
     pis = pis or {}
     gene_infos = gene_infos or {}
@@ -481,6 +487,7 @@ def results_to_adata(df_counts, conversions=frozenset([('TC',)]), gene_infos=Non
     # Transcriptome reads
     if transcriptome_exists:
         for convs in conversions:
+            convs = sorted(convs)
             # Ignore reads that have other conversions
             other_convs = list(set(all_conversions) - set(convs))
             join = '_'.join(convs)
@@ -504,7 +511,8 @@ def results_to_adata(df_counts, conversions=frozenset([('TC',)]), gene_infos=Non
     # Total reads
     if not transcriptome_only:
         layers['total'] = counts_to_matrix(df_counts, barcodes, features)
-        for conv in conversions:
+        for convs in conversions:
+            convs = sorted(convs)
             other_convs = list(set(all_conversions) - set(convs))
             join = '_'.join(convs)
             layers[f'unlabeled_{join}'], layers[f'labeled_{join}'] = split_counts(

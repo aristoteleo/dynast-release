@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -8,17 +9,15 @@ from .. import config, utils
 from ..logging import logger
 
 
-def read_pi(pi_path, group_by=None):
+def read_pi(pi_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[str, Tuple[str, ...]], float]:
     """Read pi CSV as a dictionary.
 
-    :param pi_path: path to CSV containing pi values
-    :type pi_path: str
-    :param group_by: columns that were used to group estimation, defaults to
-        ``None``
-    :type group_by: list, optional
+    Args:
+        pi_path: path to CSV containing pi values
+        group_by: columns that were used to group estimation
 
-    :return: dictionary with barcodes and genes as keys
-    :rtype: dictionary
+    Returns:
+        Dictionary with barcodes and genes as keys
     """
     if group_by is None:
         with open(pi_path, 'r') as f:
@@ -37,7 +36,7 @@ def read_pi(pi_path, group_by=None):
 _model = None
 
 
-def initializer(model):
+def initializer(model: pystan.StanModel):
     """Multiprocessing initializer.
     https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ThreadPoolExecutor
 
@@ -48,35 +47,33 @@ def initializer(model):
     _model = model
 
 
-def beta_mean(alpha, beta):
+def beta_mean(alpha: float, beta: float) -> float:
     """Calculate the mean of a beta distribution.
     https://en.wikipedia.org/wiki/Beta_distribution
 
-    :param alpha: first parameter of the beta distribution
-    :type alpha: float
-    :param beta: second parameter of the beta distribution
-    :type beta: float
+    Args:
+        alpha: First parameter of the beta distribution
+        beta: Second parameter of the beta distribution
 
-    :return: mean of the beta distribution
-    :rtype: float
+    Returns:
+        Mean of the beta distribution
     """
     return alpha / (alpha + beta)
 
 
-def beta_mode(alpha, beta):
+def beta_mode(alpha: float, beta: float) -> float:
     """Calculate the mode of a beta distribution.
     https://en.wikipedia.org/wiki/Beta_distribution
 
     When the distribution is bimodal (`alpha`, `beta` < 1), this function returns
     `nan`.
 
-    :param alpha: first parameter of the beta distribution
-    :type alpha: float
-    :param beta: second parameter of the beta distribution
-    :type beta: float
+    Args:
+        alpha: First parameter of the beta distribution
+        beta: Second parameter of the beta distribution
 
-    :return: mode of the beta distribution
-    :rtype: float
+    Returns:
+        Mode of the beta distribution
     """
     pi = float('nan')
 
@@ -93,18 +90,17 @@ def beta_mode(alpha, beta):
     return pi
 
 
-def guess_beta_parameters(guess, strength=5):
+def guess_beta_parameters(guess: float, strength: int = 5) -> Tuple[float, float]:
     """Given a `guess` of the mean of a beta distribution, calculate beta
     distribution parameters such that the distribution is skewed by some
     `strength` toward the `guess`.
 
-    :param guess: guess of the mean of the beta distribution
-    :type guess: float
-    :param strength: strength of the skew, defaults to `5`
-    :type strength: int
+    Args:
+        guess: Guess of the mean of the beta distribution
+        strength: Strength of the skew
 
-    :return: beta distribution parameters (alpha, beta)
-    :rtype: (float, float)
+    Returns
+        Beta distribution parameters (alpha, beta)
     """
     alpha = max(strength * guess, 0.1)
     beta = max(strength - alpha, 0.1)
@@ -112,44 +108,36 @@ def guess_beta_parameters(guess, strength=5):
 
 
 def fit_stan_mcmc(
-    values,
-    p_e,
-    p_c,
-    guess=0.5,
-    model=None,
-    n_chains=1,
-    n_warmup=1000,
-    n_iters=1000,
-    seed=None,
-):
+        values: np.ndarray,
+        p_e: float,
+        p_c: float,
+        guess: float = 0.5,
+        model: pystan.StanModel = None,
+        n_chains: int = 1,
+        n_warmup: int = 1000,
+        n_iters: int = 1000,
+        seed: Optional[int] = None,
+) -> Tuple[float, float, float, float]:
     """Run MCMC to estimate the fraction of labeled RNA.
 
-    :param values: array of three columns encoding a sparse array in
-                   (row, column, value) format, zero-indexed, where
-                       row:    number of conversions
-                       column: nucleotide content
-                       value:  number of reads
-    :type values: numpy.ndarray
-    :param p_e: average mutation rate in unlabeled RNA
-    :type p_e: float
-    :param p_c: average mutation rate in labeled RNA
-    :type p_c: float
-    :param guess: guess for the fraction of labeled RNA, defaults to `0.5`
-    :type guess: float, optional
-    :param model: pyStan model to run MCMC with, defaults to `None`
-                  if not provided, will try to use the `_model` global variable
-    :type model: pystan.StanModel, optional
-    :param n_chains: number of MCMC chains, defaults to `1`
-    :type n_chains: int, optional
-    :param n_warmup: number of warmup iterations, defaults to `1000`
-    :type n_warmup: int, optional
-    :param n_iters: number of MCMC iterations, excluding any warmups, defaults to `1000`
-    :type n_iters: int, optional
-    :param seed: random seed used for MCMC, defaults to `None`
-    :type seed: int, optional
+    Args:
+        values: Array of three columns encoding a sparse array in
+            (row, column, value) format, zero-indexed, where
+            row:    number of conversions
+            column: nucleotide content
+            value:  number of reads
+        p_e: Average mutation rate in unlabeled RNA
+        p_c: Average mutation rate in labeled RNA
+        guess: Guess for the fraction of labeled RNA
+        model: PyStan model to run MCMC with. If not provided, will try to use the
+            `_model` global variable
+        n_chains: Number of MCMC chains
+        n_warmup: Number of warmup iterations
+        n_iters: Number of MCMC iterations, excluding any warmups
+    seed: random seed used for MCMC
 
-    :return: (guess, alpha, beta, pi)
-    :rtype: (float, float, float, float)
+    Returns:
+        (guess, alpha, beta, pi)
     """
     model = model or _model
 
@@ -184,49 +172,37 @@ def fit_stan_mcmc(
 
 
 def estimate_pi(
-    df_aggregates,
-    p_e,
-    p_c,
-    pi_path,
-    group_by=None,
-    p_group_by=None,
-    n_threads=8,
-    threshold=16,
-    seed=None,
-    nasc=False,
-    model=None,
-):
+        df_aggregates: pd.DataFrame,
+        p_e: float,
+        p_c: float,
+        pi_path: str,
+        group_by: Optional[List[str]] = None,
+        p_group_by: Optional[List[str]] = None,
+        n_threads: int = 8,
+        threshold: int = 16,
+        seed: Optional[int] = None,
+        nasc: bool = False,
+        model: Optional[pystan.StanModel] = None,
+) -> str:
     """Estimate the fraction of labeled RNA.
 
-    :param df_aggregates: Pandas dataframe containing aggregate values
-    :type df_aggregates: pandas.DataFrame
-    :param p_e: average mutation rate in unlabeled RNA
-    :type p_e: float
-    :param p_c: average mutation rate in labeled RNA
-    :type p_c: float
-    :param pi_path: path to write pi estimates
-    :type pi_path: str
-    :param group_by: columns that were used to group cells, defaults to
-        ``None``
-    :type group_by: list, optional
-    :param p_group_by: columns that p_e/p_c estimation was grouped by, defaults to `None`
-    :type p_group_by: list, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param threshold: any conversion-content pairs with fewer than this many reads
-                      will not be processed, defaults to `16`
-    :type threshold: int, optional
-    :param seed: random seed, defaults to `None`
-    :type seed: int, optional
-    :param nasc: flag to change behavior to match NASC-seq pipeline. Specifically,
-                 the mode of the estimated Beta distribution is used as pi, defaults to `False`
-    :type nasc: bool, optional
-    :param model: pyStan model to run MCMC with, defaults to `None`
-                  if not provided, will try to compile the module manually
-    :type model: pystan.StanModel, optional
+    Args:
+        df_aggregates: Pandas dataframe containing aggregate values
+        p_e: Average mutation rate in unlabeled RNA
+        p_c: Average mutation rate in labeled RNA
+        pi_path: Path to write pi estimates
+        group_by: Columns that were used to group cells
+        p_group_by: Columns that p_e/p_c estimation was grouped by
+        n_threads: Number of threads
+        threshold: Any conversion-content pairs with fewer than this many reads
+            will not be processed
+        seed: Random seed
+        nasc: Flag to change behavior to match NASC-seq pipeline. Specifically,
+            the mode of the estimated Beta distribution is used as pi, defaults to `False`
+        model: PyStan model to run MCMC with. If not provided, will try to compile the module manually
 
-    :return: path to pi output
-    :rtype: str
+    Returns:
+        Path to pi output
     """
     df_full = df_aggregates[(df_aggregates[['base', 'count']] > 0).all(axis=1)].copy()
 
