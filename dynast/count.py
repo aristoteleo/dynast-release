@@ -23,7 +23,7 @@ def count(
     control: bool = False,
     quality: int = 27,
     conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
-    snp_threshold: float = 0.5,
+    snp_threshold: Optional[float] = None,
     snp_min_coverage: int = 1,
     snp_csv: Optional[str] = None,
     n_threads: int = 8,
@@ -207,7 +207,7 @@ def count(
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
     snp_required = [convs_path, coverage_path, snps_path]
-    if snp_threshold:
+    if snp_threshold is not None:
         if not control:
             # If SNP filtering is used with a non-control sample, there are some
             # inconsistencies in what particular reads (among duplicated ones) are used for
@@ -282,7 +282,7 @@ def count(
     counts_path = os.path.join(out_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
     logger.info(f'Counting conversions to {counts_path}')
     snps = utils.merge_dictionaries(
-        preprocessing.read_snps(snps_path) if snp_threshold else {},
+        preprocessing.read_snps(snps_path) if snp_threshold is not None else {},
         preprocessing.read_snp_csv(snp_csv) if snp_csv else {},
         f=set.union,
         default=set,
@@ -335,7 +335,7 @@ def count(
 
     if control:
         logger.info('Downstream processing skipped for controls')
-        if snp_threshold:
+        if snp_threshold is not None:
             logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
     else:
         adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)

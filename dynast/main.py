@@ -364,7 +364,7 @@ def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentP
             '(default: no SNP detection)'
         ),
         type=float,
-        default=False,
+        default=None,
     )
     parser_count.add_argument(
         '--snp-min-coverage',
