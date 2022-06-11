@@ -42,19 +42,19 @@ def read_coverage(coverage_path: str) -> Dict[str, Dict[int, int]]:
 
 
 def calculate_coverage_contig(
-        counter: multiprocessing.Value,
-        lock: multiprocessing.Lock,
-        bam_path: str,
-        contig: str,
-        indices: List[Tuple[int, int, int]],
-        alignments: Set[Tuple[str, int]] = None,
-        umi_tag: Optional[str] = None,
-        barcode_tag: Optional[str] = None,
-        gene_tag: str = 'GX',
-        barcodes: Optional[List[str]] = None,
-        temp_dir: Optional[str] = None,
-        update_every: int = 50000,
-        velocity: bool = True
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    bam_path: str,
+    contig: str,
+    indices: List[Tuple[int, int, int]],
+    alignments: Set[Tuple[str, int]] = None,
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    temp_dir: Optional[str] = None,
+    update_every: int = 50000,
+    velocity: bool = True
 ) -> str:
     """Calculate converage for a specific contig. This function is designed to
     be called as a separate process.
@@ -161,16 +161,16 @@ def calculate_coverage_contig(
 
 
 def calculate_coverage(
-        bam_path: str,
-        conversions: Dict[str, Set[int]],
-        coverage_path: str,
-        alignments: Optional[List[Tuple[str, int]]] = None,
-        umi_tag: Optional[str] = None,
-        barcode_tag: Optional[str] = None,
-        gene_tag: str = 'GX',
-        barcodes: Optional[List[str]] = None,
-        temp_dir: Optional[str] = None,
-        velocity: bool = True,
+    bam_path: str,
+    conversions: Dict[str, Set[int]],
+    coverage_path: str,
+    alignments: Optional[List[Tuple[str, int]]] = None,
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    temp_dir: Optional[str] = None,
+    velocity: bool = True,
 ) -> str:
     """Calculate coverage of each genomic position per barcode.
 

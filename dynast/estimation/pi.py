@@ -108,15 +108,15 @@ def guess_beta_parameters(guess: float, strength: int = 5) -> Tuple[float, float
 
 
 def fit_stan_mcmc(
-        values: np.ndarray,
-        p_e: float,
-        p_c: float,
-        guess: float = 0.5,
-        model: pystan.StanModel = None,
-        n_chains: int = 1,
-        n_warmup: int = 1000,
-        n_iters: int = 1000,
-        seed: Optional[int] = None,
+    values: np.ndarray,
+    p_e: float,
+    p_c: float,
+    guess: float = 0.5,
+    model: pystan.StanModel = None,
+    n_chains: int = 1,
+    n_warmup: int = 1000,
+    n_iters: int = 1000,
+    seed: Optional[int] = None,
 ) -> Tuple[float, float, float, float]:
     """Run MCMC to estimate the fraction of labeled RNA.
 
@@ -172,17 +172,17 @@ def fit_stan_mcmc(
 
 
 def estimate_pi(
-        df_aggregates: pd.DataFrame,
-        p_e: float,
-        p_c: float,
-        pi_path: str,
-        group_by: Optional[List[str]] = None,
-        p_group_by: Optional[List[str]] = None,
-        n_threads: int = 8,
-        threshold: int = 16,
-        seed: Optional[int] = None,
-        nasc: bool = False,
-        model: Optional[pystan.StanModel] = None,
+    df_aggregates: pd.DataFrame,
+    p_e: float,
+    p_c: float,
+    pi_path: str,
+    group_by: Optional[List[str]] = None,
+    p_group_by: Optional[List[str]] = None,
+    n_threads: int = 8,
+    threshold: int = 16,
+    seed: Optional[int] = None,
+    nasc: bool = False,
+    model: Optional[pystan.StanModel] = None,
 ) -> str:
     """Estimate the fraction of labeled RNA.
 

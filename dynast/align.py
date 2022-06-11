@@ -11,16 +11,16 @@ from .technology import Technology
 
 
 def STAR_solo(
-        fastqs: List[str],
-        index_dir: str,
-        out_dir: str,
-        technology: Technology,
-        whitelist_path: Optional[str] = None,
-        strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
-        n_threads: int = 8,
-        temp_dir: Optional[str] = None,
-        nasc: bool = False,
-        overrides: Optional[Dict[str, str]] = None,
+    fastqs: List[str],
+    index_dir: str,
+    out_dir: str,
+    technology: Technology,
+    whitelist_path: Optional[str] = None,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
+    nasc: bool = False,
+    overrides: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     """Align FASTQs with STARsolo.
 

@@ -110,7 +110,7 @@ def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: flo
 
 
 def expectation_maximization(
-        values: np.ndarray, p_e: float, p_c: float = 0.1, threshold: float = 0.01, max_iters: int = 300
+    values: np.ndarray, p_e: float, p_c: float = 0.1, threshold: float = 0.01, max_iters: int = 300
 ) -> float:
     """Run EM algorithm to estimate average conversion rate in labeled RNA.
 
@@ -177,13 +177,13 @@ def expectation_maximization(
 
 
 def estimate_p_c(
-        df_aggregates: pd.DataFrame,
-        p_e: float,
-        p_c_path: str,
-        group_by: Optional[List[str]] = None,
-        threshold: int = 1000,
-        n_threads: int = 8,
-        nasc: bool = False
+    df_aggregates: pd.DataFrame,
+    p_e: float,
+    p_c_path: str,
+    group_by: Optional[List[str]] = None,
+    threshold: int = 1000,
+    n_threads: int = 8,
+    nasc: bool = False
 ) -> str:
     """Estimate the average conversion rate in labeled RNA.
 

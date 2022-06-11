@@ -180,9 +180,9 @@ def drop_multimappers(df_counts: pd.DataFrame, conversions: Optional[FrozenSet[s
 
 
 def deduplicate_counts(
-        df_counts: pd.DataFrame,
-        conversions: Optional[FrozenSet[str]] = None,
-        use_conversions: bool = True
+    df_counts: pd.DataFrame,
+    conversions: Optional[FrozenSet[str]] = None,
+    use_conversions: bool = True
 ) -> pd.DataFrame:
     """Deduplicate counts based on barcode, UMI, and gene.
 
@@ -223,11 +223,11 @@ def deduplicate_counts(
 
 
 def drop_multimappers_part(
-        counter: multiprocessing.Value,
-        lock: multiprocessing.Lock,
-        split_path: str,
-        out_path: str,
-        conversions: Optional[FrozenSet[str]] = None
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    split_path: str,
+    out_path: str,
+    conversions: Optional[FrozenSet[str]] = None
 ) -> str:
     """Helper function to parallelize :func:`drop_multimappers`.
     """
@@ -280,13 +280,13 @@ def split_counts_by_velocity(df_counts: pd.DataFrame) -> Dict[str, pd.DataFrame]
 
 
 def count_no_conversions(
-        alignments_path: str,
-        counter: multiprocessing.Value,
-        lock: multiprocessing.Lock,
-        index: List[Tuple[int, int, int]],
-        barcodes: Optional[List[str]] = None,
-        temp_dir: Optional[str] = None,
-        update_every: int = 10000,
+    alignments_path: str,
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    index: List[Tuple[int, int, int]],
+    barcodes: Optional[List[str]] = None,
+    temp_dir: Optional[str] = None,
+    update_every: int = 10000,
 ) -> str:
     """Count reads that have no conversion.
 
@@ -338,16 +338,16 @@ def count_no_conversions(
 
 
 def count_conversions_part(
-        conversions_path: str,
-        alignments_path: str,
-        counter: multiprocessing.Value,
-        lock: multiprocessing.Lock,
-        index: List[Tuple[int, int, int]],
-        barcodes: Optional[List[str]] = None,
-        snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
-        quality: int = 27,
-        temp_dir: Optional[str] = None,
-        update_every: int = 10000,
+    conversions_path: str,
+    alignments_path: str,
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    index: List[Tuple[int, int, int]],
+    barcodes: Optional[List[str]] = None,
+    snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
+    quality: int = 27,
+    temp_dir: Optional[str] = None,
+    update_every: int = 10000,
 ) -> str:
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode
@@ -418,18 +418,18 @@ def count_conversions_part(
 
 
 def count_conversions(
-        conversions_path: str,
-        alignments_path: str,
-        index_path: str,
-        counts_path: str,
-        gene_infos: dict,
-        barcodes: Optional[List[str]] = None,
-        snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
-        quality: int = 27,
-        conversions: Optional[FrozenSet[str]] = None,
-        dedup_use_conversions: bool = True,
-        n_threads: int = 8,
-        temp_dir: Optional[str] = None
+    conversions_path: str,
+    alignments_path: str,
+    index_path: str,
+    counts_path: str,
+    gene_infos: dict,
+    barcodes: Optional[List[str]] = None,
+    snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
+    quality: int = 27,
+    conversions: Optional[FrozenSet[str]] = None,
+    dedup_use_conversions: bool = True,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None
 ) -> str:
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode.

@@ -27,7 +27,7 @@ def read_p_e(p_e_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[
 
 
 def estimate_p_e_control(
-        df_counts: pd.DataFrame, p_e_path: str, conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})})
+    df_counts: pd.DataFrame, p_e_path: str, conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})})
 ) -> str:
     """Estimate background mutation rate of unlabeled RNA for a control sample
     by simply calculating the average mutation rate.
@@ -50,10 +50,10 @@ def estimate_p_e_control(
 
 
 def estimate_p_e(
-        df_counts: pd.DataFrame,
-        p_e_path: str,
-        conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
-        group_by: Optional[List[str]] = None
+    df_counts: pd.DataFrame,
+    p_e_path: str,
+    conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+    group_by: Optional[List[str]] = None
 ) -> str:
     """Estimate background mutation rate of unabeled RNA by calculating the
     average mutation rate of all three nucleotides other than `conversion[0]`.

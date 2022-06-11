@@ -305,11 +305,11 @@ def split_index(index: List[Tuple[int, int, int]], n: int = 8) -> List[List[Tupl
 
 
 def downsample_counts(
-        df_counts: pd.DataFrame,
-        proportion: Optional[float] = None,
-        count: Optional[int] = None,
-        seed: Optional[int] = None,
-        group_by: Optional[List[str]] = None
+    df_counts: pd.DataFrame,
+    proportion: Optional[float] = None,
+    count: Optional[int] = None,
+    seed: Optional[int] = None,
+    group_by: Optional[List[str]] = None
 ) -> pd.DataFrame:
     """Downsample the given counts dataframe according to the ``proportion`` or
     ``count`` arguments. One of these two must be provided, but not both. The dataframe
@@ -348,11 +348,11 @@ def downsample_counts(
 
 
 def counts_to_matrix(
-        df_counts: pd.DataFrame,
-        barcodes: List[str],
-        features: List[str],
-        barcode_column: str = 'barcode',
-        feature_column: str = 'GX'
+    df_counts: pd.DataFrame,
+    barcodes: List[str],
+    features: List[str],
+    barcode_column: str = 'barcode',
+    feature_column: str = 'GX'
 ) -> sparse.csr_matrix:
     """Convert a counts dataframe to a sparse counts matrix.
 
@@ -419,8 +419,8 @@ def split_counts(
 
 
 def split_matrix(
-        matrix: Union[np.ndarray, sparse.spmatrix], pis: Dict[Tuple[str, str], float], barcodes: List[str],
-        features: List[str]
+    matrix: Union[np.ndarray, sparse.spmatrix], pis: Dict[Tuple[str, str], float], barcodes: List[str],
+    features: List[str]
 ) -> Tuple[sparse.csr_matrix, sparse.csr_matrix, sparse.csr_matrix]:
     """Split the given matrix based on provided fraction of new RNA.
 
@@ -454,10 +454,10 @@ def split_matrix(
 
 
 def results_to_adata(
-        df_counts: pd.DataFrame,
-        conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
-        gene_infos: Optional[dict] = None,
-        pis: Optional[Dict[Tuple[str, str], float]] = None
+    df_counts: pd.DataFrame,
+    conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+    gene_infos: Optional[dict] = None,
+    pis: Optional[Dict[Tuple[str, str], float]] = None
 ) -> anndata.AnnData:
     """Compile all results to a single anndata.
 

@@ -78,14 +78,14 @@ def read_snp_csv(snp_csv: str) -> Dict[str, Dict[str, Set[int]]]:
 
 
 def extract_conversions_part(
-        conversions_path: str,
-        counter: multiprocessing.Value,
-        lock: multiprocessing.Lock,
-        index: List[Tuple[int, int, int]],
-        alignments: Optional[List[Tuple[str, int]]] = None,
-        conversions: Optional[FrozenSet[str]] = None,
-        quality: int = 27,
-        update_every: int = 5000
+    conversions_path: str,
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    index: List[Tuple[int, int, int]],
+    alignments: Optional[List[Tuple[str, int]]] = None,
+    conversions: Optional[FrozenSet[str]] = None,
+    quality: int = 27,
+    update_every: int = 5000
 ) -> Dict[str, Dict[str, Dict[int, int]]]:
     """Extract number of conversions for every genomic position.
 
@@ -140,12 +140,12 @@ def extract_conversions_part(
 
 
 def extract_conversions(
-        conversions_path: str,
-        index_path: str,
-        alignments: Optional[List[Tuple[str, int]]] = None,
-        conversions: Optional[FrozenSet[str]] = None,
-        quality: int = 27,
-        n_threads: int = 8
+    conversions_path: str,
+    index_path: str,
+    alignments: Optional[List[Tuple[str, int]]] = None,
+    conversions: Optional[FrozenSet[str]] = None,
+    quality: int = 27,
+    n_threads: int = 8
 ) -> Dict[str, Dict[str, Dict[int, int]]]:
     """Wrapper around `extract_conversions_part` that works in parallel
 
@@ -195,16 +195,16 @@ def extract_conversions(
 
 
 def detect_snps(
-        conversions_path: str,
-        index_path: str,
-        coverage: Dict[str, Dict[int, int]],
-        snps_path: str,
-        alignments: Optional[List[Tuple[str, int]]] = None,
-        conversions: Optional[FrozenSet[str]] = None,
-        quality: int = 27,
-        threshold: float = 0.5,
-        min_coverage: int = 1,
-        n_threads: int = 8,
+    conversions_path: str,
+    index_path: str,
+    coverage: Dict[str, Dict[int, int]],
+    snps_path: str,
+    alignments: Optional[List[Tuple[str, int]]] = None,
+    conversions: Optional[FrozenSet[str]] = None,
+    quality: int = 27,
+    threshold: float = 0.5,
+    min_coverage: int = 1,
+    n_threads: int = 8,
 ) -> str:
     """Detect SNPs.
 

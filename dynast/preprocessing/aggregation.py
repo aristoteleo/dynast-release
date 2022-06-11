@@ -91,7 +91,7 @@ def calculate_mutation_rates(df_counts: pd.DataFrame, rates_path: str, group_by:
 
 
 def aggregate_counts(
-        df_counts: pd.DataFrame, aggregates_path: str, conversions: FrozenSet[str] = frozenset({'TC'})
+    df_counts: pd.DataFrame, aggregates_path: str, conversions: FrozenSet[str] = frozenset({'TC'})
 ) -> str:
     """Aggregate conversion counts for each pair of bases.
 

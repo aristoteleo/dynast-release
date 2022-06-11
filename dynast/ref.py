@@ -8,12 +8,12 @@ from .logging import logger
 
 
 def STAR_genomeGenerate(
-        fasta_path: str,
-        gtf_path: str,
-        index_dir: str,
-        n_threads: int = 8,
-        memory: int = 16 * 1024**3,
-        temp_dir: Optional[str] = None,
+    fasta_path: str,
+    gtf_path: str,
+    index_dir: str,
+    n_threads: int = 8,
+    memory: int = 16 * 1024**3,
+    temp_dir: Optional[str] = None,
 ) -> Dict[str, str]:
     """Generate a STAR index from a reference.
 
