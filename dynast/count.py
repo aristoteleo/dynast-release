@@ -340,11 +340,17 @@ def count(
         if snp_threshold is not None:
             logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
     else:
+        if by_name:
+            logger.info('Collapsing counts by gene name.')
+            df_counts_complemented['GX'] = df_counts_complemented['GX'].apply(
+                lambda gx: gene_infos[gx]['gene_name'] or gx
+            )
+
         adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
         logger.info(f'Combining results into Anndata object at {adata_path}')
-        adata = utils.results_to_adata(df_counts_complemented, conversions, gene_infos=gene_infos)
-        if by_name:
-            adata = utils.collapse_anndata(adata, by='gene_name')
+        adata = utils.results_to_adata(
+            df_counts_complemented, conversions, gene_infos=gene_infos if not by_name else None
+        )
         adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)
