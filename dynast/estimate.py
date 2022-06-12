@@ -28,6 +28,7 @@ def estimate(
     n_threads: int = 8,
     temp_dir: Optional[str] = None,
     nasc: bool = False,
+    by_name: bool = False,
     seed: Optional[int] = None,
 ):
     """Main interface for the `estimate` command.
@@ -48,6 +49,7 @@ def estimate(
         n_threads: Number of threads
         temp_dir: Temporary directory
         nasc: Whether to match NASC-seq pipeline behavior
+        by_name: Whether to group counts by gene name instead of ID
         seed: Random seed
     """
     stats = Stats()
@@ -69,6 +71,8 @@ def estimate(
     logger.info(f'Conversions: {" ".join(",".join(convs) for convs in conversions)}')
     all_conversions = sorted(utils.flatten_iter(conversions))
 
+    gene_infos = utils.read_pickle(os.path.join(count_dirs[0], constants.GENES_FILENAME))
+
     # Read each counts dataframe and suffix barcodes if needed
     dfs = []
     for i, count_dir in enumerate(count_dirs):
@@ -77,6 +81,9 @@ def estimate(
             f'Reading {counts_path}' + (f' and suffixing all barcodes with `-{i}`' if len(count_dirs) > 1 else '')
         )
         _df_counts = preprocessing.read_counts(counts_path)
+        # Convert gene IDs to names
+        if by_name:
+            _df_counts['GX'] = _df_counts['GX'].apply(lambda gx: gene_infos[gx]['gene_name'] or gx)
         # Subset to provided genes
         if genes:
             _df_counts = _df_counts[_df_counts['GX'].isin(genes)]
@@ -159,7 +166,6 @@ def estimate(
         reads += list(set(df_counts_uncomplemented['velocity'].unique()) - set(config.VELOCITY_BLACKLIST))
     logger.info(f'Estimation will be done on the following read groups: {reads}')
 
-    gene_infos = utils.read_pickle(os.path.join(count_dirs[0], constants.GENES_FILENAME))
     df_counts = preprocessing.complement_counts(df_counts_uncomplemented, gene_infos)
     logger.info(
         f'Final counts: {df_counts.shape[0]} reads '
@@ -339,7 +345,7 @@ def estimate(
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     logger.info(f'Combining results into Anndata object at {adata_path}')
-    adata = utils.results_to_adata(df_counts, conversions, gene_infos=gene_infos, pis=pis)
+    adata = utils.results_to_adata(df_counts, conversions, gene_infos=gene_infos if not by_name else None, pis=pis)
     # If groups were provided, add the group as a column
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')

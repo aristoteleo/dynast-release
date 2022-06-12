@@ -463,22 +463,21 @@ def results_to_adata(
 
     Args:
         df_counts: Counts dataframe, with complemented reverse strand bases
-        conversions: Conversion(s) in question, defaults to `frozenset([('TC',)])`
-        gene_infos: Dictionary containing gene information, defaults to `None`
-        pis: Dictionary of estimated pis, defaults to `None`
+        conversions: Conversion(s) in question
+        gene_infos: Dictionary containing gene information. If this is not provided,
+            the function assumes gene names are already in the Counts dataframe.
+        pis: Dictionary of estimated pis
 
     Returns:
         Anndata containing all results
     """
     pis = pis or {}
-    gene_infos = gene_infos or {}
     all_conversions = sorted(flatten_iter(conversions))
     transcriptome_exists = df_counts['transcriptome'].any()
     transcriptome_only = df_counts['transcriptome'].all()
     velocities = df_counts['velocity'].unique()
     barcodes = sorted(df_counts['barcode'].unique())
     features = sorted(df_counts['GX'].unique())
-    names = [gene_infos.get(feature, {}).get('gene_name') for feature in features]
 
     df_counts_transcriptome = df_counts[df_counts['transcriptome']]
     matrix = counts_to_matrix(df_counts_transcriptome, barcodes, features)
@@ -553,11 +552,12 @@ def results_to_adata(
                 ) = split_matrix(layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pi, barcodes, features)
 
     # Construct anndata
+    add_names = gene_infos is not None
+    var = pd.DataFrame(index=pd.Series(features, name='gene_id' if add_names else 'gene_name'))
+    if add_names:
+        var['gene_name'] = pd.Categorical([gene_infos.get(feature, {}).get('gene_name') for feature in features])
     return anndata.AnnData(
-        X=matrix,
-        obs=pd.DataFrame(index=pd.Series(barcodes, name='barcode')),
-        var=pd.DataFrame(index=pd.Series(features, name='gene_id'), data={'gene_name': pd.Categorical(names)}),
-        layers=layers
+        X=matrix, obs=pd.DataFrame(index=pd.Series(barcodes, name='barcode')), var=var, layers=layers
     )
 
 
@@ -612,3 +612,57 @@ def patch_mp_connection_bpo_17560():
 
     Connection._send_bytes = send_bytes
     Connection._recv_bytes = recv_bytes
+
+
+def collapse_anndata(adata: anndata.AnnData, by: Optional[str] = None) -> anndata.AnnData:
+    """Collapse the given Anndata by summing duplicate rows. The `by` argument
+    specifies which column to use. If not provided, the index is used.
+
+    Note:
+        This function also collapses any existing layers. Additionally, the
+        returned AnnData will have the values used to collapse as the index.
+
+    Args:
+        adata: The Anndata to collapse
+        by: The column to collapse by. If not provided, the index is used. When
+            this column contains missing values (i.e. nan or None), these
+            columns are removed.
+
+    Returns:
+        A new collapsed Anndata object. All matrices are sparse, regardless of
+        whether or not they were in the input Anndata.
+    """
+    var = adata.var
+    if by is not None:
+        var = var.set_index(by)
+    na_mask = var.index.isna()
+    adata = adata[:, ~na_mask].copy()
+    adata.var = var[~na_mask]
+
+    if not any(adata.var.index.duplicated()):
+        return adata
+
+    var_indices = {}
+    for i, index in enumerate(adata.var.index):
+        var_indices.setdefault(index, []).append(i)
+
+    # Convert all original matrices to csc for fast column operations
+    X = sparse.csc_matrix(adata.X)
+    layers = {layer: sparse.csc_matrix(adata.layers[layer]) for layer in adata.layers}
+    new_index = []
+    # lil_matrix is efficient for row-by-row construction
+    new_X = sparse.lil_matrix((len(var_indices), adata.shape[0]))
+    new_layers = {layer: new_X.copy() for layer in adata.layers}
+    for i, (index, indices) in enumerate(var_indices.items()):
+        new_index.append(index)
+        new_X[i] = X[:, indices].sum(axis=1).flatten()
+        for layer in layers.keys():
+            new_layers[layer][i] = layers[layer][:, indices].sum(axis=1).flatten()
+
+    return anndata.AnnData(
+        X=new_X.T.tocsr(),
+        layers={layer: new_layers[layer].T.tocsr()
+                for layer in new_layers},
+        obs=adata.obs.copy(),
+        var=pd.DataFrame(index=pd.Series(new_index, name=adata.var.index.name)),
+    )

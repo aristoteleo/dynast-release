@@ -391,6 +391,12 @@ def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentP
               'be processed.'),
         type=str,
     )
+    parser_count.add_argument(
+        '--gene-names',
+        help=('Group counts by gene names instead of gene IDs when generating the h5ad file.'),
+        action='store_true'
+    )
+
     splicing_group = parser_count.add_mutually_exclusive_group()
     splicing_group.add_argument(
         '--no-splicing',
@@ -529,6 +535,11 @@ def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.Argume
         help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
         type=int,
         default=16
+    )
+    parser_estimate.add_argument(
+        '--gene-names',
+        help=('Group counts by gene names instead of gene IDs when generating h5ad file'),
+        action='store_true'
     )
     parser_estimate.add_argument(
         '--downsample',
@@ -809,7 +820,8 @@ def parse_count(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_
         overwrite=args.overwrite,
         velocity=not args.no_splicing,
         strict_exon_overlap=args.exon_overlap == 'strict',
-        dedup_mode=args.dedup_mode
+        dedup_mode=args.dedup_mode,
+        by_name=args.gene_names
     )
 
 
@@ -849,6 +861,12 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
     # Read genes
     genes = None
     if args.genes:
+        if args.by_name:
+            logger.warning(
+                '`--genes` were provided with `--gene-names`. '
+                'Make sure your gene list contains gene names instead of IDs. '
+                'IDs should be used for any genes that do not have a name.'
+            )
         with open(args.genes, 'r') as f:
             genes = [line.strip() for line in f if not line.isspace()]
         logger.warning(f'Ignoring genes not in the {len(genes)} genes provided by `--genes`')
@@ -900,6 +918,7 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
+        by_name=args.gene_names,
         seed=args.seed
     )
 

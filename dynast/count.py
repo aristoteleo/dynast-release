@@ -31,6 +31,7 @@ def count(
     velocity: bool = True,
     strict_exon_overlap: bool = False,
     dedup_mode: Literal['auto', 'exon', 'conversion'] = 'auto',
+    by_name: bool = False,
     nasc: bool = False,
     overwrite: bool = False,
 ):
@@ -58,6 +59,7 @@ def count(
         velocity: Whether to quantify spliced/unspliced RNA
         strict_exon_overlap: Whether spliced/unspliced RNA quantification is strict
         dedup_mode: UMI deduplication mode
+        by_name: Whether to group counts by gene name instead of ID
         nasc: Whether to match NASC-seq pipeline behavior
         overwrite: Overwrite existing files
     """
@@ -341,6 +343,8 @@ def count(
         adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
         logger.info(f'Combining results into Anndata object at {adata_path}')
         adata = utils.results_to_adata(df_counts_complemented, conversions, gene_infos=gene_infos)
+        if by_name:
+            adata = utils.collapse_anndata(adata, by='gene_name')
         adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)
