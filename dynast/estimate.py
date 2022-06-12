@@ -190,8 +190,11 @@ def estimate(
                 conversions=conversions,
             )
         elif nasc:
+            rates = preprocessing.read_rates(os.path.join(count_dir, f'{constants.RATES_PREFIX}.csv'))
+            if groups:
+                rates['group'] = rates['barcode'].map(groups)
             p_e_path = estimation.estimate_p_e_nasc(
-                preprocessing.read_rates(os.path.join(count_dir, constants.RATES_FILENAME)),
+                rates,
                 p_e_path,
                 group_by=[p_key],
             )

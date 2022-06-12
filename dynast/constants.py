@@ -26,9 +26,8 @@ COVERAGE_INDEX_FILENAME = 'coverage.idx'
 SNPS_FILENAME = 'snps.csv'
 
 COUNTS_PREFIX = 'counts'
-
 ESTIMATE_DIR = 'estimate'
-RATES_FILENAME = 'rates.csv'
+RATES_PREFIX = 'rates'
 P_E_FILENAME = 'p_e.csv'
 P_C_PREFIX = 'p_c'
 AGGREGATE_FILENAME = 'aggregate.csv'

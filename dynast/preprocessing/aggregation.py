@@ -85,7 +85,6 @@ def calculate_mutation_rates(df_counts: pd.DataFrame, rates_path: str, group_by:
     df_rates = pd.concat(dfs, axis=1)
     if group_by is not None:
         df_rates = df_rates.reset_index()
-    logger.debug(f'Writing mutation rates to {rates_path}')
     df_rates.to_csv(rates_path, index=False)
     return rates_path
 

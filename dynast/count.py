@@ -3,6 +3,7 @@ import os
 from typing import FrozenSet, List, Optional
 
 import ngs_tools as ngs
+import pandas as pd
 from typing_extensions import Literal
 
 from . import config, constants, preprocessing, utils
@@ -329,11 +330,32 @@ def count(
                 'Otherwise, all missing barcodes will be ignored. '
             )
 
-    # Calculate mutation rates
-    rates_path = os.path.join(out_dir, constants.RATES_FILENAME)
-    rates_path = preprocessing.calculate_mutation_rates(
-        df_counts_uncomplemented if nasc else df_counts_complemented, rates_path, group_by=['barcode']
-    )
+    # Calculate mutation rates for each group
+    transcriptome_exists = df_counts_complemented['transcriptome'].any()
+    velocities = df_counts_complemented['velocity'].unique()
+    df_counts = df_counts_uncomplemented if nasc else df_counts_complemented
+    rates_paths = {}
+    rates_all_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}.csv')
+    logger.info(f'Calculating mutation rates for all reads to {rates_all_path}.')
+    rates_all_path = preprocessing.calculate_mutation_rates(df_counts, rates_all_path, group_by=['barcode'])
+    rates_paths['all'] = rates_all_path
+
+    if transcriptome_exists:
+        rates_X_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}_X.csv')
+        logger.info(f'Calculating mutation rates for X reads to {rates_X_path}.')
+        rates_X_path = preprocessing.calculate_mutation_rates(
+            df_counts[df_counts['transcriptome']], rates_X_path, group_by=['barcode']
+        )
+        rates_paths['X'] = rates_X_path
+    for key in velocities:
+        if key in config.VELOCITY_BLACKLIST:
+            continue
+        rates_velocity_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}_{key}.csv')
+        logger.info(f'Calculating mutation rates for {key} reads to {rates_velocity_path}.')
+        rates_velocity_path = preprocessing.calculate_mutation_rates(
+            df_counts[df_counts['velocity'] == key], rates_velocity_path, group_by=['barcode']
+        )
+        rates_paths[key] = rates_velocity_path
 
     if control:
         logger.info('Downstream processing skipped for controls')
@@ -351,6 +373,22 @@ def count(
         adata = utils.results_to_adata(
             df_counts_complemented, conversions, gene_infos=gene_infos if not by_name else None
         )
+
+        # Add rates to obsm
+        for key, rates_path in rates_paths.items():
+            obsm = 'rates'
+            if key != 'all':
+                obsm += f'_{key}'
+            logger.debug(f'Adding {obsm} to obsm.')
+            rates = preprocessing.read_rates(rates_path)
+            if isinstance(rates, pd.Series):
+                expanded = pd.DataFrame(columns=rates.index)
+                for obs in adata.obs_names:
+                    expanded.loc[obs] = rates
+                adata.obsm[obsm] = expanded
+            else:
+                adata.obsm[obsm] = rates.set_index('barcode').loc[adata.obs_names]
+
         adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)
