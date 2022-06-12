@@ -128,7 +128,7 @@ class TestConversion(mixins.TestMixin, TestCase):
         ]
         rows[1][4] = 100
         df = pd.DataFrame(rows, columns=['barcode', 'umi', 'GX', 'score'] + conversion.COLUMNS + ['transcriptome'])
-        df_deduplicated = conversion.deduplicate_counts(df, conversions=['TC'])
+        df_deduplicated = conversion.deduplicate_counts(df, conversions=frozenset({'TC'}))
         self.assertEqual(1, df_deduplicated.shape[0])
         self.assertEqual(1, df_deduplicated.iloc[0]['AC'])
 
@@ -153,7 +153,7 @@ class TestConversion(mixins.TestMixin, TestCase):
                     utils.read_pickle(self.umi_genes_path),
                     snps=None,
                     quality=27,
-                    conversions=['TC'],
+                    conversions=frozenset({'TC'}),
                     n_threads=2,
                     temp_dir=self.temp_dir
                 )
