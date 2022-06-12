@@ -534,7 +534,8 @@ def results_to_adata(
         if key in config.VELOCITY_BLACKLIST:
             continue
 
-        for conv in conversions:
+        for convs in conversions:
+            convs = sorted(convs)
             other_convs = list(set(all_conversions) - set(convs))
             join = '_'.join(convs)
             layers[f'{key[0]}n_{join}'], layers[f'{key[0]}l_{join}'] = split_counts(
