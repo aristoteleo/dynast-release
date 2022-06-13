@@ -387,7 +387,7 @@ def count(
                     expanded.loc[obs] = rates
                 adata.obsm[obsm] = expanded
             else:
-                adata.obsm[obsm] = rates.set_index('barcode').loc[adata.obs_names]
+                adata.obsm[obsm] = rates.set_index('barcode').reindex(adata.obs_names, fill_value=0.0)
 
         adata.write(adata_path, compression='gzip')
     stats.end()
