@@ -413,11 +413,11 @@ def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentP
             'Algorithm to use to detect spliced reads (that overlap exons). '
             'May be `strict`, which assigns reads as spliced if it only overlaps '
             'exons, or `lenient`, which assigns reads as spliced if it does not '
-            'overlap with any introns of at least one transcript. (default: lenient)'
+            'overlap with any introns of at least one transcript. (default: strict)'
         ),
         type=str,
         choices=['lenient', 'strict'],
-        default='lenient',
+        default='strict',
     )
     parser_count.add_argument(
         '--nasc',

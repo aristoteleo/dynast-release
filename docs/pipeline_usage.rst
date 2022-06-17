@@ -153,11 +153,11 @@ Quantifying counts with :code:`count`
 .. code-block:: text
 
     usage: dynast count [-h] [--tmp TMP] [--keep-tmp] [--verbose] [-t THREADS] -g GTF --conversion CONVERSION [-o OUT]
-                        [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded}]
-                        [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-min-coverage THRESHOLD] [--snp-csv CSV]
-                        [--barcodes TXT] [--no-splicing | --exon-overlap {lenient,strict}] [--control]
-                        [--dedup-mode {auto,conversion,exon}] [--overwrite]
-                        bam
+                    [--umi-tag TAG] [--barcode-tag TAG] [--gene-tag TAG] [--strand {forward,reverse,unstranded,auto}]
+                    [--quality QUALITY] [--snp-threshold THRESHOLD] [--snp-min-coverage THRESHOLD] [--snp-csv CSV]
+                    [--barcodes TXT] [--gene-names] [--no-splicing | --exon-overlap {lenient,strict}] [--control]
+                    [--dedup-mode {auto,conversion,exon}] [--overwrite]
+                    bam
 
     Quantify unlabeled and labeled RNA
 
@@ -177,8 +177,8 @@ Quantifying counts with :code:`count`
       --barcode-tag TAG     BAM tag to use as cell barcodes. If not provided, all reads are assumed to be from a single
                             cell. (default: None)
       --gene-tag TAG        BAM tag to use as gene assignments (default: GX)
-      --strand {forward,reverse,unstranded}
-                            Read strandedness. (default: `forward`)
+      --strand {forward,reverse,unstranded,auto}
+                            Read strandedness. By default, this is auto-detected from the BAM.
       --quality QUALITY     Base quality threshold. Only bases with PHRED quality greater than this value will be
                             considered when counting conversions. (default: 27)
       --snp-threshold THRESHOLD
@@ -189,13 +189,14 @@ Quantifying counts with :code:`count`
                             that region. (default: 1)
       --snp-csv CSV         CSV file of two columns: contig (i.e. chromosome) and genome position of known SNPs
       --barcodes TXT        Textfile containing filtered cell barcodes. Only these barcodes will be processed.
+      --gene-names          Group counts by gene names instead of gene IDs when generating the h5ad file.
       --no-splicing, --transcriptome-only
                             Do not assign reads a splicing status (spliced, unspliced, ambiguous) and ignore reads that
                             are not assigned to the transcriptome.
       --exon-overlap {lenient,strict}
                             Algorithm to use to detect spliced reads (that overlap exons). May be `strict`, which assigns
                             reads as spliced if it only overlaps exons, or `lenient`, which assigns reads as spliced if it
-                            does not overlap with any introns of at least one transcript. (default: lenient)
+                            does not overlap with any introns of at least one transcript. (default: strict)
       --control             Indicate this is a control sample, which is used to detect SNPs.
       --dedup-mode {auto,conversion,exon}
                             Deduplication mode for UMI-based technologies (required `--umi-tag`). Available choices are:
