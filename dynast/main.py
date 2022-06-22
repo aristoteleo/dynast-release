@@ -508,9 +508,22 @@ def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.Argume
         default=None,
     )
     parser_estimate.add_argument(
-        '--ignore-groups-for-pi',
+        '--method',
         help=(
-            'Ignore cell groupings when estimating the fraction of labeled RNA. '
+            'Correction method to use. '
+            'May be `cell-gene` to estimate the fraction of labeled RNA for every cell-gene combination, '
+            'or `alpha` to use alpha correction as used in the scNT-seq paper. `alpha` is recommended for '
+            'UMI-based assays. This option has no effect when used with `--control`. (default: alpha)'
+        )
+        choices=['pi_g', 'alpha'],
+        default='alpha'
+    )
+    parser_estimate.add_argument(
+        '--ignore-groups-for-est',
+        help=(
+            'Ignore cell groupings when calculating final estimations for the fraction of labeled RNA. '
+            'When `--method pi_g`, groups are ignored when estimating fraction of labeled RNA. '
+            'When `--method alpha`, groups are ignored when estimating detection rate. '
             'This option only has an effect when `--groups` is also specified.'
         ),
         action='store_true',
@@ -871,8 +884,6 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
             genes = [line.strip() for line in f if not line.isspace()]
         logger.warning(f'Ignoring genes not in the {len(genes)} genes provided by `--genes`')
 
-    # War
-
     # Parse cell groups csv(s)
     groups = []
     if args.groups:
@@ -890,7 +901,7 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
                     groups_part[barcode] = group
             groups.append(groups_part)
 
-    if args.ignore_groups_for_pi and not (args.groups):
+    if args.ignore_groups_for_est and not (args.groups):
         parser.error('`--ignore-groups-for-pi` can not be used without `--groups`')
 
     if not args.reads:
@@ -909,7 +920,7 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
         args.o,
         args.reads,
         groups=groups,
-        ignore_groups_for_pi=args.ignore_groups_for_pi,
+        ignore_groups_for_est=args.ignore_groups_for_est,
         genes=genes,
         downsample=args.downsample,
         downsample_mode=args.downsample_mode,
@@ -917,6 +928,7 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,
         control=args.control,
+        method=args.method,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
