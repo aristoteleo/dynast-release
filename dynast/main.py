@@ -497,12 +497,23 @@ def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.Argume
         default='.',
     )
     parser_estimate.add_argument(
+        '--barcodes',
+        metavar='TXT',
+        help=(
+            'Textfile containing filtered cell barcodes. Only these barcodes will be processed. '
+            'This option may be used multiple times when multiple input directories are provided.'
+        ),
+        action='append',
+        default=None,
+    )
+    parser_estimate.add_argument(
         '--groups',
         metavar='CSV',
         help=(
             'CSV containing cell (barcode) groups, where the first column is the barcode '
-            'and the second is the group name the cell belongs to. Cells will be combined per '
-            'group for estimation of parameters specified by `--groups-for`.'
+            'and the second is the group name the cell belongs to. Estimation will be performed '
+            'by aggregating UMIs per group. This option may be used multiple times when multiple '
+            'input directories are provided.'
         ),
         action='append',
         default=None,
@@ -545,13 +556,16 @@ def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.Argume
     parser_estimate.add_argument(
         '--cell-gene-threshold',
         metavar='COUNT',
-        help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
+        help=(
+            'A cell-gene pair must have at least this many reads for correction. '
+            'Only for `--method pi_g`. (default: 16)'
+        ),
         type=int,
         default=16
     )
     parser_estimate.add_argument(
         '--gene-names',
-        help=('Group counts by gene names instead of gene IDs when generating h5ad file'),
+        help=('Group counts by gene names instead of gene IDs when generating H5AD file'),
         action='store_true'
     )
     parser_estimate.add_argument(
@@ -725,7 +739,7 @@ def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, t
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = set()
+    barcodes = None
     if args.barcodes:
         if not args.barcode_tag:
             parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
@@ -775,7 +789,7 @@ def parse_count(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = set()
+    barcodes = None
     if args.barcodes:
         if not args.barcode_tag:
             parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
@@ -861,11 +875,16 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
 
     # group CSV must be proivded when there are multiple input directories
     if len(args.count_dirs) > 1 and not args.groups:
-        parser.error('`--group` CSVs must be provided when using multiple input directories')
+        parser.error(
+            '`--group` CSVs must be provided when using multiple input directories. '
+            'Otherwise, simply run `dynast estimate` for each directory separately.'
+        )
 
     # If group CSV(s) are provided, the number must match input directories
     if args.groups and len(args.groups) != len(args.count_dirs):
         parser.error('Number of `--group` CSVs must match number of input directories')
+    if args.barcodes and len(args.barcodes) != len(args.count_dirs):
+        parser.error('Number of `--barcodes` TXTs must match number of input directories')
 
     # Multiple count dirs can't be used with nasc
     if len(args.count_dirs) > 1 and args.nasc:
@@ -884,9 +903,26 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
             genes = [line.strip() for line in f if not line.isspace()]
         logger.warning(f'Ignoring genes not in the {len(genes)} genes provided by `--genes`')
 
+    barcodes = []
+    if args.barcodes:
+        for path in args.barcodes:
+            with open(path, 'r') as f:
+                bcs = set(line.strip() for line in f if not line.isspace())
+            barcodes.append(bcs)
+        logger.warning(
+            f'Ignoring cell barcodes not in the {sum(len(bcs) for bcs in barcodes)} barcodes provided by `--barcodes`'
+        )
+    else:
+        logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
+
     # Parse cell groups csv(s)
     groups = []
     if args.groups:
+        if args.barcodes:
+            logger.warning(
+                '`--groups` was provided with `--barcodes`. Only barcodes present in both inputs will be considered.'
+            )
+
         for path in args.groups:
             groups_part = {}
             with open(path, 'r') as f:
@@ -919,6 +955,7 @@ def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, te
         args.count_dirs,
         args.o,
         args.reads,
+        barcodes=args.barcodes,
         groups=groups,
         ignore_groups_for_est=args.ignore_groups_for_est,
         genes=genes,

@@ -16,6 +16,7 @@ def estimate(
     count_dirs: List[str],
     out_dir: str,
     reads: Union[Literal['complete'], List[Literal['total', 'transcriptome', 'spliced', 'unspliced']]] = 'complete',
+    barcodes: Optional[List[List[str]]] = None,
     groups: Optional[List[Dict[str, str]]] = None,
     ignore_groups_for_est: bool = True,
     genes: Optional[List[str]] = None,
@@ -38,6 +39,7 @@ def estimate(
         count_dirs: Paths to directories containing `count` command output
         out_dir: Output directory
         reads: What read group(s) to quantify
+        barcodes: Cell barcodes
         groups: Cell groups
         ignore_groups_for_est: Ignore cell groups for final estimation
         genes: Genes to consider
@@ -83,6 +85,9 @@ def estimate(
             f'Reading {counts_path}' + (f' and suffixing all barcodes with `-{i}`' if len(count_dirs) > 1 else '')
         )
         _df_counts = preprocessing.read_counts(counts_path)
+        # Filter barcodes
+        if barcodes:
+            _df_counts = _df_counts[_df_counts['barcode'].isin(barcodes[i])]
         # Convert gene IDs to names
         if by_name:
             _df_counts['GX'] = _df_counts['GX'].apply(lambda gx: gene_infos[gx]['gene_name'] or gx)
