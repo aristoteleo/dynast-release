@@ -158,12 +158,23 @@ class TestUtils(mixins.TestMixin, TestCase):
                              utils.split_counts(df, barcodes, features))
             self.assertEqual(2, counts_to_matrix.call_count)
 
-    def test_split_matrix(self):
+    def test_split_matrix_pi(self):
         matrix = np.array([[1, 2], [4, 5]])
         barcodes = ['bc1', 'bc2']
         features = ['gx1', 'gx2']
         pis = {('bc1', 'gx1'): 0.5, ('bc2', 'gx1'): 0.25}
-        pi_mask, unlabeled_matrix, labeled_matrix = utils.split_matrix(matrix, pis, barcodes, features)
-        self.assertTrue(np.array_equal([[True, False], [True, False]], pi_mask.A))
-        self.assertTrue(np.array_equal([[0.5, 0], [1, 0]], labeled_matrix.A))
-        self.assertTrue(np.array_equal([[0.5, 0], [3, 0]], unlabeled_matrix.A))
+        pi_matrix, unlabeled_matrix, labeled_matrix = utils.split_matrix_pi(matrix, pis, barcodes, features)
+        np.testing.assert_allclose([[0.5, 0], [0.25, 0]], pi_matrix.A)
+        np.testing.assert_allclose([[0.5, 0], [1, 0]], labeled_matrix.A)
+        np.testing.assert_allclose([[0.5, 0], [3, 0]], unlabeled_matrix.A)
+
+    def test_split_matrix_alpha(self):
+        unlabeled_matrix = np.array([[1, 2], [4, 5]])
+        labeled_matrix = np.array([[1, 2], [4, 5]])
+        barcodes = ['bc1', 'bc2']
+        alphas = {'bc1': 0.75, 'bc2': 0.25}
+        est_unlabeled_matrix, est_labeled_matrix = utils.split_matrix_alpha(
+            unlabeled_matrix, labeled_matrix, alphas, barcodes
+        )
+        np.testing.assert_allclose([[1 / 0.75, 2 / 0.75], [8, 10]], est_labeled_matrix.A)
+        np.testing.assert_allclose(labeled_matrix + unlabeled_matrix - est_labeled_matrix.A, est_unlabeled_matrix.A)

@@ -91,6 +91,14 @@ class TestMixin(TestCase):
         cls.umi_p_c_path = os.path.join(cls.umi_estimate_dir, 'p_c_TC.csv')
         cls.umi_pi_path = os.path.join(cls.umi_estimate_dir, 'pi_total_TC.csv')
 
+        # Estimate (alpha)
+        cls.umi_alpha_estimate_dir = os.path.join(cls.fixtures_dir, 'SRR11683995_estimate_alpha')
+        cls.umi_alpha_aggregates_path = os.path.join(cls.umi_alpha_estimate_dir, 'A_total_TC.csv')
+        cls.umi_alpha_p_e_path = os.path.join(cls.umi_alpha_estimate_dir, 'p_e.csv')
+        cls.umi_alpha_p_c_path = os.path.join(cls.umi_alpha_estimate_dir, 'p_c_TC.csv')
+        cls.umi_alpha_pi_path = os.path.join(cls.umi_alpha_estimate_dir, 'pi_total_TC.csv')
+        cls.umi_alpha_path = os.path.join(cls.umi_alpha_estimate_dir, 'alpha_total_TC.csv')
+
         #########
         # Control
         #########

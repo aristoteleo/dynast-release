@@ -10,7 +10,8 @@ from .. import utils
 from ..logging import logger
 
 
-def read_p_c(p_c_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[str, Tuple[str, ...]], float]:
+def read_p_c(p_c_path: str,
+             group_by: Optional[List[str]] = None) -> Union[float, Dict[str, float], Dict[Tuple[str, ...], float]]:
     """Read p_c CSV as a dictionary, with `group_by` columns as keys.
 
     Args:
@@ -24,7 +25,7 @@ def read_p_c(p_c_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[
         with open(p_c_path, 'r') as f:
             return float(f.read())
 
-    df = pd.read_csv(p_c_path, dtype={key: 'string' for key in group_by})
+    df = pd.read_csv(p_c_path, dtype={key: 'category' for key in group_by})
     return dict(df.set_index(group_by)['p_c'])
 
 
@@ -178,7 +179,7 @@ def expectation_maximization(
 
 def estimate_p_c(
     df_aggregates: pd.DataFrame,
-    p_e: float,
+    p_e: Union[float, Dict[str, float], Dict[Tuple[str, ...], float]],
     p_c_path: str,
     group_by: Optional[List[str]] = None,
     threshold: int = 1000,
