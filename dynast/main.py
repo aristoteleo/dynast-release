@@ -511,10 +511,10 @@ def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.Argume
         '--method',
         help=(
             'Correction method to use. '
-            'May be `cell-gene` to estimate the fraction of labeled RNA for every cell-gene combination, '
+            'May be `pi_g` to estimate the fraction of labeled RNA for every cell-gene combination, '
             'or `alpha` to use alpha correction as used in the scNT-seq paper. `alpha` is recommended for '
             'UMI-based assays. This option has no effect when used with `--control`. (default: alpha)'
-        )
+        ),
         choices=['pi_g', 'alpha'],
         default='alpha'
     )

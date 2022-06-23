@@ -261,54 +261,14 @@ def estimate(
     logger.info(f'Compling STAN model from {config.MODEL_PATH}')
     model = pystan.StanModel(file=config.MODEL_PATH, model_name=config.MODEL_NAME)
 
-    # Estimate pi per cell
-    pi_key = 'barcode' if ignore_groups_for_est or not groups else 'group'
-    pi_c_paths = {}
-    for key in reads:
-        for convs in conversions:
-            convs = sorted(convs)
-            pi_c_path = os.path.join(out_dir, f'pi_c_{key}_{"_".join(convs)}.csv')
-            logger.info(
-                f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_key} to {pi_c_path}'
-            )
-            df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
-            if groups:
-                df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
-
-            pi_c_paths.setdefault(key, {})[tuple(convs)] = estimation.estimate_pi(
-                df_aggregates,
-                p_es,
-                p_cs[tuple(convs)],
-                pi_c_path,
-                group_by=[pi_key],
-                p_group_by=[p_key],
-                n_threads=n_threads,
-                threshold=cell_gene_threshold,
-                seed=seed,
-                nasc=nasc,
-                model=model,
-            )
-    pi_cs = {
-        key: {convs: estimation.read_pi(pi_c_paths[key][convs], group_by=[pi_key])
-              for convs in pi_c_paths[key]}
-        for key in pi_c_paths
-    }
-    if groups and not ignore_groups_for_est:
-        pi_cs = {
-            key: {
-                convs: {barcode: value
-                        for group, value in pi_cs[key][convs].items()
-                        for barcode in group_cells[group]}
-                for convs in pi_cs[key]
-            }
-            for key in pi_cs
-        }
-
     pis = None
     alphas = None
-    if method == 'gene-cell':
-        # Estimate pi per cell-gene
+    if method == 'pi_g':
+        pi_key = 'barcode' if ignore_groups_for_est or not groups else 'group'
         pi_paths = {}
+        pi_as = {}
+        pi_bs = {}
+        pis = {}
         for key in reads:
             for convs in conversions:
                 convs = sorted(convs)
@@ -333,14 +293,31 @@ def estimate(
                     nasc=nasc,
                     model=model,
                 )
+                pi_a, pi_b, pi = estimation.read_pi(pi_path, group_by=[pi_key, 'GX'])
+                pi_as.setdefault(key, {})[tuple(convs)] = pi_a
+                pi_bs.setdefault(key, {})[tuple(convs)] = pi_b
+                pis.setdefault(key, {})[tuple(convs)] = pi
 
         # Estimated pis need to be per cell because the adata is per cell
-        pis = {
-            key: {convs: estimation.read_pi(pi_paths[key][convs], group_by=[pi_key, 'GX'])
-                for convs in pi_paths[key]}
-            for key in pi_paths
-        }
         if groups and not ignore_groups_for_est:
+            pi_as = {
+                key: {
+                    convs: {(barcode, gx): value
+                            for (group, gx), value in pi_as[key][convs].items()
+                            for barcode in group_cells[group]}
+                    for convs in pi_as[key]
+                }
+                for key in pi_as
+            }
+            pi_bs = {
+                key: {
+                    convs: {(barcode, gx): value
+                            for (group, gx), value in pi_bs[key][convs].items()
+                            for barcode in group_cells[group]}
+                    for convs in pi_bs[key]
+                }
+                for key in pi_bs
+            }
             pis = {
                 key: {
                     convs: {(barcode, gx): value
@@ -351,21 +328,31 @@ def estimate(
                 for key in pis
             }
     elif method == 'alpha':
+        pi_c_key = 'group' if groups else 'barcode'
+        alpha_key = 'group' if groups and not ignore_groups_for_est else 'barcode'
+        pi_c_paths = {}
+        pi_cs = {}
+        pi_as = {}
+        pi_bs = {}
         alpha_paths = {}
+        alphas = {}
         for key in reads:
             for convs in conversions:
                 convs = sorted(convs)
-                pi_path = os.path.join(out_dir, f'alpha_{key}_{"_".join(convs)}.csv')
+                pi_c_path = os.path.join(out_dir, f'pi_{key}_{"_".join(convs)}.csv')
                 logger.info(
-                    f'Estimating `{key}` RNA detection rate for conversions {convs} per {pi_key}-gene to {pi_path}'
+                    f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_c_key} to {pi_c_path}'
                 )
+                df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
+                if groups:
+                    df_aggregates['group'] = df_aggregates['barcode'].map(groups).astype('category')
 
-                alpha_paths.setdefault(key, {})[tuple(convs)] = estimation.estimate_alpha(
-                    df_counts,
-                    pi_cs[],
+                pi_c_path = estimation.estimate_pi(
+                    df_aggregates,
+                    p_es,
                     p_cs[tuple(convs)],
-                    pi_path,
-                    group_by=[pi_key, 'GX'],
+                    pi_c_path,
+                    group_by=[pi_c_key],
                     p_group_by=[p_key],
                     n_threads=n_threads,
                     threshold=cell_gene_threshold,
@@ -373,29 +360,48 @@ def estimate(
                     nasc=nasc,
                     model=model,
                 )
+                pi_c_paths.setdefault(key, {})[tuple(convs)] = pi_c_path
 
-        # Estimated pis need to be per cell because the adata is per cell
-        pis = {
-            key: {convs: estimation.read_pi(pi_paths[key][convs], group_by=[pi_key, 'GX'])
-                for convs in pi_paths[key]}
-            for key in pi_paths
-        }
+                pi_as.setdefault(key, {})[tuple(convs)], pi_bs.setdefault(key,
+                                                                          {})[tuple(convs)], pi_c = estimation.read_pi(
+                                                                              pi_c_path, group_by=[pi_c_key]
+                                                                          )
+                pi_cs.setdefault(key, {})[tuple(convs)] = pi_c
+
+                alpha_path = os.path.join(out_dir, f'alpha_{key}_{"_".join(convs)}.csv')
+                logger.info(
+                    f'Estimating detection rate of `{key}` RNA for conversions {convs} per {alpha_key} to {alpha_path}'
+                )
+                alpha_path = estimation.estimate_alpha(
+                    df_counts,
+                    pi_c,
+                    alpha_path,
+                    conversions=convs,
+                    group_by=[alpha_key],
+                    pi_c_group_by=[pi_c_key],
+                )
+                alpha_paths.setdefault(key, {})[tuple(convs)] = alpha_path
+                alphas.setdefault(key, {})[tuple(convs)] = estimation.read_alpha(alpha_path, group_by=[alpha_key])
         if groups and not ignore_groups_for_est:
-            pis = {
+            alphas = {
                 key: {
-                    convs: {(barcode, gx): value
-                            for (group, gx), value in pis[key][convs].items()
-                            for barcode in group_cells[group]}
-                    for convs in pis[key]
+                    convs:
+                    {barcode: value
+                     for group, value in alphas[key][convs].items()
+                     for barcode in group_cells[group]}
+                    for convs in alphas[key]
                 }
-                for key in pis
+                for key in alphas
             }
+
     else:
         raise Exception(f'Unrecognized method {method}')
 
     adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
     logger.info(f'Combining results into Anndata object at {adata_path}')
-    adata = utils.results_to_adata(df_counts, conversions, gene_infos=gene_infos if not by_name else None, pis=pis)
+    adata = utils.results_to_adata(
+        df_counts, conversions, gene_infos=gene_infos if not by_name else None, pis=pis, alphas=alphas
+    )
     # If groups were provided, add the group as a column
     if groups:
         adata.obs['group'] = adata.obs.index.map(groups).astype('category')
@@ -407,16 +413,15 @@ def estimate(
             for i, count_dir in enumerate(count_dirs)
         }).astype('category')
 
-    # Add p_e, p_c, pi_c estimates
     adata.obs.reset_index(inplace=True)
-    adata.obs['p_e'] = adata.obs[p_key].map(p_es).astype('float')
+
+    # Add p_e, p_c estimates
+    adata.obs['p_e'] = adata.obs[p_key].map(p_es).astype(float)
     for convs in conversions:
         convs = sorted(convs)
         convs_key = "_".join(convs)
-        adata.obs[f'p_c_{convs_key}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype('float')
+        adata.obs[f'p_c_{convs_key}'] = adata.obs[p_key].map(p_cs[tuple(convs)]).astype(float)
 
-        for key in reads:
-            adata.obs[f'pi_c_{key}_{convs_key}'] = adata.obs[pi_key].map(pi_cs[key][tuple(convs)])
     adata.obs.set_index('barcode', inplace=True)
 
     adata.write(adata_path, compression='gzip')

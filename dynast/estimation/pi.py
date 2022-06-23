@@ -9,7 +9,13 @@ from .. import config, utils
 from ..logging import logger
 
 
-def read_pi(pi_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[str, Tuple[str, ...]], float]:
+def read_pi(
+    pi_path: str,
+    group_by: Optional[List[str]] = None
+) -> Tuple[Union[float, Dict[str, float], Dict[Tuple[str, ...], float]],
+           Union[float, Dict[str, float], Dict[Tuple[str, ...], float]],
+           Union[float, Dict[str, float], Dict[Tuple[str, ...], float]],
+           ]:
     """Read pi CSV as a dictionary.
 
     Args:
@@ -22,10 +28,11 @@ def read_pi(pi_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[st
     if group_by is None:
         with open(pi_path, 'r') as f:
             # pi is always the last column
-            return float(f.readline().strip().split(',')[-1])
+            return tuple(float(s) for s in f.readline().strip().split(','))
 
-    df = pd.read_csv(pi_path, usecols=group_by + ['pi'], dtype={key: 'string' for key in group_by})
-    return dict(df.set_index(group_by)['pi'])
+    df = pd.read_csv(pi_path, dtype={key: 'category' for key in group_by})
+    df.set_index(group_by, inplace=True)
+    return dict(df['alpha']), dict(df['beta']), dict(df['pi'])
 
 
 # Process initializer.
@@ -250,7 +257,7 @@ def estimate_pi(
 
                 if len(p_e_unique) > 1 or len(p_c_unique) > 1:
                     raise Exception(
-                        'p_e and p_c for each aggregate group must be a constant, '
+                        '`p_e` and `p_c` for each aggregate group must be a constant, '
                         f'but instead got {p_e_unique} and {p_c_unique}'
                     )
 
@@ -295,12 +302,12 @@ def estimate_pi(
 
     with open(pi_path, 'w') as f:
         if group_by is None:
-            f.write(f'{guess},{alpha},{beta},{pi}')
+            f.write(f'{alpha},{beta},{pi}')
         else:
-            f.write(f'{",".join(group_by)},guess,alpha,beta,pi\n')
+            f.write(f'{",".join(group_by)},alpha,beta,pi\n')
             for key in sorted(pis.keys()):
                 guess, alpha, beta, pi = pis[key]
                 formatted_key = key if isinstance(key, str) else ",".join(key)
-                f.write(f'{formatted_key},{guess},{alpha},{beta},{pi}\n')
+                f.write(f'{formatted_key},{alpha},{beta},{pi}\n')
 
     return pi_path

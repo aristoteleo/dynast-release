@@ -418,7 +418,7 @@ def split_counts(
     return matrix_unlabeled, matrix_labeled
 
 
-def split_matrix(
+def split_matrix_pi(
     matrix: Union[np.ndarray, sparse.spmatrix], pis: Dict[Tuple[str, str], float], barcodes: List[str],
     features: List[str]
 ) -> Tuple[sparse.csr_matrix, sparse.csr_matrix, sparse.csr_matrix]:
@@ -431,11 +431,11 @@ def split_matrix(
         features: All features (i.e. genes)
 
     Returns:
-        matrix of pi masks, matrix of unlabeled RNA, matrix of labeled RNA
+        matrix of pis, matrix of unlabeled RNA, matrix of labeled RNA
     """
     unlabeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
     labeled_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
-    pi_mask = sparse.lil_matrix((len(barcodes), len(features)), dtype=bool)
+    pi_matrix = sparse.lil_matrix((len(barcodes), len(features)), dtype=np.float32)
     barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
     feature_indices = {feature: i for i, feature in enumerate(features)}
 
@@ -448,16 +448,55 @@ def split_matrix(
         val = matrix[row, col]
         unlabeled_matrix[row, col] = val * (1 - pi)
         labeled_matrix[row, col] = val * pi
-        pi_mask[row, col] = True
+        pi_matrix[row, col] = pi
 
-    return pi_mask.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
+    return pi_matrix.tocsr(), unlabeled_matrix.tocsr(), labeled_matrix.tocsr()
+
+
+def split_matrix_alpha(
+    unlabeled_matrix: Union[np.ndarray, sparse.spmatrix], labeled_matrix: Union[np.ndarray, sparse.spmatrix],
+    alphas: Dict[str, float], barcodes: List[str]
+) -> Tuple[sparse.csr_matrix, sparse.csr_matrix, sparse.csr_matrix]:
+    """Split the given matrix based on provided fraction of new RNA.
+
+    Args:
+        unlabeled_matrix: unlabeled matrix
+        labeled_matrix: Labeled matrix
+        alphas: Dictionary containing alpha estimates
+        barcodes: All barcodes
+        features: All features (i.e. genes)
+
+    Returns:
+        matrix of pis, matrix of unlabeled RNA, matrix of labeled RNA
+    """
+    total_matrix = unlabeled_matrix + labeled_matrix
+    est_unlabeled_matrix = sparse.lil_matrix(unlabeled_matrix.shape, dtype=np.float32)
+    est_labeled_matrix = sparse.lil_matrix(labeled_matrix.shape, dtype=np.float32)
+    barcode_indices = {barcode: i for i, barcode in enumerate(barcodes)}
+
+    module = np
+    if sparse.issparse(total_matrix):
+        module = sparse
+
+    for barcode, alpha in alphas.items():
+        try:
+            alpha = np.clip(float(alpha), 0, 1)
+        except ValueError:
+            continue
+        row = barcode_indices[barcode]
+        l_alpha = labeled_matrix[row] / alpha
+        est_labeled_matrix[row] = module.vstack((l_alpha, total_matrix[row])).min(axis=0)
+        est_unlabeled_matrix[row] = total_matrix[row] - est_labeled_matrix[row]
+
+    return est_unlabeled_matrix.tocsr(), est_labeled_matrix.tocsr()
 
 
 def results_to_adata(
     df_counts: pd.DataFrame,
     conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
     gene_infos: Optional[dict] = None,
-    pis: Optional[Dict[Tuple[str, str], float]] = None
+    pis: Optional[Dict[str, Dict[Tuple[str, ...], Dict[Tuple[str, str], float]]]] = None,
+    alphas: Optional[Dict[str, Dict[Tuple[str, ...], Dict[str, float]]]] = None,
 ) -> anndata.AnnData:
     """Compile all results to a single anndata.
 
@@ -467,17 +506,28 @@ def results_to_adata(
         gene_infos: Dictionary containing gene information. If this is not provided,
             the function assumes gene names are already in the Counts dataframe.
         pis: Dictionary of estimated pis
+        alphas: Dictionary of estimated alphas
 
     Returns:
         Anndata containing all results
     """
+    if pis is not None and alphas is not None:
+        raise Exception('Only one of `pis` or `alphas` may be provided.')
+
     pis = pis or {}
+    alphas = alphas or {}
     all_conversions = sorted(flatten_iter(conversions))
     transcriptome_exists = df_counts['transcriptome'].any()
     transcriptome_only = df_counts['transcriptome'].all()
     velocities = df_counts['velocity'].unique()
     barcodes = sorted(df_counts['barcode'].unique())
     features = sorted(df_counts['GX'].unique())
+
+    add_names = gene_infos is not None
+    obs = pd.DataFrame(index=pd.Series(barcodes, name='barcode'))
+    var = pd.DataFrame(index=pd.Series(features, name='gene_id' if add_names else 'gene_name'))
+    if add_names:
+        var['gene_name'] = pd.Categorical([gene_infos.get(feature, {}).get('gene_name') for feature in features])
 
     df_counts_transcriptome = df_counts[df_counts['transcriptome']]
     matrix = counts_to_matrix(df_counts_transcriptome, barcodes, features)
@@ -500,10 +550,17 @@ def results_to_adata(
             pi = pis.get('transcriptome', {}).get(tuple(convs))
             if pi is not None:
                 (
-                    _,
+                    layers[f'X_{join}_pi_g'],
                     layers[f'X_n_{join}_est'],
                     layers[f'X_l_{join}_est'],
-                ) = split_matrix(layers[f'X_n_{join}'] + layers[f'X_l_{join}'], pi, barcodes, features)
+                ) = split_matrix_pi(layers[f'X_n_{join}'] + layers[f'X_l_{join}'], pi, barcodes, features)
+            alpha = alphas.get('transcriptome', {}).get(tuple(convs))
+            if alpha is not None:
+                obs[f'X_{join}_alpha'] = obs.index.map(alpha)
+                (
+                    layers[f'X_n_{join}_est'],
+                    layers[f'X_l_{join}_est'],
+                ) = split_matrix_alpha(layers[f'X_n_{join}'], layers[f'X_l_{join}'], alpha, barcodes)
     else:
         logger.warning('No reads were assigned to `transcriptome`')
 
@@ -523,7 +580,14 @@ def results_to_adata(
                     _,
                     layers[f'unlabeled_{join}_est'],
                     layers[f'labeled_{join}_est'],
-                ) = split_matrix(layers[f'unlabeled_{join}'] + layers[f'labeled_{join}'], pi, barcodes, features)
+                ) = split_matrix_pi(layers[f'unlabeled_{join}'] + layers[f'labeled_{join}'], pi, barcodes, features)
+            alpha = alphas.get('total', {}).get(tuple(convs))
+            if alpha is not None:
+                obs[f'total_{join}_alpha'] = obs.index.map(alpha)
+                (
+                    layers[f'unlabeled_{join}_est'],
+                    layers[f'labeled_{join}_est'],
+                ) = split_matrix_alpha(layers[f'unlabeled_{join}'], layers[f'labeled_{join}'], alpha, barcodes)
 
     # Velocity reads
     for key in velocities:
@@ -550,16 +614,17 @@ def results_to_adata(
                     _,
                     layers[f'{key[0]}n_{join}_est'],
                     layers[f'{key[0]}l_{join}_est'],
-                ) = split_matrix(layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pi, barcodes, features)
+                ) = split_matrix_pi(layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pi, barcodes, features)
+            alpha = alphas.get(key, {}).get(tuple(convs))
+            if alpha is not None:
+                obs[f'{key}_{join}_alpha'] = obs.index.map(alpha)
+                (
+                    layers[f'{key[0]}n_{join}_est'],
+                    layers[f'{key[0]}l_{join}_est'],
+                ) = split_matrix_alpha(layers[f'{key[0]}n_{join}'], layers[f'{key[0]}l_{join}'], alpha, barcodes)
 
     # Construct anndata
-    add_names = gene_infos is not None
-    var = pd.DataFrame(index=pd.Series(features, name='gene_id' if add_names else 'gene_name'))
-    if add_names:
-        var['gene_name'] = pd.Categorical([gene_infos.get(feature, {}).get('gene_name') for feature in features])
-    return anndata.AnnData(
-        X=matrix, obs=pd.DataFrame(index=pd.Series(barcodes, name='barcode')), var=var, layers=layers
-    )
+    return anndata.AnnData(X=matrix, obs=obs, var=var, layers=layers)
 
 
 def patch_mp_connection_bpo_17560():
@@ -613,3 +678,25 @@ def patch_mp_connection_bpo_17560():
 
     Connection._send_bytes = send_bytes
     Connection._recv_bytes = recv_bytes
+
+
+def dict_to_matrix(d: Dict[Tuple[str, str], float], rows: List[str], columns: List[str]) -> sparse.csr_matrix:
+    """Convert a dictionary to a matrix.
+
+    Args:
+        d: Dictionary to convert
+        rows: Row names
+        columns: Column names
+
+    Returns:
+        A sparse matrix
+    """
+    # Transform to index for fast lookup
+    row_indices = {col: i for i, col in enumerate(columns)}
+    column_indices = {row: i for i, row in enumerate(rows)}
+
+    matrix = sparse.lil_matrix((len(rows), len(columns)), dtype=np.float32)
+    for (row, col), value in d.items():
+        matrix[row_indices[row], column_indices[col]] = value
+
+    return matrix.tocsr()

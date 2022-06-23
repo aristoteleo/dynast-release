@@ -22,7 +22,7 @@ def read_p_e(p_e_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[
         with open(p_e_path, 'r') as f:
             return float(f.read())
 
-    df = pd.read_csv(p_e_path, dtype={key: 'string' for key in group_by})
+    df = pd.read_csv(p_e_path, dtype={key: 'category' for key in group_by})
     return dict(df.set_index(group_by)['p_e'])
 
 

@@ -10,7 +10,8 @@ from .. import utils
 from ..logging import logger
 
 
-def read_p_c(p_c_path: str, group_by: Optional[List[str]] = None) -> Union[float, Dict[str, float], Dict[Tuple[str, ...], float]]:
+def read_p_c(p_c_path: str,
+             group_by: Optional[List[str]] = None) -> Union[float, Dict[str, float], Dict[Tuple[str, ...], float]]:
     """Read p_c CSV as a dictionary, with `group_by` columns as keys.
 
     Args:
@@ -24,7 +25,7 @@ def read_p_c(p_c_path: str, group_by: Optional[List[str]] = None) -> Union[float
         with open(p_c_path, 'r') as f:
             return float(f.read())
 
-    df = pd.read_csv(p_c_path, dtype={key: 'string' for key in group_by})
+    df = pd.read_csv(p_c_path, dtype={key: 'category' for key in group_by})
     return dict(df.set_index(group_by)['p_c'])
 
 
