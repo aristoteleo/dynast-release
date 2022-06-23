@@ -307,4 +307,16 @@ The M step updates the estimate for :math:`p_c`
 
 Bayesian inference (:math:`\pi_g`)
 ''''''''''''''''''''''''''''''''''
-The fraction of labeled RNA per cell :math:`\pi_c` and per cell-gene :math:`\pi_g` are estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
+The fraction of labeled RNA is estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
+
+When :code:`--method pi_g`, this estimation yields the fraction of labeled RNA per cell-gene, :math:`\pi_g`, which can be used directly to split the total RNA. However, when :code:`--method alpha`, this estimation yields the fraction of labeled RNA per cell, :math:`\pi_c`. As was described in [Qiu2020]_, the detection rate per cell, :math:`\alpha_c`, is calculated as
+
+.. math::
+
+	\alpha_c = \frac{\pi_c}{L_c+U_c}
+
+where :math:`L_c` and :math:`U_c` are the numbers of labeled and unlableed RNA for cell :math:`c`. Then, using this detection rate, the corrected labeled RNA is calculated as
+
+.. math::
+
+	N'_c = \min \left( \frac{L_c}{\alpha_c}, L_c+U_c \right)
