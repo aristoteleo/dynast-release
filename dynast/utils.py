@@ -577,7 +577,7 @@ def results_to_adata(
             pi = pis.get('total', {}).get(tuple(convs))
             if pi is not None:
                 (
-                    _,
+                    layers[f'total_{join}_pi_g'],
                     layers[f'unlabeled_{join}_est'],
                     layers[f'labeled_{join}_est'],
                 ) = split_matrix_pi(layers[f'unlabeled_{join}'] + layers[f'labeled_{join}'], pi, barcodes, features)
@@ -611,7 +611,7 @@ def results_to_adata(
             pi = pis.get(key, {}).get(tuple(convs))
             if pi is not None:
                 (
-                    _,
+                    layers[f'{key}_{join}_pi_g'],
                     layers[f'{key[0]}n_{join}_est'],
                     layers[f'{key[0]}l_{join}_est'],
                 ) = split_matrix_pi(layers[f'{key[0]}n_{join}'] + layers[f'{key[0]}l_{join}'], pi, barcodes, features)

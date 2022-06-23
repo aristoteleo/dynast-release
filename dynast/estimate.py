@@ -300,24 +300,6 @@ def estimate(
 
         # Estimated pis need to be per cell because the adata is per cell
         if groups and not ignore_groups_for_est:
-            pi_as = {
-                key: {
-                    convs: {(barcode, gx): value
-                            for (group, gx), value in pi_as[key][convs].items()
-                            for barcode in group_cells[group]}
-                    for convs in pi_as[key]
-                }
-                for key in pi_as
-            }
-            pi_bs = {
-                key: {
-                    convs: {(barcode, gx): value
-                            for (group, gx), value in pi_bs[key][convs].items()
-                            for barcode in group_cells[group]}
-                    for convs in pi_bs[key]
-                }
-                for key in pi_bs
-            }
             pis = {
                 key: {
                     convs: {(barcode, gx): value
