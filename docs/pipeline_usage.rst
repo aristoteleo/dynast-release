@@ -222,6 +222,8 @@ The :code:`--strand` argument can be used to specify the read strand of the sequ
 
 The :code:`--conversion` argument is used to specify the type of conversion that is experimentally introduced as a two-character string. For instance, a T>C conversion is represented as :code:`TC`, which is the default. Multiple conversions can be specified as a comma-delimited list, and :code:`--conversion` may be specified multiple times to indicate multiple-indexing experiments. For example, for an experiment that introduced T>C mutations at timepoint 1 and A>G and C>G mutations at timepoint 2, the appropriate options would be :code:`--conversion TC --conversion AG,CG`.
 
+The :code:`--gene-names` argument can be used to specify that the resulting AnnData should contain gene names as its columns, instead of the usual gene IDs.
+
 .. _snps:
 
 Detecting and filtering SNPs
