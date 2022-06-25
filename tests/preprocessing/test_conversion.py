@@ -178,3 +178,15 @@ class TestConversion(mixins.TestMixin, TestCase):
                 )
             )
             self.assertTrue(mixins.files_equal(self.paired_counts_path, counts_path))
+
+    def test_subset_counts(self):
+        rows = [
+            ['barcode1', 'GX1', True, 'spliced'],
+            ['barcode1', 'GX1', False, 'unspliced'],
+            ['barcode2', 'GX2', True, 'ambiguous'],
+        ]
+        df = pd.DataFrame(rows, columns=['barcode', 'GX', 'transcriptome', 'velocity'])
+        pd.testing.assert_frame_equal(df, conversion.subset_counts(df, 'total'))
+        pd.testing.assert_frame_equal(df.iloc[[0, 2]], conversion.subset_counts(df, 'transcriptome'))
+        pd.testing.assert_frame_equal(df.iloc[[0]], conversion.subset_counts(df, 'spliced'))
+        pd.testing.assert_frame_equal(df.iloc[[1]], conversion.subset_counts(df, 'unspliced'))

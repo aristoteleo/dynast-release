@@ -8,6 +8,7 @@ from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 import ngs_tools as ngs
 import numpy as np
 import pandas as pd
+from typing_extensions import Literal
 
 from .. import config, utils
 from ..logging import logger
@@ -122,6 +123,26 @@ def complement_counts(df_counts: pd.DataFrame, gene_infos: dict) -> pd.DataFrame
     df_reverse = df_reverse[columns]
 
     return pd.concat((df_forward, df_reverse), verify_integrity=True)
+
+
+def subset_counts(
+    df_counts: pd.DataFrame,
+    key: Literal['total', 'transcriptome', 'spliced', 'unspliced'],
+) -> pd.DataFrame:
+    """Subset the given counts DataFrame to only contain reads of the desired key.
+
+    Args:
+        df_count: Counts dataframe
+        key: Read types to subset
+
+    Returns:s
+        Subset dataframe
+    """
+    if key == 'transcriptome':
+        df_counts = df_counts[df_counts['transcriptome']]
+    if key in ('spliced', 'unspliced'):
+        df_counts = df_counts[df_counts['velocity'] == key]
+    return df_counts
 
 
 def drop_multimappers(df_counts: pd.DataFrame, conversions: Optional[FrozenSet[str]] = None) -> pd.DataFrame:

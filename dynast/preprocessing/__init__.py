@@ -25,6 +25,7 @@ from .conversion import (
     deduplicate_counts,
     read_counts,
     split_counts_by_velocity,
+    subset_counts,
 )
 from .coverage import calculate_coverage, read_coverage
 from .snp import detect_snps, read_snp_csv, read_snps

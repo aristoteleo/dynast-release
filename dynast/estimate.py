@@ -230,12 +230,7 @@ def estimate(
     for key in set(reads).union(['transcriptome'] if transcriptome_all else ['total']):
         logger.info(f'Aggregating counts for `{key}`')
 
-        if key == 'transcriptome':
-            df = df_counts[df_counts['transcriptome']]
-        elif key == 'total':
-            df = df_counts
-        else:
-            df = df_counts[df_counts['velocity'] == key]
+        df = preprocessing.subset_counts(df_counts, key)
 
         for convs in conversions:
             convs = sorted(convs)
@@ -360,7 +355,7 @@ def estimate(
                     f'Estimating detection rate of `{key}` RNA for conversions {convs} per {alpha_key} to {alpha_path}'
                 )
                 alpha_path = estimation.estimate_alpha(
-                    df_counts,
+                    preprocessing.subset_counts(df_counts, key),
                     pi_c,
                     alpha_path,
                     conversions=convs,
