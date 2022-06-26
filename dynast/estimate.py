@@ -88,12 +88,6 @@ def estimate(
         # Filter barcodes
         if barcodes:
             _df_counts = _df_counts[_df_counts['barcode'].isin(barcodes[i])]
-        # Convert gene IDs to names
-        if by_name:
-            _df_counts['GX'] = _df_counts['GX'].apply(lambda gx: gene_infos[gx]['gene_name'] or gx)
-        # Subset to provided genes
-        if genes:
-            _df_counts = _df_counts[_df_counts['GX'].isin(genes)]
         if len(count_dirs) > 1:
             _df_counts['barcode'] = _df_counts['barcode'].astype(str) + f'-{i}'
         dfs.append(_df_counts)
@@ -179,6 +173,15 @@ def estimate(
         f'across {df_counts["barcode"].nunique()} barcodes' +
         (f' and {df_counts["group"].nunique()} groups.' if groups else '.')
     )
+
+    # Convert gene IDs to names
+    if by_name:
+        logger.info('`--gene-names` provided. Converting gene IDs to names.')
+        df_counts['GX'] = df_counts['GX'].apply(lambda gx: gene_infos[gx]['gene_name'] or gx)
+    # Subset to provided genes
+    if genes:
+        logger.info(f'`--genes` provided. Ignorning genes not in the {len(genes)} provided.')
+        df_counts = df_counts[df_counts['GX'].isin(genes)]
 
     # Estimate p_e
     p_key = 'group' if groups else 'barcode'
