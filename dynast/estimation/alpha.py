@@ -62,10 +62,12 @@ def estimate_alpha(
     if group_by is None:
         if not isinstance(pi_c, float):
             raise Exception('`pi_c` and `p_c` must be a float when `group_by` is not provided')
+        if pi_c <= 0:
+            raise Exception(f'Estimated `pi_c` must be positive, but got {pi_c}')
         total = df_full.shape[0]
         new = (df_full[list(conversions)] > 0).any(axis=1).sum()
         ntr = new / total
-        alpha = pi_c / ntr
+        alpha = ntr / pi_c
     else:
         groupby = df_full.groupby(group_by, sort=False, observed=True)
         groups = groupby.indices
@@ -78,7 +80,8 @@ def estimate_alpha(
             if len(pi_c_unique) > 1:
                 raise Exception(f'`pi_c` for each aggregate group must be a constant, but instead got {pi_c_unique}.')
 
-            alphas[key] = pi_c_unique[0] / ntr[key]
+            if pi_c_unique[0] > 0:
+                alphas[key] = ntr[key] / pi_c_unique[0]
 
     with open(alpha_path, 'w') as f:
         if group_by is None:
