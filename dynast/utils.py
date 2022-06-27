@@ -440,6 +440,8 @@ def split_matrix_pi(
     feature_indices = {feature: i for i, feature in enumerate(features)}
 
     for (barcode, gx), pi in pis.items():
+        if barcode not in barcode_indices or gx not in feature_indices:
+            continue
         try:
             pi = float(pi)
         except ValueError:
@@ -479,6 +481,8 @@ def split_matrix_alpha(
         module = sparse
 
     for barcode, alpha in alphas.items():
+        if barcode not in barcode_indices:
+            continue
         try:
             alpha = np.clip(float(alpha), 0, 1)
         except ValueError:

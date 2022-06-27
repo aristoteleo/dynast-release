@@ -101,6 +101,16 @@ def estimate(
             groups = groups[0]
         else:
             groups = {f'{barcode}-{i}': group for i, _groups in enumerate(groups) for barcode, group in _groups.items()}
+    if groups:
+        # Remove any barcodes not present.
+        barcodes = set(df_counts_uncomplemented['barcode'])
+        to_remove = set(groups.keys()) - barcodes
+        if to_remove:
+            logger.warning(
+                f'Removing {len(to_remove)} barcodes from the provided groups that are not present in the counts CSV.'
+            )
+            for barcode in to_remove:
+                del groups[barcode]
         # Contains group name to list of cells mapping
         group_cells = {}
         for barcode, group in groups.items():
