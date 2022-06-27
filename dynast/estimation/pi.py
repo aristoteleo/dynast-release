@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import pystan
+from scipy import sparse
 
 from .. import config, utils
 from ..logging import logger
@@ -153,11 +154,17 @@ def fit_stan_mcmc(
     # Skew beta distribution toward the guess.
     alpha_guess, beta_guess = guess_beta_parameters(guess)
 
+    # Collapse values so that there are no duplicates.
+    mtx = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1])))
+    nonzero = mtx.nonzero()
+    conversions, contents = nonzero
+    counts = mtx[nonzero].A.flatten()
+
     data = {
-        'N': len(values),
-        'conversions': values[:, 0],
-        'contents': values[:, 1],
-        'counts': values[:, 2],
+        'N': len(counts),
+        'conversions': conversions,
+        'contents': contents,
+        'counts': counts,
         'p_c': p_c,
         'p_e': p_e,
     }
