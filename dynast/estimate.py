@@ -249,7 +249,10 @@ def estimate(
     for convs in conversions:
         convs = sorted(convs)
         p_c_path = os.path.join(out_dir, f'{constants.P_C_PREFIX}_{"_".join(convs)}.csv')
-        logger.info(f'Estimating {convs} conversion rate in labeled RNA per {p_key} to {p_c_path}')
+        logger.info(
+            f'Estimating {convs} conversion rate in labeled RNA per {p_key} to {p_c_path}. '
+            'Consider downsampling with `--downsample` if this step takes too long.'
+        )
         df_aggregates = preprocessing.read_aggregates(
             aggregates_paths['transcriptome' if transcriptome_all else 'total'][tuple(convs)]
         )
