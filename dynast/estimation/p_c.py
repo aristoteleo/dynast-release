@@ -29,7 +29,7 @@ def read_p_c(p_c_path: str,
     return dict(df.set_index(group_by)['p_c'])
 
 
-@njit
+@njit(cache=True)
 def binomial_pmf(k: int, n: int, p: int) -> float:
     """Numbaized binomial PMF function for faster calculation.
 
@@ -46,28 +46,25 @@ def binomial_pmf(k: int, n: int, p: int) -> float:
     return coef * (p**k) * ((1 - p)**(n - k))
 
 
+@njit(cache=True)
 def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: float = 0.01) -> float:
     """NASC-seq pipeline variant of the EM algorithm to estimate average
     conversion rate in labeled RNA.
 
     Args:
-        values: array of three columns encoding a sparse array in (row, column, value) format,
-            zero-indexed, where
-            row:    number of conversions
-            column: nucleotide content
-            value:  number of reads
+        values: N x C Numpy array where N is the number of conversions, C is the nucleotide
+            content, and the value at this position is the number of reads observed
         p_e: Background mutation rate of unlabeled RNA
         threshold: Filter threshold
 
     Returns:
         Estimated conversion rate
     """
-    sp = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1]))).tolil()
     mask = []
-    for k in range(sp.shape[0]):
-        for n in range(sp.shape[1]):
-            expected = np.sum(sp[k + 1:, n]) * binomial_pmf(k, n, p_e)
-            if expected > threshold * sp[k, n]:
+    for k in range(values.shape[0]):
+        for n in range(values.shape[1]):
+            expected = (values[k + 1:, n]).sum() * binomial_pmf(k, n, p_e)
+            if expected > threshold * values[k, n]:
                 mask.append((k, n))
 
     r = 1
@@ -75,7 +72,8 @@ def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: flo
     p_c = (r + l) / 2
     prev_p_c = p_c
     keys = sorted(mask)
-    new_sp = sp.copy().asfptype()
+    keys_set = set(mask)
+    new_values = values.astype(np.float32)  # This makes a copy
 
     while r - l >= 1e-8:  # noqa
         # E step
@@ -83,19 +81,19 @@ def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: flo
             numerator = 0
             denominator = 0
 
-            for kp in range(new_sp.shape[0]):
-                if (kp, n) in mask:
-                    numerator += binomial_pmf(k, n, p_c) * new_sp[kp, n]
+            for kp in range(new_values.shape[0]):
+                if (kp, n) in keys_set:
+                    numerator += binomial_pmf(k, n, p_c) * new_values[kp, n]
                     denominator += binomial_pmf(kp, n, p_c)
-            new_sp[k, n] = numerator / denominator
+            new_values[k, n] = numerator / denominator
 
         # M step
         numerator = 0
         denominator = 0
-        for k in range(new_sp.shape[0]):
-            for n in range(new_sp.shape[1]):
-                numerator += k * new_sp[k, n]
-                denominator += n * new_sp[k, n]
+        for k in range(new_values.shape[0]):
+            for n in range(new_values.shape[1]):
+                numerator += k * new_values[k, n]
+                denominator += n * new_values[k, n]
         prev_p_c = p_c
         p_c = numerator / denominator if denominator > 0 else 0
 
@@ -110,6 +108,7 @@ def expectation_maximization_nasc(values: np.ndarray, p_e: float, threshold: flo
     return p_c
 
 
+@njit(cache=True)
 def expectation_maximization(
     values: np.ndarray, p_e: float, p_c: float = 0.1, threshold: float = 0.01, max_iters: int = 300
 ) -> float:
@@ -136,36 +135,32 @@ def expectation_maximization(
     Returns:
         Estimated conversion rate
     """
-    sp = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1]))).tolil()
     mask = []
-    for k in range(sp.shape[0]):
-        for n in range(sp.shape[1]):
-            expected = np.sum(sp[k:, n]) * binomial_pmf(k, n, p_e)
-            if expected > threshold * sp[k, n]:
+    for k in range(values.shape[0]):
+        for n in range(values.shape[1]):
+            expected = (values[k:, n]).sum() * binomial_pmf(k, n, p_e)
+            if expected > threshold * values[k, n]:
                 mask.append((k, n))
 
     prev_p_c = p_c
     keys = sorted(mask)
-    new_sp = sp.copy().asfptype()
+    keys_set = set(mask)
+    new_values = values.astype(np.float32)  # This makes a copy
     for _ in range(max_iters):  # noqa
         # E step
         for k, n in keys:
             numerator = 0
             denominator = 0
 
-            for kp in range(new_sp.shape[0]):
-                if (kp, n) not in mask:
-                    numerator += binomial_pmf(k, n, p_c) * new_sp[kp, n]
+            for kp in range(new_values.shape[0]):
+                if (kp, n) not in keys_set:
+                    numerator += binomial_pmf(k, n, p_c) * new_values[kp, n]
                     denominator += binomial_pmf(kp, n, p_c)
             if denominator > 0:
-                new_sp[k, n] = numerator / denominator
+                new_values[k, n] = numerator / denominator
         # M step
-        numerator = 0
-        denominator = 0
-        for k in range(new_sp.shape[0]):
-            for n in range(new_sp.shape[1]):
-                numerator += k * new_sp[k, n]
-                denominator += n * new_sp[k, n]
+        numerator = (new_values * np.arange(new_values.shape[0]).reshape(-1, 1)).sum()
+        denominator = (new_values * np.arange(new_values.shape[1])).sum()
         prev_p_c = p_c
         p_c = numerator / denominator if denominator > 0 else p_c
         if prev_p_c == p_c:
@@ -204,7 +199,9 @@ def estimate_p_c(
     values = df_aggregates[['conversion', 'base', 'count']].values
     logger.debug('Running EM algorithm')
     if group_by is None:
-        p_c = em_func(values, p_e)
+        # Initialize with sparse matrix because duplicates need to be added.
+        values_mtx = sparse.csr_matrix((values[:, 2], (values[:, 0], values[:, 1]))).A
+        p_c = em_func(values_mtx, p_e)
     else:
         groups = df_aggregates.groupby(group_by, sort=False, observed=True).indices
         p_cs = {}
@@ -218,7 +215,9 @@ def estimate_p_c(
                 if sum(vals[:, 2]) < threshold:
                     skipped += 1
                     continue
-                futures[executor.submit(em_func, vals, p_e[key])] = key
+                # Initialize with sparse matrix because duplicates need to be added.
+                vals_mtx = sparse.csr_matrix((vals[:, 2], (vals[:, 0], vals[:, 1]))).A
+                futures[executor.submit(em_func, vals_mtx, p_e[key])] = key
 
             for future in utils.as_completed_with_progress(futures):
                 key = futures[future]
