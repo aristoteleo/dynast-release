@@ -123,6 +123,7 @@ def fit_stan_mcmc(
     n_chains: int = 1,
     n_warmup: int = 1000,
     n_iters: int = 1000,
+    n_threads: int = 1,
     seed: Optional[int] = None,
 ) -> Tuple[float, float, float, float]:
     """Run MCMC to estimate the fraction of labeled RNA.
@@ -141,7 +142,8 @@ def fit_stan_mcmc(
         n_chains: Number of MCMC chains
         n_warmup: Number of warmup iterations
         n_iters: Number of MCMC iterations, excluding any warmups
-    seed: random seed used for MCMC
+        n_threads: Number of threads to use
+        seed: random seed used for MCMC
 
     Returns:
         (guess, alpha, beta, pi)
@@ -165,7 +167,7 @@ def fit_stan_mcmc(
         fit = model.sampling(
             data=data,
             pars=['alpha', 'beta', 'pi_g'],
-            n_jobs=1,
+            n_jobs=n_threads,
             chains=n_chains,
             warmup=n_warmup,
             iter=n_iters + n_warmup,
@@ -236,6 +238,7 @@ def estimate_pi(
             p_e,
             p_c,
             guess=0.5,
+            n_threads=n_threads,
             seed=seed,
         )
         pi = beta_mode(alpha, beta) if nasc else pi
@@ -281,6 +284,7 @@ def estimate_pi(
                     p_e,
                     p_c,
                     guess=guess,
+                    n_threads=max(1, n_threads // len(groups)),
                     seed=seed,
                 )] = key
 

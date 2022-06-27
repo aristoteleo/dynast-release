@@ -329,7 +329,9 @@ def estimate(
                 convs = sorted(convs)
                 pi_c_path = os.path.join(out_dir, f'pi_{key}_{"_".join(convs)}.csv')
                 logger.info(
-                    f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per {pi_c_key} to {pi_c_path}'
+                    f'Estimating fraction of labeled `{key}` RNA for conversions {convs} per '
+                    f'{pi_c_key} to {pi_c_path}. Consider downsampling with `--downsample` if '
+                    'this step takes too long.'
                 )
                 df_aggregates = preprocessing.read_aggregates(aggregates_paths[key][tuple(convs)])
                 if groups:
