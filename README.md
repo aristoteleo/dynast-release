@@ -14,6 +14,7 @@
 Dynast is a command-line pipeline that preprocesses data from metabolic labeling scRNA-seq experiments and quantifies the following four mRNA species: unlabeled unspliced, unlabeled spliced, labeled unspliced and labeled spliced. In addition, dynast can perform statistical estimation of these species through expectation maximization (EM) and Bayesian inference.
 
 ### Key features
+* Novel consensus-calling algorithm to identify the most probable base at each sequenced position.
 * Complete quantification of labeling and splicing of RNA.
     * Unlabeled unspliced, unlabeled spliced, labeled unspliced, labeled spliced species quantification.
     * Highly paralellized and optimized pipeline procedures.
