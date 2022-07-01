@@ -1,8 +1,7 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
 import dynast.ref as ref
-
 from tests import mixins
 
 

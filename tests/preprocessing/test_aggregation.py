@@ -38,5 +38,7 @@ class TestAggregation(mixins.TestMixin, TestCase):
     def test_aggregate_counts(self):
         df = conversion.complement_counts(pd.read_csv(self.umi_counts_path), utils.read_pickle(self.umi_genes_path))
         aggregates_path = os.path.join(self.temp_dir, 'aggregates.csv')
-        self.assertEqual(aggregates_path, aggregation.aggregate_counts(df, aggregates_path, conversions=['TC']))
+        self.assertEqual(
+            aggregates_path, aggregation.aggregate_counts(df, aggregates_path, conversions=frozenset({'TC'}))
+        )
         self.assertTrue(mixins.dataframes_equal(self.umi_aggregates_path, aggregates_path, sort_by=['barcode', 'GX']))

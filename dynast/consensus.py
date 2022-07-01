@@ -1,7 +1,9 @@
 import datetime as dt
 import os
+from typing import List, Optional
 
 import ngs_tools as ngs
+from typing_extensions import Literal
 
 from . import config, constants, preprocessing
 from .logging import logger
@@ -10,19 +12,35 @@ from .stats import Stats
 
 @logger.namespaced('consensus')
 def consensus(
-    bam_path,
-    gtf_path,
-    out_dir,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    quality=27,
-    add_RS_RI=False,
-    n_threads=8,
-    temp_dir=None,
+    bam_path: str,
+    gtf_path: str,
+    out_dir: str,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    quality: int = 27,
+    add_RS_RI: bool = False,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
 ):
+    """Main interface for the `consensus` command.
+
+    Args:
+        bam_path: Path to BAM to call consensus from
+        gtf_path: Path to GTF used to build STAR index
+        out_dir: Path to output directory
+        strand: Strandedness of the protocol
+        umi_tag: BAM tag to use as UMIs
+        barcode_tag: BAM tag to use as cell barcodes
+        gene_tag: BAM tag to use as gene assignments
+        barcodes: Only consider these barcodes
+        quality: Quality threshold
+        add_RS_RI: Add RS and RI tags to BAM. Mostly useful for debugging.
+        n_threads: Number of threads to use
+        temp_dir: Temporary directory
+    """
     stats = Stats()
     stats.start()
     stats_path = os.path.join(

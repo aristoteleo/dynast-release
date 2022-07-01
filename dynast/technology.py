@@ -1,6 +1,10 @@
+import re
 from collections import namedtuple
+from typing import Optional
 
 import ngs_tools as ngs
+import pysam
+from typing_extensions import Literal
 
 Technology = namedtuple('Technology', ['name', 'chemistry', 'additional_args'])
 
@@ -26,3 +30,29 @@ PLATE_TECHNOLOGIES = [
 
 TECHNOLOGIES = BARCODE_UMI_TECHNOLOGIES + PLATE_TECHNOLOGIES
 TECHNOLOGIES_MAP = {t.name: t for t in TECHNOLOGIES}
+STRAND_MAP = {
+    ngs.chemistry.SequencingStrand.UNSTRANDED: 'unstranded',
+    ngs.chemistry.SequencingStrand.FORWARD: 'forward',
+    ngs.chemistry.SequencingStrand.REVERSE: 'reverse',
+}
+BAM_STRAND_PARSER = re.compile('(--readStrand|--soloStrand)(=| +)(?P<strand>Forward|Reverse|Unstranded)')
+
+
+def detect_strand(bam_path: str) -> Optional[Literal['forward', 'reverse', 'unstranded']]:
+    """Attempt to detect strandness by parsing the BAM header.
+
+    Args:
+        bam_path: Path to BAM
+
+    Returns:
+        'unstranded', 'forward', or 'reverse if the strand was successfully detected. `None` otherwise.
+    """
+    with pysam.AlignmentFile(bam_path, 'rb') as f:
+        pg = f.header.get('PG')
+        if pg:
+            for entry in pg:
+                if entry.get('PN') == 'STAR':
+                    search = BAM_STRAND_PARSER.search(entry.get('CL', ''))
+                    if search:
+                        return search.groupdict()['strand'].lower()
+    return None

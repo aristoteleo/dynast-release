@@ -1,6 +1,6 @@
 import os
 import pickle
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
 from scipy import stats
 
@@ -17,8 +17,8 @@ class TestPi(mixins.TestMixin, TestCase):
     def test_read_pi(self):
         pi.read_pi(self.umi_pi_path, group_by=['barcode', 'GX'])
 
-        result = pi.read_pi(self.pi_int_path, group_by=['group'])
-        self.assertEqual({'1': 0.5, '2': 0.75}, result)
+        res_a, res_b, res_pi = pi.read_pi(self.pi_int_path, group_by=['group'])
+        self.assertEqual({'1': 0.5, '2': 0.75}, res_pi)
 
     def test_beta_mean(self):
         self.assertAlmostEqual(stats.beta.mean(1, 1), pi.beta_mean(1, 1))
@@ -56,8 +56,7 @@ class TestPi(mixins.TestMixin, TestCase):
                 )
                 with open(pi_path, 'r') as f:
                     self.assertTrue(
-                        f.read().
-                        startswith('barcode,GX,guess,alpha,beta,pi\nAAACCCAACGTA,ENSG00000172009,0.99,2.0,2.0,0.5\n')
+                        f.read().startswith('barcode,GX,alpha,beta,pi\nAAACCCAACGTA,ENSG00000172009,2.0,2.0,0.5\n')
                     )
             except pickle.PicklingError:
                 pass

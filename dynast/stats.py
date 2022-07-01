@@ -3,6 +3,7 @@ import json
 import os
 import sys
 from contextlib import contextmanager
+from typing import Any, Dict
 
 from . import __version__
 
@@ -11,7 +12,7 @@ class Step:
     """Class that represents a processing step.
     """
 
-    def __init__(self, skipped=False, **kwargs):
+    def __init__(self, skipped: bool = False, **kwargs):
         self.start_time = None
         self.end_time = None
         self.elapsed = None
@@ -29,11 +30,8 @@ class Step:
         self.end_time = dt.datetime.now()
         self.elapsed = (self.end_time - self.start_time).total_seconds()
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """Convert this step to a dictionary.
-
-        :return: dictionary of class variables
-        :rtype: dictionary
         """
         return {
             'start_time': None if self.skipped else self.start_time.isoformat(),
@@ -76,15 +74,10 @@ class Stats:
         self.elapsed = (self.end_time - self.start_time).total_seconds()
 
     @contextmanager
-    def step(self, key, skipped=False, **kwargs):
+    def step(self, key: str, skipped: bool = False, **kwargs):
         """Register a processing step.
 
         Any additional keyword arguments are passed to the constructor of `Step`.
-
-        :param key: processing key
-        :type key: str
-        :param skipped: whether or not this step is skipped, defaults to `False`
-        :type skipped: bool, optional
         """
         step = Step(skipped=skipped, **kwargs)
         self.steps[key] = step
@@ -95,20 +88,14 @@ class Stats:
         if not skipped:
             step.end()
 
-    def save(self, path):
+    def save(self, path: str) -> str:
         """Save statistics as JSON to path.
-
-        :param path: path to JSON
-        :type path: str
-
-        :return: path to saved JSON
-        :rtype: str
         """
         with open(path, 'w') as f:
             json.dump(self.to_dict(), f, indent=4)
         return path
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """Convert statistics to dictionary, so that it is easily parsed
         by the report-rendering functions.
         """

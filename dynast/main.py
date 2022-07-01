@@ -4,11 +4,13 @@ import os
 import shutil
 import sys
 import warnings
+from typing import Optional
 
 from . import __version__
 from .config import BAM_GENE_TAG
 from .logging import logger
-from .technology import TECHNOLOGIES_MAP
+from .preprocessing import CONVERSION_COMPLEMENT
+from .technology import STRAND_MAP, TECHNOLOGIES_MAP, detect_strand
 from .utils import flatten_iter, patch_mp_connection_bpo_17560
 
 
@@ -16,7 +18,7 @@ def print_technologies():
     """Displays a list of supported technologies along with whether a whitelist
     is provided for that technology.
     """
-    headers = ['name', 'whitelist', 'barcode', 'umi', 'cDNA']
+    headers = ['name', 'whitelist', 'barcode', 'umi', 'cDNA', 'strand']
     rows = [headers]
 
     print('List of supported single-cell technologies\n')
@@ -26,11 +28,10 @@ def print_technologies():
         t = TECHNOLOGIES_MAP[key]
         chem = t.chemistry
         row = [
-            t.name,
-            'yes' if chem.has_whitelist else '',
+            t.name, 'yes' if chem.has_whitelist else '',
             ' '.join(str(_def) for _def in chem.cell_barcode_parser) if chem.has_cell_barcode else '',
             ' '.join(str(_def) for _def in chem.umi_parser) if chem.has_umi else '',
-            ' '.join(str(_def) for _def in chem.cdna_parser),
+            ' '.join(str(_def) for _def in chem.cdna_parser), chem.strand.name
         ]
         rows.append(row)
 
@@ -48,17 +49,16 @@ def print_technologies():
     sys.exit(1)
 
 
-def setup_ref_args(parser, parent):
+def setup_ref_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `ref` command.
 
-    :param parser: argparse parser to add the `ref` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `ref` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_ref = parser.add_parser(
         'ref',
@@ -93,7 +93,17 @@ def setup_ref_args(parser, parent):
     return parser_ref
 
 
-def setup_align_args(parser, parent):
+def setup_align_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Helper function to set up a subparser for the `align` command.
+
+    Args:
+        parser: Argparse parser to add the `align` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
+
+    Returns:
+        The newly added parser
+    """
     parser_align = parser.add_parser(
         'align',
         description='Align FASTQs',
@@ -123,9 +133,9 @@ def setup_align_args(parser, parent):
     )
     parser_align.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected depending on the technology.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_align.add_argument(
         '-w',
@@ -156,17 +166,16 @@ def setup_align_args(parser, parent):
     return parser_align
 
 
-def setup_consensus_args(parser, parent):
+def setup_consensus_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `consensus` command.
 
-    :param parser: argparse parser to add the `consensus` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `consensus` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_consensus = parser.add_parser(
         'consensus',
@@ -216,9 +225,9 @@ def setup_consensus_args(parser, parent):
     )
     parser_consensus.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected from the BAM.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_consensus.add_argument(
         '--quality',
@@ -260,17 +269,16 @@ def setup_consensus_args(parser, parent):
     return parser_consensus
 
 
-def setup_count_args(parser, parent):
+def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `count` command.
 
-    :param parser: argparse parser to add the `count` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `count` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_count = parser.add_parser(
         'count',
@@ -294,7 +302,8 @@ def setup_count_args(parser, parent):
             'timepoint.'
         ),
         action='append',
-        required=True
+        required=True,
+        choices=sorted(CONVERSION_COMPLEMENT.keys())
     )
     parser_count.add_argument(
         '-o',
@@ -332,9 +341,9 @@ def setup_count_args(parser, parent):
     )
     parser_count.add_argument(
         '--strand',
-        help='Read strandedness. (default: `forward`)',
-        choices=['forward', 'reverse', 'unstranded'],
-        default='forward',
+        help='Read strandedness. By default, this is auto-detected from the BAM.',
+        choices=['forward', 'reverse', 'unstranded', 'auto'],
+        default='auto',
     )
     parser_count.add_argument(
         '--quality',
@@ -355,7 +364,7 @@ def setup_count_args(parser, parent):
             '(default: no SNP detection)'
         ),
         type=float,
-        default=False,
+        default=None,
     )
     parser_count.add_argument(
         '--snp-min-coverage',
@@ -382,6 +391,12 @@ def setup_count_args(parser, parent):
               'be processed.'),
         type=str,
     )
+    parser_count.add_argument(
+        '--gene-names',
+        help=('Group counts by gene names instead of gene IDs when generating the h5ad file.'),
+        action='store_true'
+    )
+
     splicing_group = parser_count.add_mutually_exclusive_group()
     splicing_group.add_argument(
         '--no-splicing',
@@ -398,11 +413,11 @@ def setup_count_args(parser, parent):
             'Algorithm to use to detect spliced reads (that overlap exons). '
             'May be `strict`, which assigns reads as spliced if it only overlaps '
             'exons, or `lenient`, which assigns reads as spliced if it does not '
-            'overlap with any introns of at least one transcript. (default: lenient)'
+            'overlap with any introns of at least one transcript. (default: strict)'
         ),
         type=str,
         choices=['lenient', 'strict'],
-        default='lenient',
+        default='strict',
     )
     parser_count.add_argument(
         '--nasc',
@@ -443,17 +458,16 @@ def setup_count_args(parser, parent):
     return parser_count
 
 
-def setup_estimate_args(parser, parent):
+def setup_estimate_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `estimate` command.
 
-    :param parser: argparse parser to add the `estimate` command to
-    :type args: argparse.ArgumentParser
-    :param parent: argparse parser parent of the newly added subcommand.
-                   used to inherit shared commands/flags
-    :type args: argparse.ArgumentParser
+    Args:
+        parser: Argparse parser to add the `estimate` command to
+        parent: Argparse parser parent of the newly added subcommand.
+            Used to inherit shared commands/flags
 
-    :return: the newly added parser
-    :rtype: argparse.ArgumentParser
+    Returns:
+        The newly added parser
     """
     parser_estimate = parser.add_parser(
         'estimate',
@@ -483,20 +497,44 @@ def setup_estimate_args(parser, parent):
         default='.',
     )
     parser_estimate.add_argument(
-        '--groups',
-        metavar='CSV',
+        '--barcodes',
+        metavar='TXT',
         help=(
-            'CSV containing cell (barcode) groups, where the first column is the barcode '
-            'and the second is the group name the cell belongs to. Cells will be combined per '
-            'group for estimation of parameters specified by `--groups-for`.'
+            'Textfile containing filtered cell barcodes. Only these barcodes will be processed. '
+            'This option may be used multiple times when multiple input directories are provided.'
         ),
         action='append',
         default=None,
     )
     parser_estimate.add_argument(
-        '--ignore-groups-for-pi',
+        '--groups',
+        metavar='CSV',
         help=(
-            'Ignore cell groupings when estimating the fraction of labeled RNA. '
+            'CSV containing cell (barcode) groups, where the first column is the barcode '
+            'and the second is the group name the cell belongs to. Estimation will be performed '
+            'by aggregating UMIs per group. This option may be used multiple times when multiple '
+            'input directories are provided.'
+        ),
+        action='append',
+        default=None,
+    )
+    parser_estimate.add_argument(
+        '--method',
+        help=(
+            'Correction method to use. '
+            'May be `pi_g` to estimate the fraction of labeled RNA for every cell-gene combination, '
+            'or `alpha` to use alpha correction as used in the scNT-seq paper. `alpha` is recommended for '
+            'UMI-based assays. This option has no effect when used with `--control`. (default: alpha)'
+        ),
+        choices=['pi_g', 'alpha'],
+        default='alpha'
+    )
+    parser_estimate.add_argument(
+        '--ignore-groups-for-est',
+        help=(
+            'Ignore cell groupings when calculating final estimations for the fraction of labeled RNA. '
+            'When `--method pi_g`, groups are ignored when estimating fraction of labeled RNA. '
+            'When `--method alpha`, groups are ignored when estimating detection rate. '
             'This option only has an effect when `--groups` is also specified.'
         ),
         action='store_true',
@@ -518,9 +556,17 @@ def setup_estimate_args(parser, parent):
     parser_estimate.add_argument(
         '--cell-gene-threshold',
         metavar='COUNT',
-        help='A cell-gene pair must have at least this many reads for correction. (default: 16)',
+        help=(
+            'A cell-gene pair must have at least this many reads for correction. '
+            'Only for `--method pi_g`. (default: 16)'
+        ),
         type=int,
         default=16
+    )
+    parser_estimate.add_argument(
+        '--gene-names',
+        help=('Group counts by gene names instead of gene IDs when generating H5AD file'),
+        action='store_true'
     )
     parser_estimate.add_argument(
         '--downsample',
@@ -578,10 +624,13 @@ def setup_estimate_args(parser, parent):
     return parser_estimate
 
 
-def parse_ref(parser, args, temp_dir=None):
+def parse_ref(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `ref` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     if os.path.exists(args.i):
         parser.error(
@@ -653,6 +702,15 @@ def parse_align(parser, args, temp_dir=None):
         # Clean
         overrides = {arg: parts[0] if len(parts) == 1 else parts for arg, parts in overrides.items()}
 
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = STRAND_MAP[technology.chemistry.strand]
+        logger.info(
+            f'Auto-detected strandedness `{strand}` for technology `{technology.name}`. '
+            'Use `--strand` to override.'
+        )
+
     from .align import align
     align(
         args.fastqs,
@@ -660,7 +718,7 @@ def parse_align(parser, args, temp_dir=None):
         args.o,
         technology,
         whitelist_path=args.w,
-        strand=args.strand,
+        strand=strand,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
@@ -668,17 +726,20 @@ def parse_align(parser, args, temp_dir=None):
     )
 
 
-def parse_consensus(parser, args, temp_dir=None):
+def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `consensus` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     # Check quality
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = set()
+    barcodes = None
     if args.barcodes:
         if not args.barcode_tag:
             parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
@@ -689,12 +750,21 @@ def parse_consensus(parser, args, temp_dir=None):
     else:
         logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
 
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = detect_strand(args.bam)
+        if strand is None:
+            parser.error('Failed to auto-detect strandedness from BAM. Use `--strand` to provide strandedness.')
+        else:
+            logger.info(f'Auto-detected strandedness: {strand}. Use `--strand` to override.')
+
     from .consensus import consensus
     consensus(
         args.bam,
         args.g,
         args.o,
-        strand=args.strand,
+        strand=strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
@@ -706,17 +776,20 @@ def parse_consensus(parser, args, temp_dir=None):
     )
 
 
-def parse_count(parser, args, temp_dir=None):
+def parse_count(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
     """Parser for the `count` command.
-    :param args: Command-line arguments dictionary, as parsed by argparse
-    :type args: dict
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
     """
     # Check quality
     if args.quality < 0 or args.quality > 41:
         parser.error('`--quality` must be in [0, 42)')
 
     # Read barcodes
-    barcodes = set()
+    barcodes = None
     if args.barcodes:
         if not args.barcode_tag:
             parser.error('`--barcodes` may only be provided with `--barcode-tag`.')
@@ -741,14 +814,23 @@ def parse_count(parser, args, temp_dir=None):
         parser.error('duplicate conversions are not allowed for `--conversion`')
 
     # Convert conversions to frozenset of tuples.
-    conversions = frozenset(tuple(conv) for conv in conversions)
+    conversions = frozenset(frozenset(conv) for conv in conversions)
+
+    # Detect strand
+    strand = args.strand
+    if args.strand == 'auto':
+        strand = detect_strand(args.bam)
+        if strand is None:
+            parser.error('Failed to auto-detect strandedness from BAM. Use `--strand` to provide strandedness.')
+        else:
+            logger.info(f'Auto-detected strandedness: {strand}. Use `--strand` to override.')
 
     from .count import count
     count(
         args.bam,
         args.g,
         args.o,
-        strand=args.strand,
+        strand=strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
         gene_tag=args.gene_tag,
@@ -765,11 +847,19 @@ def parse_count(parser, args, temp_dir=None):
         overwrite=args.overwrite,
         velocity=not args.no_splicing,
         strict_exon_overlap=args.exon_overlap == 'strict',
-        dedup_mode=args.dedup_mode
+        dedup_mode=args.dedup_mode,
+        by_name=args.gene_names
     )
 
 
-def parse_estimate(parser, args, temp_dir=None):
+def parse_estimate(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
+    """Parser for the `estimate` command.
+
+    Args:
+        parser: The parser
+        args: Command-line arguments dictionary, as parsed by argparse
+        temp_dir: Temporary directory
+    """
     # Check control constraints
     if args.control and args.p_e:
         parser.error('`--control` and `--p-e` can not be used together')
@@ -785,11 +875,16 @@ def parse_estimate(parser, args, temp_dir=None):
 
     # group CSV must be proivded when there are multiple input directories
     if len(args.count_dirs) > 1 and not args.groups:
-        parser.error('`--group` CSVs must be provided when using multiple input directories')
+        parser.error(
+            '`--group` CSVs must be provided when using multiple input directories. '
+            'Otherwise, simply run `dynast estimate` for each directory separately.'
+        )
 
     # If group CSV(s) are provided, the number must match input directories
     if args.groups and len(args.groups) != len(args.count_dirs):
         parser.error('Number of `--group` CSVs must match number of input directories')
+    if args.barcodes and len(args.barcodes) != len(args.count_dirs):
+        parser.error('Number of `--barcodes` TXTs must match number of input directories')
 
     # Multiple count dirs can't be used with nasc
     if len(args.count_dirs) > 1 and args.nasc:
@@ -798,13 +893,36 @@ def parse_estimate(parser, args, temp_dir=None):
     # Read genes
     genes = None
     if args.genes:
+        if args.by_name:
+            logger.warning(
+                '`--genes` were provided with `--gene-names`. '
+                'Make sure your gene list contains gene names instead of IDs. '
+                'IDs should be used for any genes that do not have a name.'
+            )
         with open(args.genes, 'r') as f:
             genes = [line.strip() for line in f if not line.isspace()]
         logger.warning(f'Ignoring genes not in the {len(genes)} genes provided by `--genes`')
 
+    barcodes = []
+    if args.barcodes:
+        for path in args.barcodes:
+            with open(path, 'r') as f:
+                bcs = set(line.strip() for line in f if not line.isspace())
+            barcodes.append(bcs)
+        logger.warning(
+            f'Ignoring cell barcodes not in the {sum(len(bcs) for bcs in barcodes)} barcodes provided by `--barcodes`'
+        )
+    else:
+        logger.warning('`--barcodes` not provided. All cell barcodes will be processed.')
+
     # Parse cell groups csv(s)
     groups = []
     if args.groups:
+        if args.barcodes:
+            logger.warning(
+                '`--groups` was provided with `--barcodes`. Only barcodes present in both inputs will be considered.'
+            )
+
         for path in args.groups:
             groups_part = {}
             with open(path, 'r') as f:
@@ -819,7 +937,7 @@ def parse_estimate(parser, args, temp_dir=None):
                     groups_part[barcode] = group
             groups.append(groups_part)
 
-    if args.ignore_groups_for_pi and not (args.groups):
+    if args.ignore_groups_for_est and not (args.groups):
         parser.error('`--ignore-groups-for-pi` can not be used without `--groups`')
 
     if not args.reads:
@@ -837,8 +955,9 @@ def parse_estimate(parser, args, temp_dir=None):
         args.count_dirs,
         args.o,
         args.reads,
+        barcodes=args.barcodes,
         groups=groups,
-        ignore_groups_for_pi=args.ignore_groups_for_pi,
+        ignore_groups_for_est=args.ignore_groups_for_est,
         genes=genes,
         downsample=args.downsample,
         downsample_mode=args.downsample_mode,
@@ -846,9 +965,11 @@ def parse_estimate(parser, args, temp_dir=None):
         cell_gene_threshold=args.cell_gene_threshold,
         control_p_e=control_p_e,
         control=args.control,
+        method=args.method,
         n_threads=args.t,
         temp_dir=temp_dir,
         nasc=args.nasc,
+        by_name=args.gene_names,
         seed=args.seed
     )
 

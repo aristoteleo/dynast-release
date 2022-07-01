@@ -1,7 +1,10 @@
 import datetime as dt
 import os
+from typing import FrozenSet, List, Optional
 
 import ngs_tools as ngs
+import pandas as pd
+from typing_extensions import Literal
 
 from . import config, constants, preprocessing, utils
 from .logging import logger
@@ -10,28 +13,57 @@ from .stats import Stats
 
 @logger.namespaced('count')
 def count(
-    bam_path,
-    gtf_path,
-    out_dir,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    control=False,
-    quality=27,
-    conversions=frozenset([('TC',)]),
-    snp_threshold=0.5,
-    snp_min_coverage=1,
-    snp_csv=None,
-    n_threads=8,
-    temp_dir=None,
-    velocity=True,
-    strict_exon_overlap=False,
-    dedup_mode='auto',
-    nasc=False,
-    overwrite=False,
+    bam_path: str,
+    gtf_path: str,
+    out_dir: str,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    control: bool = False,
+    quality: int = 27,
+    conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+    snp_threshold: Optional[float] = None,
+    snp_min_coverage: int = 1,
+    snp_csv: Optional[str] = None,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None,
+    velocity: bool = True,
+    strict_exon_overlap: bool = False,
+    dedup_mode: Literal['auto', 'exon', 'conversion'] = 'auto',
+    by_name: bool = False,
+    nasc: bool = False,
+    overwrite: bool = False,
 ):
+    """Main interface for the `count` command.
+
+    Args:
+        bam_path: Path to BAM
+        gtf_path: Path to GTF
+        out_dir: Path to output directory
+        strand: Strandedness of technology
+        umi_tag: BAM tag to use as UMIs
+        barcode_tag: BAM tag to use as barcodes
+        gene_tag: BAM tag to use as genes
+        barcodes: List of barcodes to consider
+        control: Whether this is a control sample
+        quality: Quality threshold in detecting conversions
+        conversions: Set of conversions to quantify
+        snp_threshold: Call genomic locations that have greater than this proportion of
+            specific conversions as a SNP
+        snp_min_coverage: Only consider genomic locations with at least this many mapping
+            reads for SNP calling
+        snp_csv: CSV containing SNPs
+        n_threads: Number of threads to use
+        temp_dir: Temporary directory
+        velocity: Whether to quantify spliced/unspliced RNA
+        strict_exon_overlap: Whether spliced/unspliced RNA quantification is strict
+        dedup_mode: UMI deduplication mode
+        by_name: Whether to group counts by gene name instead of ID
+        nasc: Whether to match NASC-seq pipeline behavior
+        overwrite: Overwrite existing files
+    """
     stats = Stats()
     stats.start()
     stats_path = os.path.join(
@@ -178,7 +210,7 @@ def count(
     coverage_path = os.path.join(out_dir, constants.COVERAGE_FILENAME)
     snps_path = os.path.join(out_dir, constants.SNPS_FILENAME)
     snp_required = [convs_path, coverage_path, snps_path]
-    if snp_threshold:
+    if snp_threshold is not None:
         if not control:
             # If SNP filtering is used with a non-control sample, there are some
             # inconsistencies in what particular reads (among duplicated ones) are used for
@@ -253,7 +285,7 @@ def count(
     counts_path = os.path.join(out_dir, f'{constants.COUNTS_PREFIX}_{"_".join(all_conversions)}.csv')
     logger.info(f'Counting conversions to {counts_path}')
     snps = utils.merge_dictionaries(
-        preprocessing.read_snps(snps_path) if snp_threshold else {},
+        preprocessing.read_snps(snps_path) if snp_threshold is not None else {},
         preprocessing.read_snp_csv(snp_csv) if snp_csv else {},
         f=set.union,
         default=set,
@@ -298,20 +330,65 @@ def count(
                 'Otherwise, all missing barcodes will be ignored. '
             )
 
-    # Calculate mutation rates
-    rates_path = os.path.join(out_dir, constants.RATES_FILENAME)
-    rates_path = preprocessing.calculate_mutation_rates(
-        df_counts_uncomplemented if nasc else df_counts_complemented, rates_path, group_by=['barcode']
-    )
+    # Calculate mutation rates for each group
+    transcriptome_exists = df_counts_complemented['transcriptome'].any()
+    velocities = df_counts_complemented['velocity'].unique()
+    df_counts = df_counts_uncomplemented if nasc else df_counts_complemented
+    rates_paths = {}
+    rates_all_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}.csv')
+    logger.info(f'Calculating mutation rates for all reads to {rates_all_path}.')
+    rates_all_path = preprocessing.calculate_mutation_rates(df_counts, rates_all_path, group_by=['barcode'])
+    rates_paths['all'] = rates_all_path
+
+    if transcriptome_exists:
+        rates_X_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}_X.csv')
+        logger.info(f'Calculating mutation rates for X reads to {rates_X_path}.')
+        rates_X_path = preprocessing.calculate_mutation_rates(
+            df_counts[df_counts['transcriptome']], rates_X_path, group_by=['barcode']
+        )
+        rates_paths['X'] = rates_X_path
+    for key in velocities:
+        if key in config.VELOCITY_BLACKLIST:
+            continue
+        rates_velocity_path = os.path.join(out_dir, f'{constants.RATES_PREFIX}_{key}.csv')
+        logger.info(f'Calculating mutation rates for {key} reads to {rates_velocity_path}.')
+        rates_velocity_path = preprocessing.calculate_mutation_rates(
+            df_counts[df_counts['velocity'] == key], rates_velocity_path, group_by=['barcode']
+        )
+        rates_paths[key] = rates_velocity_path
 
     if control:
         logger.info('Downstream processing skipped for controls')
-        if snp_threshold:
+        if snp_threshold is not None:
             logger.info(f'Use `--snp-csv {snps_path}` to run test samples')
     else:
+        if by_name:
+            logger.info('Collapsing counts by gene name.')
+            df_counts_complemented['GX'] = df_counts_complemented['GX'].apply(
+                lambda gx: gene_infos[gx]['gene_name'] or gx
+            )
+
         adata_path = os.path.join(out_dir, constants.ADATA_FILENAME)
         logger.info(f'Combining results into Anndata object at {adata_path}')
-        adata = utils.results_to_adata(df_counts_complemented, conversions, gene_infos=gene_infos)
-        adata.write(adata_path)
+        adata = utils.results_to_adata(
+            df_counts_complemented, conversions, gene_infos=gene_infos if not by_name else None
+        )
+
+        # Add rates to obsm
+        for key, rates_path in rates_paths.items():
+            obsm = 'rates'
+            if key != 'all':
+                obsm += f'_{key}'
+            logger.debug(f'Adding {obsm} to obsm.')
+            rates = preprocessing.read_rates(rates_path)
+            if isinstance(rates, pd.Series):
+                expanded = pd.DataFrame(columns=rates.index)
+                for obs in adata.obs_names:
+                    expanded.loc[obs] = rates
+                adata.obsm[obsm] = expanded
+            else:
+                adata.obsm[obsm] = rates.set_index('barcode').reindex(adata.obs_names, fill_value=0.0)
+
+        adata.write(adata_path, compression='gzip')
     stats.end()
     stats.save(stats_path)

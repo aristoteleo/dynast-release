@@ -1,19 +1,20 @@
+from typing import FrozenSet, List, Optional
+
 import numpy as np
 import pandas as pd
 
-from .conversion import BASE_IDX, COLUMNS
-from .. import utils
 from ..logging import logger
+from .conversion import BASE_IDX, COLUMNS
 
 
-def read_rates(rates_path):
+def read_rates(rates_path: str) -> pd.DataFrame:
     """Read mutation rates CSV as a pandas dataframe.
 
-    :param rates_path: path to rates CSV
-    :type rates_path: str
+    Args:
+        rates_path: Path to rates CSV
 
-    :return: rates dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Rates dataframe
     """
     df = pd.read_csv(rates_path, index_col=None)
     if df.shape[0] == 1:
@@ -21,14 +22,14 @@ def read_rates(rates_path):
     return df
 
 
-def read_aggregates(aggregates_path):
+def read_aggregates(aggregates_path: str) -> pd.DataFrame:
     """Read aggregates CSV as a pandas dataframe.
 
-    :param aggregates_path: path to aggregates CSV
-    :type aggregates_path: str
+    Args:
+        aggregates_path: Path to aggregates CSV
 
-    :return: aggregates dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Aggregates dataframe
     """
     dtypes = {
         'barcode': 'category',
@@ -41,14 +42,14 @@ def read_aggregates(aggregates_path):
     return df
 
 
-def merge_aggregates(*dfs):
+def merge_aggregates(*dfs: pd.DataFrame) -> pd.DataFrame:
     """Merge multiple aggregate dataframes into one.
 
-    :param *dfs: dataframes to merge
-    :type *dfs: pandas.DataFrame
+    Args:
+        dfs: Dataframes to merge
 
-    :return: merged dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Merged dataframe
     """
     df = pd.concat(dfs).groupby(['barcode', 'GX', 'conversion', 'base'], sort=False, observed=True).sum().reset_index()
     df['conversion'] = df['conversion'].astype(np.uint8)
@@ -57,19 +58,17 @@ def merge_aggregates(*dfs):
     return df
 
 
-def calculate_mutation_rates(df_counts, rates_path, group_by=None):
+def calculate_mutation_rates(df_counts: pd.DataFrame, rates_path: str, group_by: Optional[List[str]] = None) -> str:
     """Calculate mutation rate for each pair of bases.
 
-    :param df_counts: counts dataframe, with complemented reverse strand bases
-    :type df_counts: pandas.DataFrame
-    :param rates_path: path to write rates CSV
-    :type rates_path: str
-    :param group_by: column(s) to group calculations by, defaults to `None`, which
-                     combines all rows
-    :type group_by: list
+    Args:
+        df_counts: Counts dataframe, with complemented reverse strand bases
+        rates_path: Path to write rates CSV
+        group_by: Column(s) to group calculations by, defaults to `None`, which
+            combines all rows
 
-    :return: path to rates CSV
-    :rtype: str
+    Returns:
+        Path to rates CSV
     """
     logger.debug(f'Mutation rates will be grouped by {group_by}')
 
@@ -86,28 +85,26 @@ def calculate_mutation_rates(df_counts, rates_path, group_by=None):
     df_rates = pd.concat(dfs, axis=1)
     if group_by is not None:
         df_rates = df_rates.reset_index()
-    logger.debug(f'Writing mutation rates to {rates_path}')
     df_rates.to_csv(rates_path, index=False)
     return rates_path
 
 
-def aggregate_counts(df_counts, aggregates_path, conversions=frozenset([('TC',)])):
+def aggregate_counts(
+    df_counts: pd.DataFrame, aggregates_path: str, conversions: FrozenSet[str] = frozenset({'TC'})
+) -> str:
     """Aggregate conversion counts for each pair of bases.
 
-    :param df_counts: counts dataframe, with complemented reverse strand bases
-    :type df_counts: pandas.DataFrame
-    :param aggregates_path: path to write aggregate CSV
-    :type aggregates_path: str
-    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
-    :type conversions: list, optional
+    Args:
+        df_counts: Counts dataframe, with complemented reverse strand bases
+        aggregates_path: Path to write aggregate CSV
+        conversions: Conversion(s) in question
 
-    :return: path to aggregate CSV that was written
-    :rtype: str
+    Returns:
+        Path to aggregate CSV that was written
     """
-    flattened = list(utils.flatten_iter(conversions))
-    bases = list(set(f[0] for f in flattened))
+    bases = list(set(f[0] for f in conversions))
     df_combined = df_counts[['barcode', 'GX']].copy()
-    df_combined['conversion'] = df_counts[flattened].sum(axis=1)
+    df_combined['conversion'] = df_counts[list(conversions)].sum(axis=1)
     df_combined['base'] = df_counts[bases].sum(axis=1)
     pd.DataFrame(
         df_combined.groupby(

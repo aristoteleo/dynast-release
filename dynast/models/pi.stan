@@ -19,14 +19,16 @@ parameters {
 transformed parameters {
   real alpha = exp(log_alpha);
   real beta = exp(log_beta);
+  real log_pi_g = log(pi_g);
+  real log_pi_g_inv = log(1 - pi_g);
 }
 
 model {
   pi_g ~ beta(alpha, beta);
   for (i in 1:N) {
     target += counts[i] * log_sum_exp(
-      binomial_lpmf(conversions[i] | contents[i], p_c) + log(pi_g),
-      binomial_lpmf(conversions[i] | contents[i], p_e) + log(1 - pi_g)
+      binomial_lpmf(conversions[i] | contents[i], p_c) + log_pi_g,
+      binomial_lpmf(conversions[i] | contents[i], p_e) + log_pi_g_inv
     );
   }
 }

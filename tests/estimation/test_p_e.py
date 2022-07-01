@@ -27,7 +27,7 @@ class TestPE(mixins.TestMixin, TestCase):
                     utils.read_pickle(self.control_genes_path),
                 ),
                 p_e_path,
-                conversions=['TC']
+                conversions=frozenset({'TC'})
             )
         )
         self.assertAlmostEqual(p_e.read_p_e(self.control_p_e_path), p_e.read_p_e(p_e_path))
@@ -42,7 +42,7 @@ class TestPE(mixins.TestMixin, TestCase):
                     utils.read_pickle(self.umi_genes_path),
                 ),
                 p_e_path,
-                conversions=['TC'],
+                conversions=frozenset({'TC'}),
                 group_by=['barcode']
             )
         )

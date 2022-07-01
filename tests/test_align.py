@@ -1,5 +1,5 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
 import dynast.align as align
 import dynast.config as config

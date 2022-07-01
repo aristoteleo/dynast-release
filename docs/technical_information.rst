@@ -175,7 +175,9 @@ For each cell and gene and for each conversion provided with :code:`--conversion
 ''''''''''''''''
 1. The background conversion rate :math:`p_e` is estimated, if :code:`--p-e` was not provided (see :ref:`background_estimation`). If :code:`--p-e` was provided, this value is used and estimation is skipped. :math:`p_e`s are written to :code:`p_e.csv`.
 2. The induced conversion rate :math:`p_c` is estimated using an expectation maximization (EM) approach, for each conversion provided with :code:`--conversion` (see :ref:`induced_rate_estimation`). :math:`p_c`s are written to :code:`p_c_{conversion}.csv` where :code:`{conversion}` is an underscore-delimited list of each conversion (because multiple conversions can be introduced in a single timepoint). This step is skipped for control samples with :code:`--control`.
-3. Finally, the fraction of labeled RNA per cell :math:`\pi_c` and per cell-gene :math:`\pi_g` are estimated. The resulting fractions are written to CSV files named :code:`pi_c_xxx.csv` and :code:`pi_xxx.csv`, where the former contains estimations per cell and the latter contains estimations per cell-gene.
+3. Finally, the counts are split into estimated number of labeled and unlabeled counts. These may be produced by either estimating the the fraction of labeled RNA per cell-gene :math:`\pi_g` directly by using :code:`--method pi_g` or using a detection rate estimation-based method by using :code:`--method alpha` (see :ref:`bayesian_inference`). By default, the latter is performed. The resulting estimated fractions are written to CSV files named :code:`pi_xxx.csv`, where the former contains estimations per cell-gene (:code:`--method pi_g`) or per cell (:code:`--method alpha`).
+
+.. Note:: The induced conversion rate :math:`p_c` estimation always uses all reads present in the counts CSV (located within the count directory provided to the :code:`dynast estimate` command). Therefore, unless :code:`--no-splicing` or :code:`--transcriptome-only` was provided to :code:`dynast count`, `total` reads will be used.
 
 Output Anndata
 ''''''''''''''
@@ -183,7 +185,8 @@ All results are compiled into a single AnnData :code:`H5AD` file. The AnnData ob
 
 * The *transcriptome* read counts in :code:`.X`. Here, *transcriptome* reads are the mRNA read counts that are usually output from conventional scRNA-seq quantification pipelines. In technical terms, these are reads that contain the BAM tag provided with the :code:`--gene-tag` (default is :code:`GX`).
 * Unlabeled and labeled *transcriptome* read counts in :code:`.layers['X_n_{conversion}']` and :code:`.layers['X_l_{conversion}']`. If :code:`--reads transcriptome` was specified, the estimated counts are in :code:`.layers['X_n_{conversion}_est']` and :code:`.layers['X_l_{conversion}_est']`. :code:`{conversion}` is an underscore-delimited list of each conversion provided with :code:`--conversion` when running :code:`dynast count`.
-* Per cell estimated parameters in corresponding columns of :code:`.obs`. These include the estimated :math:`p_e` in :code:`.obs['p_e']`, :math:`p_c` in :code:`.obs['p_c_{conversion}']`, and per cell estimated fractions of labeled RNA in :code:`.obs['pi_c_{group}_{conversion}']`. There is one column for each possible read group. For instance, if :code:`transcriptome` and :code:`spliced` read groups are available, two columns with the names :code:`pi_c_transcriptome_{conversion}` and :code:`pi_c_spliced_{conversion}` are added.
+* If :code:`--method pi_g`, the estimated fraction of labeled RNA per cell-gene in :code:`.layers['{group}_{conversion}_pi_g']`.
+* If :code:`--method alpha`, the per cell detection rate in :code:`.obs['{group}_{conversion}_alpha']`.
 
 The following layers are also present if :code:`--no-splicing` or :code:`--transcriptome-only` was *NOT* specified when running :code:`dynast count`.
 
@@ -307,4 +310,16 @@ The M step updates the estimate for :math:`p_c`
 
 Bayesian inference (:math:`\pi_g`)
 ''''''''''''''''''''''''''''''''''
-The fraction of labeled RNA per cell :math:`\pi_c` and per cell-gene :math:`\pi_g` are estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
+The fraction of labeled RNA is estimated with Bayesian inference using the binomial mixture model described above. A Markov chain Monte Carlo (MCMC) approach is applied using the :math:`p_e`, :math:`p_c`, and the matrix :math:`A` found/estimated in previous steps. This estimation procedure is implemented with `pyStan <https://pystan.readthedocs.io/en/latest/>`_, which is a Python interface to the Bayesian inference package `Stan <https://mc-stan.org/>`_. The Stan model definition is `here <https://github.com/aristoteleo/dynast-release/blob/main/dynast/models/pi.stan>`_.
+
+When :code:`--method pi_g`, this estimation yields the fraction of labeled RNA per cell-gene, :math:`\pi_g`, which can be used directly to split the total RNA. However, when :code:`--method alpha`, this estimation yields the fraction of labeled RNA per cell, :math:`\pi_c`. As was described in [Qiu2020]_, the detection rate per cell, :math:`\alpha_c`, is calculated as
+
+.. math::
+
+	\alpha_c = \frac{\pi_c}{L_c+U_c}
+
+where :math:`L_c` and :math:`U_c` are the numbers of labeled and unlableed RNA for cell :math:`c`. Then, using this detection rate, the corrected labeled RNA is calculated as
+
+.. math::
+
+	N'_c = \min \left( \frac{L_c}{\alpha_c}, L_c+U_c \right)

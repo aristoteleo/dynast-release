@@ -3,14 +3,14 @@ import multiprocessing
 import queue
 from hashlib import sha256
 
-import pysam
 import ngs_tools as ngs
 import numpy as np
+import pysam
 from tqdm import tqdm
 
-from . import bam
 from .. import config, utils
 from ..logging import logger
+from . import bam
 
 BASES = ('A', 'C', 'G', 'T')
 BASE_IDX = {base: i for i, base in enumerate(BASES)}
@@ -232,6 +232,8 @@ def call_consensus(
     temp_dir=None,
     n_threads=8
 ):
+    """
+    """
 
     def skip_alignment(read, tags):
         return read.is_secondary or read.is_unmapped or any(not read.has_tag(tag) for tag in tags)
@@ -280,8 +282,8 @@ def call_consensus(
             })
 
         # Figure out what strand the consensus should map to
-        consensus_strand = None
         gene_strand = gene_info['strand']
+        consensus_strand = gene_strand
         if strand == 'forward':
             consensus_strand = gene_strand
         elif strand == 'reverse':

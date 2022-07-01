@@ -1,6 +1,8 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
+import numpy as np
+import pandas as pd
 from scipy import stats
 
 import dynast.estimation.p_c as p_c
@@ -38,7 +40,9 @@ class TestPC(mixins.TestMixin, TestCase):
                     n_threads=2
                 )
             )
-            self.assertTrue(mixins.files_equal(self.umi_p_c_path, p_c_path))
+        expected = pd.read_csv(self.umi_p_c_path)['p_c'].values
+        produced = pd.read_csv(p_c_path)['p_c'].values
+        np.testing.assert_allclose(expected, produced, rtol=1e-5)
 
     def test_estimate_p_c_nasc(self):
         p_c_path = os.path.join(self.temp_dir, 'p_c.csv')
@@ -56,4 +60,6 @@ class TestPC(mixins.TestMixin, TestCase):
                     nasc=True,
                 )
             )
-            self.assertTrue(mixins.files_equal(self.nasc_p_c_path, p_c_path))
+        expected = pd.read_csv(self.nasc_p_c_path)['p_c'].values
+        produced = pd.read_csv(p_c_path)['p_c'].values
+        np.testing.assert_allclose(expected, produced)

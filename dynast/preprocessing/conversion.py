@@ -1,11 +1,14 @@
+import multiprocessing
 import re
 import shutil
 import tempfile
 from functools import partial
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 import ngs_tools as ngs
 import numpy as np
 import pandas as pd
+from typing_extensions import Literal
 
 from .. import config, utils
 from ..logging import logger
@@ -68,16 +71,16 @@ COLUMNS = CONVERSION_COLUMNS + BASE_COLUMNS
 CSV_COLUMNS = ['read_id', 'barcode', 'umi', 'GX'] + COLUMNS + ['velocity', 'transcriptome', 'score']
 
 
-def read_counts(counts_path, *args, **kwargs):
+def read_counts(counts_path: str, *args, **kwargs) -> pd.DataFrame:
     """Read counts CSV as a pandas dataframe.
 
     Any additional arguments and keyword arguments are passed to `pandas.read_csv`.
 
-    :param counts_path: path to CSV
-    :type counts_path: str
+    Args:
+        counts_path: Path to CSV
 
-    :return: counts dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Counts dataframe
     """
     dtypes = {
         'read_id': 'string',
@@ -93,18 +96,16 @@ def read_counts(counts_path, *args, **kwargs):
     return pd.read_csv(counts_path, dtype=dtypes, na_filter=False, *args, **kwargs)
 
 
-def complement_counts(df_counts, gene_infos):
+def complement_counts(df_counts: pd.DataFrame, gene_infos: dict) -> pd.DataFrame:
     """Complement the counts in the counts dataframe according to gene strand.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param gene_infos: dictionary containing gene information, as returned by
-                       `preprocessing.gtf.parse_gtf`
-    :type gene_infos: dictionary
+    Args:
+        df_counts: Counts dataframe
+        gene_infos: Dictionary containing gene information, as returned by
+            `preprocessing.gtf.parse_gtf`
 
-    :return: counts dataframe with counts complemented for reads mapping to genes
-        on the reverse strand
-    :rtype: pandas.DataFrame
+    Returns:
+        counts dataframe with counts complemented for reads mapping to genes on the reverse strand
     """
     # Extract columns that do not need to be complemented
     other_columns = []
@@ -124,7 +125,27 @@ def complement_counts(df_counts, gene_infos):
     return pd.concat((df_forward, df_reverse), verify_integrity=True)
 
 
-def drop_multimappers(df_counts, conversions=None):
+def subset_counts(
+    df_counts: pd.DataFrame,
+    key: Literal['total', 'transcriptome', 'spliced', 'unspliced'],
+) -> pd.DataFrame:
+    """Subset the given counts DataFrame to only contain reads of the desired key.
+
+    Args:
+        df_count: Counts dataframe
+        key: Read types to subset
+
+    Returns:s
+        Subset dataframe
+    """
+    if key == 'transcriptome':
+        df_counts = df_counts[df_counts['transcriptome']]
+    if key in ('spliced', 'unspliced'):
+        df_counts = df_counts[df_counts['velocity'] == key]
+    return df_counts
+
+
+def drop_multimappers(df_counts: pd.DataFrame, conversions: Optional[FrozenSet[str]] = None) -> pd.DataFrame:
     """Drop multimappings that have the same read ID where
     * some map to the transcriptome while some do not -- drop non-transcriptome alignments
     * none map to the transcriptome AND aligned to multiple genes -- drop all
@@ -133,16 +154,16 @@ def drop_multimappers(df_counts, conversions=None):
     TODO: This function can probably be removed because BAM parsing only considers
     primary alignments now.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param conversions: conversions to prioritize, defaults to `None`
-    :type conversions: list, optional
+    Args:
+        df_counts: Counts dataframe
+        conversions: Conversions to prioritize
 
-    :return: counts dataframe with multimappers appropriately filtered
-    :rtype: pandas.DataFrame
+    Returns:
+        Counts dataframe with multimappers appropriately filtered
     """
     columns = list(df_counts.columns)
-    df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
+    convs = list(conversions) if conversions is not None else CONVERSION_COLUMNS
+    df_counts['conversion_sum'] = df_counts[convs].sum(axis=1)
     df_sorted = df_counts.sort_values(['transcriptome', 'score', 'conversion_sum']).drop(columns='conversion_sum')
     df_counts.drop(columns='conversion_sum', inplace=True)
     df_sorted['not_transcriptome'] = ~df_sorted['transcriptome']
@@ -179,7 +200,11 @@ def drop_multimappers(df_counts, conversions=None):
     return df_deduplicated[columns]
 
 
-def deduplicate_counts(df_counts, conversions=None, use_conversions=True):
+def deduplicate_counts(
+    df_counts: pd.DataFrame,
+    conversions: Optional[FrozenSet[str]] = None,
+    use_conversions: bool = True
+) -> pd.DataFrame:
     """Deduplicate counts based on barcode, UMI, and gene.
 
     The order of priority is the following.
@@ -189,24 +214,22 @@ def deduplicate_counts(df_counts, conversions=None, use_conversions=True):
     4. If `conversions` is provided, reads that have a larger sum of such conversions
        If `conversions` is not provided, reads that have larger sum of all conversions
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
-    :param conversions: conversions to prioritize, defaults to `None`
-    :type conversions: list, optional
-    :param use_conversions: prioritize reads that have conversions first, defaults
-        to `True`
-    :type use_conversions: bool, optional
+    Args:
+        df_counts: Counts dataframe
+        conversions: Conversions to prioritize, defaults to `None`
+        use_conversions: Prioritize reads that have conversions first
 
-    :return: deduplicated counts dataframe
-    :rtype: pandas.DataFrame
+    Returns:
+        Deduplicated counts dataframe
     """
-    df_counts['conversion_sum'] = df_counts[conversions or CONVERSION_COLUMNS].sum(axis=1)
+    convs = list(conversions) if conversions is not None else CONVERSION_COLUMNS
+    df_counts['conversion_sum'] = df_counts[convs].sum(axis=1)
     # Deduplication priority.
     sort_order = ['transcriptome', 'score', 'conversion_sum']
     to_remove = ['conversion_sum']
 
     if use_conversions and conversions is not None:
-        df_counts['has_conversions'] = df_counts[conversions].sum(axis=1) > 0
+        df_counts['has_conversions'] = df_counts[list(conversions)].sum(axis=1) > 0
         sort_order.insert(0, 'has_conversions')
         to_remove.append('has_conversions')
 
@@ -220,15 +243,36 @@ def deduplicate_counts(df_counts, conversions=None, use_conversions=True):
     return df_sorted.drop_duplicates(subset=['barcode', 'umi', 'GX'], keep='last').reset_index(drop=True)
 
 
-def drop_multimappers_part(counter, lock, split_path, out_path):
-    drop_multimappers(read_counts(split_path))[CSV_COLUMNS[1:]].to_csv(out_path, header=False, index=False)
+def drop_multimappers_part(
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    split_path: str,
+    out_path: str,
+    conversions: Optional[FrozenSet[str]] = None
+) -> str:
+    """Helper function to parallelize :func:`drop_multimappers`.
+    """
+    drop_multimappers(
+        read_counts(split_path), conversions=conversions
+    )[CSV_COLUMNS[1:]].to_csv(
+        out_path, header=False, index=False
+    )
     lock.acquire()
     counter.value += 1
     lock.release()
     return out_path
 
 
-def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=None, use_conversions=True):
+def deduplicate_counts_part(
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    split_path: str,
+    out_path: str,
+    conversions: Optional[FrozenSet[str]],
+    use_conversions: bool = True
+):
+    """Helper function to parallelize :func:`deduplicate_multimappers`.
+    """
     deduplicate_counts(
         read_counts(split_path), conversions=conversions, use_conversions=use_conversions
     )[CSV_COLUMNS[1:]].to_csv(
@@ -240,15 +284,14 @@ def deduplicate_counts_part(counter, lock, split_path, out_path, conversions=Non
     return out_path
 
 
-def split_counts_by_velocity(df_counts):
+def split_counts_by_velocity(df_counts: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Split the given counts dataframe by the `velocity` column.
 
-    :param df_counts: counts dataframe
-    :type df_counts: pandas.DataFrame
+    Args:
+        df_counts: Counts dataframe
 
-    :return: dictionary containing `velocity` column values as keys and the
-             subset dataframe as values
-    :rtype: dictionary
+    Returns:
+        Dictionary containing `velocity` column values as keys and the subset dataframe as values
     """
     dfs = {}
     for velocity, df_part in df_counts.groupby('velocity', sort=False, observed=True):
@@ -258,35 +301,28 @@ def split_counts_by_velocity(df_counts):
 
 
 def count_no_conversions(
-    alignments_path,
-    counter,
-    lock,
-    index,
-    barcodes=None,
-    temp_dir=None,
-    update_every=10000,
-):
+    alignments_path: str,
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    index: List[Tuple[int, int, int]],
+    barcodes: Optional[List[str]] = None,
+    temp_dir: Optional[str] = None,
+    update_every: int = 10000,
+) -> str:
     """Count reads that have no conversion.
 
-    :param alignments_path: alignments CSV path
-    :type alignments_path: str
-    :param counter: counter that keeps track of how many reads have been processed
-    :type counter: multiprocessing.Value
-    :param lock: semaphore for the `counter` so that multiple processes do not
-                 modify it at the same time
-    :type lock: multiprocessing.Lock
-    :param index: index for conversions CSV
-    :type index: list
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param update_every: update the counter every this many reads, defaults to `5000`
-    :type update_every: int, optional
+    Args:
+        alignments_path: Alignments CSV path
+        counter: Counter that keeps track of how many reads have been processed
+        lock: Semaphore for the `counter` so that multiple processes do not
+            modify it at the same time
+        index: Index for conversions CSV
+        barcodes: List of barcodes to be considered. All barcodes are considered if not provided
+        temp_dir: Path to temporary directory
+        update_every: Update the counter every this many reads
 
-    :return: path to temporary counts CSV
-    :rtype: str
+    Returns:
+        Path to temporary counts CSV
     """
     count_path = utils.mkstemp(dir=temp_dir)
     positions = set(tup[2] for tup in index)
@@ -323,48 +359,37 @@ def count_no_conversions(
 
 
 def count_conversions_part(
-    conversions_path,
-    alignments_path,
-    counter,
-    lock,
-    index,
-    barcodes=None,
-    snps=None,
-    quality=27,
-    temp_dir=None,
-    update_every=10000,
-):
+    conversions_path: str,
+    alignments_path: str,
+    counter: multiprocessing.Value,
+    lock: multiprocessing.Lock,
+    index: List[Tuple[int, int, int]],
+    barcodes: Optional[List[str]] = None,
+    snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
+    quality: int = 27,
+    temp_dir: Optional[str] = None,
+    update_every: int = 10000,
+) -> str:
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode
     and gene. This function is used exclusively for multiprocessing.
 
-    :param conversions_path: path to conversions CSV
-    :type conversions_path: str
-    :param alignments_path: path to alignments information about reads
-    :type alignments_path: str
-    :param counter: counter that keeps track of how many reads have been processed
-    :type counter: multiprocessing.Value
-    :param lock: semaphore for the `counter` so that multiple processes do not
-                 modify it at the same time
-    :type lock: multiprocessing.Lock
-    :param index: list of (file position, number of lines) tuples to process
-    :type index: list
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param snps: dictionary of contig as keys and list of genomic positions as
-                 values that indicate SNP locations, defaults to `None`
-    :type snps: dictionary, optional
-    :param quality: only count conversions with PHRED quality greater than this value,
-                    defaults to `27`
-    :type quality: int, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
-    :param update_every: update the counter every this many reads, defaults to `10000`
-    :type update_every: int, optional
+    Args:
+        conversions_path: Path to conversions CSV
+        alignments_path: Path to alignments information about reads
+        counter: Counter that keeps track of how many reads have been processed
+        lock: Semaphore for the `counter` so that multiple processes do not
+            modify it at the same time
+        index: Index for conversions CSV
+        barcodes: List of barcodes to be considered. All barcodes are considered if not provided
+        snps: Dictionary of contig as keys and list of genomic positions as
+            values that indicate SNP locations
+        quality: Only count conversions with PHRED quality greater than this value
+        temp_dir: Path to temporary directory, defaults to `None`
+        update_every: Update the counter every this many reads
 
-    :return: path to temporary counts CSV
-    :rtype: tuple
+    Returns:
+        Path to temporary counts CSV
     """
 
     def is_snp(gx, conversion, contig, genome_i):
@@ -414,57 +439,44 @@ def count_conversions_part(
 
 
 def count_conversions(
-    conversions_path,
-    alignments_path,
-    index_path,
-    counts_path,
-    gene_infos,
-    barcodes=None,
-    snps=None,
-    quality=27,
-    conversions=None,
-    dedup_use_conversions=True,
-    n_threads=8,
-    temp_dir=None
-):
+    conversions_path: str,
+    alignments_path: str,
+    index_path: str,
+    counts_path: str,
+    gene_infos: dict,
+    barcodes: Optional[List[str]] = None,
+    snps: Optional[Dict[str, Dict[str, Set[int]]]] = None,
+    quality: int = 27,
+    conversions: Optional[FrozenSet[str]] = None,
+    dedup_use_conversions: bool = True,
+    n_threads: int = 8,
+    temp_dir: Optional[str] = None
+) -> str:
     """Count the number of conversions of each read per barcode and gene, along with
     the total nucleotide content of the region each read mapped to, also per barcode.
     When a duplicate UMI for a barcode is observed, the read with the greatest
     number of conversions is selected.
 
-    :param conversions_path: path to conversions CSV
-    :type conversions_path: str
-    :param alignments_path: path to alignments information about reads
-    :type alignments_path: str
-    :param index_path: path to conversions index
-    :type index_path: str
-    :param counts_path: path to write counts CSV
-    :param counts_path: str
-    :param gene_infos: dictionary containing gene information, as returned by
-                       `ngs.gtf.genes_and_transcripts_from_gtf`, defaults to `None`
-    :type gene_infos: dictionary
-    :param barcodes: list of barcodes to be considered. All barcodes are considered
-                     if not provided, defaults to `None`
-    :type barcodes: list, optional
-    :param snps: dictionary of contig as keys and list of genomic positions as
-                 values that indicate SNP locations, defaults to `None`
-    :type snps: dictionary, optional
-    :param conversions: conversions to prioritize when deduplicating only applicable
-                        for UMI technologies, defaults to `None`
-    :type conversions: list, optional
-    :param dedup_use_conversions: prioritize reads that have at least one conversion
-        when deduplicating, defaults to `True`
-    :type dedup_use_conversions: bool, optional
-    :param quality: only count conversions with PHRED quality greater than this value,
-                    defaults to `27`
-    :type quality: int, optional
-    :param n_threads: number of threads, defaults to `8`
-    :type n_threads: int, optional
-    :param temp_dir: path to temporary directory, defaults to `None`
-    :type temp_dir: str, optional
+    Args:
+        conversions_path: Path to conversions CSV
+        alignments_path: Path to alignments information about reads
+        index_path: Path to conversions index
+        counts_path: Path to write counts CSV
+        gene_infos: Dictionary containing gene information, as returned by
+            `ngs.gtf.genes_and_transcripts_from_gtf`
+        barcodes: List of barcodes to be considered. All barcodes are considered if not provided
+        snps: Dictionary of contig as keys and list of genomic positions as
+            values that indicate SNP locations
+        conversions: Conversions to prioritize when deduplicating only applicable
+            for UMI technologies
+        dedup_use_conversions: Prioritize reads that have at least one conversion
+            when deduplicating
+        quality: Only count conversions with PHRED quality greater than this value
+        n_threads: Number of threads
+        temp_dir: Path to temporary directory
 
-    :return: path to counts CSV
-    :rtype: str
+    Returns:
+        Path to counts CSV
     """
     # Load index
     logger.debug(f'Loading index {index_path}')
@@ -578,7 +590,7 @@ def count_conversions(
             lock,
             conversions=conversions,
             use_conversions=dedup_use_conversions,
-        ) if umi else partial(drop_multimappers_part, counter, lock), paths
+        ) if umi else partial(drop_multimappers_part, counter, lock, conversions=conversions), paths
     )
     pool.close()
 

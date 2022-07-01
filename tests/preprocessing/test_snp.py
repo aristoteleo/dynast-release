@@ -1,5 +1,5 @@
 import os
-from unittest import mock, TestCase
+from unittest import TestCase, mock
 
 import pandas as pd
 
@@ -52,7 +52,7 @@ class TestSnp(mixins.TestMixin, TestCase):
                     cov,
                     snps_path,
                     alignments=alignments,
-                    conversions={'TC', 'AG'},
+                    conversions=frozenset({'TC', 'AG'}),
                     quality=27,
                     threshold=0.5,
                     n_threads=2

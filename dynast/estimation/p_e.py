@@ -1,3 +1,5 @@
+from typing import Dict, FrozenSet, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 
@@ -6,39 +8,38 @@ from ..logging import logger
 from ..preprocessing.conversion import BASE_COLUMNS, CONVERSION_COLUMNS
 
 
-def read_p_e(p_e_path, group_by=None):
+def read_p_e(p_e_path: str, group_by: Optional[List[str]] = None) -> Dict[Union[str, Tuple[str, ...]], float]:
     """Read p_e CSV as a dictionary, with `group_by` columns as keys.
 
-    :param p_e_path: path to CSV containing p_e values
-    :type p_e_path: str
-    :param group_by: columns to group by, defaults to `None`
-    :type group_by: list, optional
+    Args:
+        p_e_path: Path to CSV containing p_e values
+        group_by: Columns to group by
 
-    :return: dictionary with `group_by` columns as keys (tuple if multiple)
-    :rtype: dictionary
+    Returns:
+        Dictionary with `group_by` columns as keys (tuple if multiple)
     """
     if group_by is None:
         with open(p_e_path, 'r') as f:
             return float(f.read())
 
-    df = pd.read_csv(p_e_path, dtype={key: 'string' for key in group_by})
+    df = pd.read_csv(p_e_path, dtype={key: 'category' for key in group_by})
     return dict(df.set_index(group_by)['p_e'])
 
 
-def estimate_p_e_control(df_counts, p_e_path, conversions=frozenset([('TC',)])):
+def estimate_p_e_control(
+    df_counts: pd.DataFrame, p_e_path: str, conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})})
+) -> str:
     """Estimate background mutation rate of unlabeled RNA for a control sample
     by simply calculating the average mutation rate.
 
-    :param df_counts: Pandas dataframe containing number of each conversion and
-                      nucleotide content of each read
-    :type df_counts: pandas.DataFrame
-    :param p_e_path: path to output CSV containing p_e estimates
-    :type p_e_path: str
-    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
-    :type conversions: list, optional
+    Args:
+        df_counts: Pandas dataframe containing number of each conversion and
+            nucleotide content of each read
+        p_e_path: Path to output CSV containing p_e estimates
+        conversions: Conversion(s) in question
 
-    :return: path to output CSV containing p_e estimates
-    :rtype: str
+    Returns:
+        Path to output CSV containing p_e estimates
     """
     flattened = list(utils.flatten_iter(conversions))
     bases = list(set(f[0] for f in flattened))
@@ -48,22 +49,24 @@ def estimate_p_e_control(df_counts, p_e_path, conversions=frozenset([('TC',)])):
     return p_e_path
 
 
-def estimate_p_e(df_counts, p_e_path, conversions=frozenset([('TC',)]), group_by=None):
+def estimate_p_e(
+    df_counts: pd.DataFrame,
+    p_e_path: str,
+    conversions: FrozenSet[FrozenSet[str]] = frozenset({frozenset({'TC'})}),
+    group_by: Optional[List[str]] = None
+) -> str:
     """Estimate background mutation rate of unabeled RNA by calculating the
     average mutation rate of all three nucleotides other than `conversion[0]`.
 
-    :param df_counts: Pandas dataframe containing number of each conversion and
-                      nucleotide content of each read
-    :type df_counts: pandas.DataFrame
-    :param p_e_path: path to output CSV containing p_e estimates
-    :type p_e_path: str
-    :param conversions: conversion(s) in question, defaults to `frozenset([('TC',)])`
-    :type conversions: list, optional
-    :param group_by: columns to group by, defaults to `None`
-    :type group_by: list, optional
+    Args:
+        df_counts: Pandas dataframe containing number of each conversion and
+            nucleotide content of each read
+        p_e_path: Path to output CSV containing p_e estimates
+        conversions: Conversion(s) in question, defaults to `frozenset([('TC',)])`
+        group_by: Columns to group by, defaults to `None`
 
-    :return: path to output CSV containing p_e estimates
-    :rtype: str
+    Returns:
+        Path to output CSV containing p_e estimates
     """
     flattened = list(utils.flatten_iter(conversions))
     bases = sorted(set(f[0] for f in flattened))
@@ -105,21 +108,19 @@ def estimate_p_e(df_counts, p_e_path, conversions=frozenset([('TC',)]), group_by
     return p_e_path
 
 
-def estimate_p_e_nasc(df_rates, p_e_path, group_by=None):
+def estimate_p_e_nasc(df_rates: pd.DataFrame, p_e_path: str, group_by: Optional[List[str]] = None) -> str:
     """Estimate background mutation rate of unabeled RNA by calculating the
     average `CT` and `GA` mutation rates. This function imitates the procedure
     implemented in the NASC-seq pipeline (DOI: 10.1038/s41467-019-11028-9).
 
-    :param df_counts: Pandas dataframe containing number of each conversion and
-                      nucleotide content of each read
-    :type df_counts: pandas.DataFrame
-    :param p_e_path: path to output CSV containing p_e estimates
-    :type p_e_path: str
-    :param group_by: columns to group by, defaults to `None`
-    :type group_by: list, optional
+    Args:
+        df_counts: Pandas dataframe containing number of each conversion and
+            nucleotide content of each read
+        p_e_path: Path to output CSV containing p_e estimates
+        group_by: Columns to group by, defaults to `None`
 
-    :return: path to output CSV containing p_e estimates
-    :rtype: str
+    Returns:
+        Path to output CSV containing p_e estimates
     """
     if group_by is not None:
         df_rates = df_rates.set_index(group_by)
