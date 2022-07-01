@@ -145,6 +145,7 @@ and the follwing additional BAM tags.
 
 * :code:`RN` indicating how many reads were used to generate the consensus
 * :code:`RS`, :code:`RI` each containing a semicolon-delimited list of read names and their corresponding alignment indices (:code:`HI` tag in the original BAM) that were used to generate the consensus (only added if :code:`--add-RS-RI` is provided)
+* :code:`GX`, :code:`GN` each containing the assigned gene ID and name. Note that these tags are used regardless of what was provided to :code:`--gene-tag`.
 
 Quantifying counts with :code:`count`
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

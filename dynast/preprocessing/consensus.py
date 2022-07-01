@@ -2,11 +2,13 @@ import array
 import multiprocessing
 import queue
 from hashlib import sha256
+from typing import Any, Dict, List, Optional
 
 import ngs_tools as ngs
 import numpy as np
 import pysam
 from tqdm import tqdm
+from typing_extensions import Literal
 
 from .. import config, utils
 from ..logging import logger
@@ -16,7 +18,12 @@ BASES = ('A', 'C', 'G', 'T')
 BASE_IDX = {base: i for i, base in enumerate(BASES)}
 
 
-def call_consensus_from_reads(reads, header, quality=27, tags=None):
+def call_consensus_from_reads(
+    reads: List[pysam.AlignedSegment],
+    header: pysam.AlignmentHeader,
+    quality: int = 27,
+    tags: Optional[Dict[str, Any]] = None,
+) -> pysam.AlignedSegment:
     """Call a single consensus alignment given a list of aligned reads.
 
     Reads must map to the same contig. Results are undefined otherwise.
@@ -38,17 +45,14 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
     The caller is expected to further populate the alignment
     with additional tags, flags, and name.
 
-    :param reads: List of reads to call a consensus sequence from
-    :type reads: list
-    :param header: header to use when creating the new pysam alignment
-    :type header: pysam.AlignmentHeader
-    :param quality: quality threshold, defaults to 27
-    :type quality: int, optional
-    :param tags: additional tags to set, defaults to `None`
-    :type tags: dict, optional
+    Args:
+        reads: List of reads to call a consensus sequence from
+        header: header to use when creating the new pysam alignment
+        quality: quality threshold
+        tags: additional tags to set
 
-    :return: (New pysam alignment of the consensus sequence)
-    :rtype: pysam.AlignedSegment
+    Returns:
+        New pysam alignment of the consensus sequence
     """
     if len(set(read.reference_name for read in reads)) > 1:
         raise Exception("Can not call consensus from reads mapping to multiple contigs.")
@@ -197,6 +201,7 @@ def call_consensus_from_reads(reads, header, quality=27, tags=None):
 
 
 def call_consensus_from_reads_process(reads, header, tags, strand=None, quality=27):
+    """Helper function to call :func:`call_consensus_from_reads` from a subprocess."""
     header = pysam.AlignmentHeader.from_dict(header)
     reads = [pysam.AlignedSegment.fromstring(read, header) for read in reads]
     consensus = call_consensus_from_reads(reads, header, quality=quality, tags=tags)
@@ -207,6 +212,7 @@ def call_consensus_from_reads_process(reads, header, tags, strand=None, quality=
 
 
 def consensus_worker(args_q, results_q, *args, **kwargs):
+    """Multiprocessing worker."""
     while True:
         try:
             _args = args_q.get(timeout=1)  # None means we are done.
@@ -219,20 +225,37 @@ def consensus_worker(args_q, results_q, *args, **kwargs):
 
 
 def call_consensus(
-    bam_path,
-    out_path,
-    gene_infos,
-    strand='forward',
-    umi_tag=None,
-    barcode_tag=None,
-    gene_tag='GX',
-    barcodes=None,
-    quality=27,
-    add_RS_RI=False,
-    temp_dir=None,
-    n_threads=8
-):
-    """
+    bam_path: str,
+    out_path: str,
+    gene_infos: dict,
+    strand: Literal['forward', 'reverse', 'unstranded'] = 'forward',
+    umi_tag: Optional[str] = None,
+    barcode_tag: Optional[str] = None,
+    gene_tag: str = 'GX',
+    barcodes: Optional[List[str]] = None,
+    quality: int = 27,
+    add_RS_RI: bool = False,
+    temp_dir: Optional[str] = None,
+    n_threads: int = 8
+) -> str:
+    """Call consensus sequences from BAM.
+
+    Args:
+        bam_path: Path to BAM
+        out_path: Output BAM path
+        gene_infos: Gene information, as parsed from the GTF
+        strand: Protocol strandedness
+        umi_tag: BAM tag containing the UMI
+        barcode_tag: BAM tag containing the barcode
+        gene_tag: BAM tag containing the assigned gene
+        barcodes: List of barcodes to consider
+        quality: Quality threshold
+        add_RS_RI: Add RS and RI BAM tags for debugging
+        temp_dir: Temporary directory
+        n_threads: Number of threads
+
+    Returns:
+        Path to sorted and indexed consensus BAM
     """
 
     def skip_alignment(read, tags):
