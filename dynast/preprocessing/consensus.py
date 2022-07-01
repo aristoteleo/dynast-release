@@ -274,6 +274,17 @@ def call_consensus(
                 genes.append(gene)
         return genes
 
+    def swap_gene_tags(read, gene):
+        tags = dict(read.get_tags())
+        if gene_tag and read.has_tag(gene_tag):
+            del tags[gene_tag]
+        tags['GX'] = gene
+        gn = gene_infos.get(gene, {}).get('gene_name')
+        if gn:
+            tags['GN'] = gn
+        read.set_tags(list(tags.items()))
+        return read
+
     def create_tags_and_strand(barcode, umi, reads, gene_info):
         tags = {
             'AS': sum(read.get_tag('AS') for read in reads),
@@ -402,7 +413,7 @@ def call_consensus(
                     read_strand = '+' if read.is_reverse else '-'
 
                 # Find compatible genes
-                gx_assigned = read.has_tag(gene_tag)
+                gx_assigned = read.has_tag(gene_tag) if gene_tag else False
                 genes = [read.get_tag(gene_tag)] if gx_assigned else find_genes(contig, start, end, read_strand)
 
                 # If there isn't exactly one compatible gene, do nothing and
@@ -430,8 +441,7 @@ def call_consensus(
                             for barcode, umi_groups in barcode_umi_groups.items():
                                 for umi, reads in umi_groups.items():
                                     if len(reads) == 1:
-                                        out.write(reads[0])
-                                        continue
+                                        out.write(swap_gene_tags(reads[0], gene))
 
                                     tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_info)
 
@@ -464,7 +474,7 @@ def call_consensus(
                 for barcode, umi_groups in barcode_umi_groups.items():
                     for umi, reads in umi_groups.items():
                         if len(reads) == 1:
-                            out.write(reads[0])
+                            out.write(swap_gene_tags(reads[0], gene))
                             continue
 
                         tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_infos[gene])
