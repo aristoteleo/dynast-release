@@ -316,7 +316,7 @@ When :code:`--method pi_g`, this estimation yields the fraction of labeled RNA p
 
 .. math::
 
-	\alpha_c = \frac{\pi_c}{L_c+U_c}
+	\alpha_c = \frac{L_c}{\pi_c(L_c+U_c)}
 
 where :math:`L_c` and :math:`U_c` are the numbers of labeled and unlableed RNA for cell :math:`c`. Then, using this detection rate, the corrected labeled RNA is calculated as
 
