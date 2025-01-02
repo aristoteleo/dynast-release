@@ -8,7 +8,7 @@ def read(path):
 
 setup(
     name='dynast-release',
-    version='1.0.1',
+    version='1.0.2.beta',
     url='https://github.com/aristoteleo/dynast-release',
     author='Kyung Hoi (Joseph) Min',
     author_email='phoenixter96@gmail.com',

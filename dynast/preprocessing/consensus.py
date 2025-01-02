@@ -23,84 +23,58 @@ def call_consensus_from_reads(
     header: pysam.AlignmentHeader,
     quality: int = 27,
     tags: Optional[Dict[str, Any]] = None,
+    read_number: Optional[str] = None,
+    shared_qname: Optional[str] = None
 ) -> pysam.AlignedSegment:
-    """Call a single consensus alignment given a list of aligned reads.
+    """
+    Call a single consensus alignment given a list of aligned reads.
 
     Reads must map to the same contig. Results are undefined otherwise.
     Additionally, consensus bases are called only for positions that match
     to the reference (i.e. no insertions allowed).
 
-    This function only sets the minimal amount of attributes such that the
-    alignment is valid. These include:
-    * read name -- SHA256 hash of the provided read names
-    * read sequence and qualities
-    * reference name and ID
-    * reference start
-    * mapping quality (MAPQ)
-    * cigarstring
-    * MD tag
-    * NM tag
-    * Not unmapped, paired, duplicate, qc fail, secondary, nor supplementary
-
-    The caller is expected to further populate the alignment
-    with additional tags, flags, and name.
-
-    Args:
-        reads: List of reads to call a consensus sequence from
-        header: header to use when creating the new pysam alignment
-        quality: quality threshold
-        tags: additional tags to set
-
-    Returns:
-        New pysam alignment of the consensus sequence
+    If read_number is 'R1' or 'R2', we set the resulting consensus read
+    to is_paired = True and is_read1/is_read2 = True accordingly,
+    preserving the same QNAME for both consensus reads (if shared_qname is given).
     """
-    if len(set(read.reference_name for read in reads)) > 1:
-        raise Exception("Can not call consensus from reads mapping to multiple contigs.")
+    if len(set(r.reference_name for r in reads)) > 1:
+        raise Exception("Cannot call consensus from reads mapping to multiple contigs.")
 
-    # Pysam coordinates are [start, end)
-    left_pos = min(read.reference_start for read in reads)
-    right_pos = max(read.reference_end for read in reads)
+    left_pos = min(r.reference_start for r in reads)
+    right_pos = max(r.reference_end for r in reads)
     length = right_pos - left_pos
 
-    # A consensus sequence is internally represented as a L x 4 matrix,
-    # where L is the length of the sequence and the columns correspond to
-    # each of the four bases. The values indicate the support of each base.
-    # It's possible to switch these to sparse matrices if memory becomes an issue.
     sequence = np.zeros((length, len(BASES)), dtype=np.uint32)
     reference = np.full(length, -1, dtype=np.int8)  # -1 means unobserved
-    deletions = 0
 
     for read in reads:
-        read_sequence = read.query_sequence.upper()
-        read_qualities = read.query_qualities
-        for read_i, genome_i, _genome_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
-            # Insertion
-            if genome_i is None or _genome_base is None:
+        read_seq = read.query_sequence.upper()
+        read_quals = read.query_qualities
+        for read_i, ref_i, ref_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
+            if ref_i is None or ref_base is None:
                 continue
-            i = genome_i - left_pos
-            genome_base = _genome_base.upper()
-            if genome_base == 'N':
+            i = ref_i - left_pos
+            ref_base = ref_base.upper()
+            if ref_base == 'N':
                 continue
-            # Deletion
             if read_i is None:
+                # Deletion
                 if reference[i] < 0:
-                    reference[i] = BASE_IDX[genome_base]
-                    deletions += 1
+                    reference[i] = BASE_IDX[ref_base]
                 continue
-
-            read_base = read_sequence[read_i]
+            read_base = read_seq[read_i]
             if read_base == 'N':
                 continue
-
             if reference[i] < 0:
-                reference[i] = BASE_IDX[genome_base]
-            sequence[i, BASE_IDX[read_base]] += read_qualities[read_i]
+                reference[i] = BASE_IDX[ref_base]
+            sequence[i, BASE_IDX[read_base]] += read_quals[read_i]
 
-    # Determine consensus
-    # Note that we ignore any insertions
-    consensus_length = (sequence > 0).any(axis=1).sum()
+    # Build consensus
+    consensus_mask = (sequence > 0).any(axis=1)
+    consensus_length = consensus_mask.sum()
     consensus = np.zeros(consensus_length, dtype=np.uint8)
     qualities = np.zeros(consensus_length, dtype=np.uint8)
+
     cigar = []
     last_cigar_op = None
     cigar_n = 0
@@ -110,74 +84,69 @@ def call_consensus_from_reads(
     md_del = False
     nm = 0
     consensus_i = 0
-    for i in range(length):
-        ref = reference[i]
-        # Region not present in read. MD tag only deals with aligned
-        # regions, so nothing else needs to be done.
-        cigar_op = 'N'
-        if ref >= 0:
-            seq = sequence[i]
 
-            # Deletion
+    for i in range(length):
+        ref_idx = reference[i]
+        cigar_op = 'N'
+        if ref_idx >= 0:
+            seq = sequence[i]
             if (seq == 0).all():
+                # Deletion
                 cigar_op = 'D'
                 if md_n > 0 or md_zero:
                     md.append(str(md_n))
                     md_n = 0
-
                 if not md_del:
                     md.append('^')
-                md.append(BASES[ref])
+                md.append(BASES[ref_idx])
                 md_del = True
-
-            # Match
             else:
                 md_del = False
-
-                # On ties, select reference if present. Otherwise, choose lexicographically.
                 base_q = seq.max()
                 if base_q < quality:
-                    base = ref
+                    base = ref_idx
                 else:
-                    bases = (seq == base_q).nonzero()[0]
-                    if len(bases) > 0 and ref in bases:
-                        base = ref
+                    candidates = (seq == base_q).nonzero()[0]
+                    if ref_idx in candidates:
+                        base = ref_idx
                     else:
-                        base = bases[0]
-
-                # We use the STAR convention of using M cigar operation to mean
-                # both matches AND mismatches, ignoring the X cigar operation exists.
+                        base = candidates[0]
                 cigar_op = 'M'
-
-                if ref == base:
+                if base == ref_idx:
                     md_n += 1
                     md_zero = False
                 else:
                     if md_n > 0 or md_zero:
                         md.append(str(md_n))
                         md_n = 0
-                    md.append(BASES[ref])
+                    md.append(BASES[ref_idx])
                     md_zero = True
                     nm += 1
-
-                consensus[consensus_i] = base
-                qualities[consensus_i] = min(base_q, 42)  # Clip to maximum PHRED score
-                consensus_i += 1
+                if consensus_mask[i]:
+                    consensus[consensus_i] = base
+                    qualities[consensus_i] = min(base_q, 42)
+                    consensus_i += 1
 
         if cigar_op == last_cigar_op:
             cigar_n += 1
         else:
             if last_cigar_op:
-                cigar.append(f'{cigar_n}{last_cigar_op}')
+                cigar.append(f"{cigar_n}{last_cigar_op}")
             last_cigar_op = cigar_op
             cigar_n = 1
 
-    md.append(str(md_n))  # MD tag always ends with a number
-    cigar.append(f'{cigar_n}{last_cigar_op}')
+    md.append(str(md_n))
+    cigar.append(f"{cigar_n}{last_cigar_op}")
 
     al = pysam.AlignedSegment(header)
-    al.query_name = sha256(''.join(read.query_name for read in reads).encode('utf-8')).hexdigest()
-    al.query_sequence = ''.join(BASES[i] for i in consensus)
+    if shared_qname is not None:
+        al.query_name = shared_qname
+    else:
+        # default: hash together original QNAMEs
+        all_names = ''.join(r.query_name for r in reads)
+        al.query_name = sha256(all_names.encode('utf-8')).hexdigest()
+
+    al.query_sequence = ''.join(BASES[b] for b in consensus)
     al.query_qualities = array.array('B', qualities)
     al.reference_name = reads[0].reference_name
     al.reference_id = reads[0].reference_id
@@ -185,43 +154,84 @@ def call_consensus_from_reads(
     al.mapping_quality = 255
     al.cigarstring = ''.join(cigar)
 
-    # Set tags
+    # Add tags
     tags = tags or {}
     tags.update({'MD': ''.join(md), 'NM': nm})
     al.set_tags(list(tags.items()))
 
-    # Make sure these are False
+    # Mark R1 or R2 if provided
+    if read_number == 'R1':
+        al.is_paired = True
+        al.is_read1 = True
+        al.is_read2 = False
+    elif read_number == 'R2':
+        al.is_paired = True
+        al.is_read1 = False
+        al.is_read2 = True
+    else:
+        al.is_paired = False
+
+    # Force false for these
     al.is_unmapped = False
-    al.is_paired = False
     al.is_duplicate = False
     al.is_qcfail = False
     al.is_secondary = False
     al.is_supplementary = False
+
     return al
 
 
-def call_consensus_from_reads_process(reads, header, tags, strand=None, quality=27):
-    """Helper function to call :func:`call_consensus_from_reads` from a subprocess."""
+def call_consensus_from_reads_process(
+    reads,
+    header,
+    tags,
+    strand=None,
+    read_number=None,
+    shared_qname=None,
+    quality=27
+):
+    """
+    Helper for multiprocessing calls.
+    """
     header = pysam.AlignmentHeader.from_dict(header)
-    reads = [pysam.AlignedSegment.fromstring(read, header) for read in reads]
-    consensus = call_consensus_from_reads(reads, header, quality=quality, tags=tags)
-    consensus.is_paired = False
+    pysam_reads = [pysam.AlignedSegment.fromstring(r, header) for r in reads]
+
+    aln = call_consensus_from_reads(
+        pysam_reads,
+        header,
+        quality=quality,
+        tags=tags,
+        read_number=read_number,
+        shared_qname=shared_qname
+    )
     if strand == '-':
-        consensus.is_reverse = True
-    return consensus.to_string()
+        aln.is_reverse = True
+    return aln.to_string()
 
 
-def consensus_worker(args_q, results_q, *args, **kwargs):
-    """Multiprocessing worker."""
+def consensus_worker(args_q, results_q, quality=27):
+    """
+    Worker that reads tasks from args_q, calls call_consensus_from_reads_process.
+    """
     while True:
         try:
-            _args = args_q.get(timeout=1)  # None means we are done.
+            _args = args_q.get(timeout=1)
         except queue.Empty:
             continue
         if _args is None:
             return
+        results_q.put(call_consensus_from_reads_process(*_args, quality=quality))
 
-        results_q.put(call_consensus_from_reads_process(*_args, *args, **kwargs))
+
+def get_read_number(read: pysam.AlignedSegment) -> str:
+    """
+    Return 'R1' if read.is_read1 is True, else 'R2'.
+    For single-end reads, default to 'R1'.
+    """
+    if read.is_paired:
+        return 'R1' if read.is_read1 else 'R2'
+    else:
+        return 'R1'
 
 
 def call_consensus(
@@ -236,34 +246,43 @@ def call_consensus(
     quality: int = 27,
     add_RS_RI: bool = False,
     temp_dir: Optional[str] = None,
-    n_threads: int = 8
+    n_threads: int = 8,
+    collapse_r1_r2: bool = False  # <-- ### ADDED
 ) -> str:
-    """Call consensus sequences from BAM.
+    """
+    Call consensus sequences from BAM.
+
+    If collapse_r1_r2 is True, then R1 and R2 from the same UMI
+    are stored together in one group, producing a single consensus.
+
+    If collapse_r1_r2 is False, R1 and R2 from the same UMI
+    are stored separately, producing two consensus reads (one for R1, one for R2).
 
     Args:
         bam_path: Path to BAM
         out_path: Output BAM path
-        gene_infos: Gene information, as parsed from the GTF
+        gene_infos: Gene info from GTF
         strand: Protocol strandedness
-        umi_tag: BAM tag containing the UMI
-        barcode_tag: BAM tag containing the barcode
-        gene_tag: BAM tag containing the assigned gene
-        barcodes: List of barcodes to consider
-        quality: Quality threshold
-        add_RS_RI: Add RS and RI BAM tags for debugging
-        temp_dir: Temporary directory
-        n_threads: Number of threads
-
-    Returns:
-        Path to sorted and indexed consensus BAM
+        umi_tag: BAM tag for UMI
+        barcode_tag: BAM tag for barcode
+        gene_tag: BAM tag for assigned gene
+        barcodes: optional filter for barcodes
+        quality: consensus base quality threshold
+        add_RS_RI: optional debug tags
+        temp_dir: optional temp dir
+        n_threads: number of threads
+        collapse_r1_r2: if True, combine R1/R2. if False, produce separate consensus.
     """
 
-    def skip_alignment(read, tags):
-        return read.is_secondary or read.is_unmapped or any(not read.has_tag(tag) for tag in tags)
+    def skip_alignment(read, required):
+        return (
+            read.is_secondary
+            or read.is_unmapped
+            or any(not read.has_tag(t) for t in required)
+        )
 
     def find_genes(contig, start, end, read_strand=None):
         genes = []
-        # NOTE: contigs may not have any genes
         for gene in contig_gene_order.get(contig, []):
             if read_strand and read_strand != gene_infos[gene]['strand']:
                 continue
@@ -274,20 +293,21 @@ def call_consensus(
                 genes.append(gene)
         return genes
 
-    def swap_gene_tags(read, gene):
-        tags = dict(read.get_tags())
-        if gene_tag and read.has_tag(gene_tag):
-            del tags[gene_tag]
-        tags['GX'] = gene
+    def swap_gene_tags(r, gene):
+        t = dict(r.get_tags())
+        if gene_tag and r.has_tag(gene_tag):
+            del t[gene_tag]
+        t['GX'] = gene
         gn = gene_infos.get(gene, {}).get('gene_name')
         if gn:
-            tags['GN'] = gn
-        read.set_tags(list(tags.items()))
-        return read
+            t['GN'] = gn
+        r.set_tags(list(t.items()))
+        return r
 
-    def create_tags_and_strand(barcode, umi, reads, gene_info):
+    def create_tags_and_strand(barcode, umi, reads, ginfo):
+        as_sum = sum(r.get_tag('AS') for r in reads if r.has_tag('AS'))
         tags = {
-            'AS': sum(read.get_tag('AS') for read in reads),
+            'AS': as_sum,
             'NH': 1,
             'HI': 1,
             config.BAM_CONSENSUS_READ_COUNT_TAG: len(reads),
@@ -299,42 +319,53 @@ def call_consensus(
 
         if gene_tag:
             gene_id = None
-            for read in reads:
-                if read.has_tag(gene_tag):
-                    gene_id = read.get_tag(gene_tag)
+            for rr in reads:
+                if rr.has_tag(gene_tag):
+                    gene_id = rr.get_tag(gene_tag)
                     break
-
             if gene_id:
                 tags['GX'] = gene_id
-                gn = gene_info.get('gene_name')
+                gn = ginfo.get('gene_name')
                 if gn:
                     tags['GN'] = gn
-        if add_RS_RI:
-            tags.update({
-                'RS': ';'.join(read.query_name for read in reads),
-                'RI': ';'.join(str(read.get_tag('HI')) for read in reads),
-            })
 
-        # Figure out what strand the consensus should map to
-        gene_strand = gene_info['strand']
-        consensus_strand = gene_strand
+        if add_RS_RI:
+            tags['RS'] = ';'.join(r.query_name for r in reads)
+            tags['RI'] = ';'.join(
+                str(r.get_tag('HI')) if r.has_tag('HI') else '0' for r in reads
+            )
+
+        consensus_strand = None
+        gene_strand = ginfo['strand']
         if strand == 'forward':
             consensus_strand = gene_strand
         elif strand == 'reverse':
             consensus_strand = '-' if gene_strand == '+' else '+'
+
         return tags, consensus_strand
 
     if add_RS_RI:
-        logger.warning('RS and RI tags will be added to the BAM. This may dramatically increase the BAM size.')
+        logger.warning("RS and RI tags may greatly increase BAM size.")
 
+    # Build index of genes per contig
     contig_gene_order = {}
-    for gene_id, gene_info in gene_infos.items():
-        contig_gene_order.setdefault(gene_info['chromosome'], []).append(gene_id)
+    for gene_id, ginfo in gene_infos.items():
+        contig_gene_order.setdefault(ginfo['chromosome'], []).append(gene_id)
     for contig in list(contig_gene_order.keys()):
         contig_gene_order[contig] = sorted(
-            contig_gene_order[contig], key=lambda gene: tuple(gene_infos[gene]['segment'])
+            contig_gene_order[contig],
+            key=lambda g: tuple(gene_infos[g]['segment'])
         )
 
+    # ### CHANGED
+    # Instead of storing R1 and R2 in separate keys unconditionally,
+    # we let the user decide via 'collapse_r1_r2'.
+    #
+    # Data structure:
+    #   gx_barcode_umi_groups[gene][barcode][umi][subkey] -> list_of_reads
+    # where 'subkey' is either:
+    #   'ALL'   (if collapse_r1_r2=True)
+    #   'R1' or 'R2' (if collapse_r1_r2=False)
     gx_barcode_umi_groups = {}
     paired = {}
 
@@ -344,29 +375,33 @@ def call_consensus(
     if barcode_tag:
         required_tags.append(barcode_tag)
 
-    # Start processes for consensus calling
-    logger.debug(f'Spawning {n_threads} processes')
     manager = multiprocessing.Manager()
     args_q = manager.Queue(1000 * n_threads)
     results_q = manager.Queue()
+
     workers = [
         multiprocessing.Process(
-            target=consensus_worker, args=(args_q, results_q), kwargs=dict(quality=quality), daemon=True
-        ) for _ in range(n_threads)
+            target=consensus_worker,
+            args=(args_q, results_q, quality),
+            daemon=True
+        )
+        for _ in range(n_threads)
     ]
-    for worker in workers:
-        worker.start()
+    for w in workers:
+        w.start()
 
     temp_out_path = utils.mkstemp(dir=temp_dir)
-    with pysam.AlignmentFile(bam_path, 'rb') as f:
-        # Get header dict and update sort order to unsorted.
-        header_dict = f.header.to_dict()
+    with pysam.AlignmentFile(bam_path, 'rb') as f_in:
+        header_dict = f_in.header.to_dict()
         hd = header_dict.setdefault('HD', {'VN': '1.4', 'SO': 'unsorted'})
         hd['SO'] = 'unsorted'
         header = pysam.AlignmentHeader.from_dict(header_dict)
+
+        total_reads = ngs.bam.count_bam(bam_path)
         with pysam.AlignmentFile(temp_out_path, 'wb', header=header) as out:
-            for i, read in tqdm(enumerate(f.fetch()), total=ngs.bam.count_bam(bam_path), ascii=True, smoothing=0.01,
-                                desc='Calling consensus'):
+            for i, read in tqdm(enumerate(f_in.fetch()),
+                                total=total_reads, ascii=True, smoothing=0.01,
+                                desc="Calling consensus"):
                 if skip_alignment(read, required_tags):
                     continue
 
@@ -374,121 +409,179 @@ def call_consensus(
                 if barcode == '-' or (barcodes and barcode not in barcodes):
                     continue
 
-                contig = read.reference_name
                 umi = read.get_tag(umi_tag) if umi_tag else None
-
                 read_id = read.query_name
-                alignment_index = read.get_tag('HI')
-                start = read.reference_start
-                end = read.reference_end
+                alignment_index = read.get_tag('HI') if read.has_tag('HI') else 1
                 key = (read_id, alignment_index)
+
+                # Handle pairing
                 mate = None
                 if read.is_paired:
                     if key not in paired:
                         paired[key] = read
                         continue
-
                     mate = paired.pop(key)
-                    # Use alignment start and end as UMI for paired reads without UMI
                     if not umi:
-                        start = mate.reference_start
-                        umi = (start, end)
+                        umi = (mate.reference_start, mate.reference_end)
 
-                # Determine read strand
+                # Determine the gene
+                start = read.reference_start
+                end = read.reference_end
                 read_strand = None
-                if read.is_paired:
-                    if read.is_read1:  # R1 is mapped after R2
-                        if strand == 'forward':
-                            read_strand = '+' if read.is_reverse else '-'
-                        elif strand == 'reverse':
-                            read_strand = '-' if read.is_reverse else '+'
-                    else:  # R1 is mapped before R2
-                        if strand == 'forward':
-                            read_strand = '-' if read.is_reverse else '+'
-                        elif strand == 'reverse':
-                            read_strand = '+' if read.is_reverse else '-'
-                elif strand == 'forward':
-                    read_strand = '-' if read.is_reverse else '+'
-                elif strand == 'reverse':
-                    read_strand = '+' if read.is_reverse else '-'
-
-                # Find compatible genes
-                gx_assigned = read.has_tag(gene_tag) if gene_tag else False
-                genes = [read.get_tag(gene_tag)] if gx_assigned else find_genes(contig, start, end, read_strand)
-
-                # If there isn't exactly one compatible gene, do nothing and
-                # write to BAM.
-                if len(genes) != 1:
-                    out.write(read)
+                if strand in ('forward', 'reverse'):
                     if read.is_paired:
+                        if strand == 'forward':
+                            read_strand = '+' if not read.is_reverse else '-'
+                        else:  # 'reverse'
+                            read_strand = '-' if not read.is_reverse else '+'
+                    else:
+                        if strand == 'forward':
+                            read_strand = '-' if read.is_reverse else '+'
+                        else:
+                            read_strand = '+' if read.is_reverse else '-'
+
+                if gene_tag and read.has_tag(gene_tag):
+                    genes = [read.get_tag(gene_tag)]
+                else:
+                    contig = read.reference_name
+                    genes = find_genes(contig, start, end, read_strand)
+
+                if len(genes) != 1:
+                    # If not exactly one gene, write raw
+                    out.write(read)
+                    if mate:
                         out.write(mate)
                     continue
 
-                # Add read to group
-                gx_barcode_umi_groups.setdefault(genes[0], {}).setdefault(barcode, {}).setdefault(umi, []).append(read)
-                if read.is_paired:
-                    gx_barcode_umi_groups[genes[0]][barcode][umi].append(mate)
+                gene = genes[0]
 
+                # ### CHANGED
+                # Decide subkey = 'ALL' (if collapsing) or 'R1'/'R2' (if separating)
+                if collapse_r1_r2:
+                    subkey = 'ALL'
+                else:
+                    subkey = get_read_number(read)
+
+                gx_barcode_umi_groups \
+                    .setdefault(gene, {}) \
+                    .setdefault(barcode, {}) \
+                    .setdefault(umi, {}) \
+                    .setdefault(subkey, []) \
+                    .append(read)
+
+                # Also store mate if present
+                if mate:
+                    if collapse_r1_r2:
+                        mate_subkey = 'ALL'
+                    else:
+                        mate_subkey = get_read_number(mate)
+                    gx_barcode_umi_groups[gene][barcode][umi] \
+                        .setdefault(mate_subkey, []) \
+                        .append(mate)
+
+                # Periodically flush old genes
                 if i % 10000 == 0:
-                    # Call consensus for gene's whose bodies we've fully passed.
-                    leftmost_start = start if not paired else next(iter(paired.values())).reference_start
-                    for gene in list(gx_barcode_umi_groups.keys()):
-                        gene_info = gene_infos[gene]
-                        gene_contig = gene_info['chromosome']
-                        gene_segment = gene_info['segment']
-                        if (gene_contig < contig) or (gene_contig == contig and gene_segment.end <= leftmost_start):
-                            barcode_umi_groups = gx_barcode_umi_groups.pop(gene)
-                            for barcode, umi_groups in barcode_umi_groups.items():
-                                for umi, reads in umi_groups.items():
-                                    if len(reads) == 1:
-                                        out.write(swap_gene_tags(reads[0], gene))
+                    leftmost = min(
+                        read.reference_start,
+                        mate.reference_start if mate else read.reference_start
+                    )
+                    for g in list(gx_barcode_umi_groups.keys()):
+                        ginfo = gene_infos[g]
+                        gene_contig = ginfo['chromosome']
+                        gene_segment = ginfo['segment']
+                        if (gene_contig < read.reference_name) or (
+                            gene_contig == read.reference_name and gene_segment.end <= leftmost
+                        ):
+                            bc_map = gx_barcode_umi_groups.pop(g)
+                            for bc, umi_map in bc_map.items():
+                                for this_umi, sub_map in umi_map.items():
+                                    # Build a stable QNAME for everything in sub_map
+                                    all_names = []
+                                    for subkey_, reads_list in sub_map.items():
+                                        all_names.extend(r.query_name for r in reads_list)
+                                    shared_qname = sha256(''.join(all_names).encode('utf-8')).hexdigest()
 
-                                    tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_info)
+                                    for subk, reads_list in sub_map.items():
+                                        if len(reads_list) == 1:
+                                            single_read = swap_gene_tags(reads_list[0], g)
+                                            single_read.query_name = shared_qname
+                                            if not collapse_r1_r2:
+                                                # If not collapsing, check if subk = 'R1'/'R2'
+                                                if subk == 'R1':
+                                                    single_read.is_paired = True
+                                                    single_read.is_read1 = True
+                                                    single_read.is_read2 = False
+                                                elif subk == 'R2':
+                                                    single_read.is_paired = True
+                                                    single_read.is_read1 = False
+                                                    single_read.is_read2 = True
+                                            out.write(single_read)
+                                        else:
+                                            tags, cstrand = create_tags_and_strand(bc, this_umi, reads_list, ginfo)
+                                            # subk might be 'ALL' or 'R1'/'R2'
+                                            args_q.put((
+                                                [r.to_string() for r in reads_list],
+                                                header_dict,
+                                                tags,
+                                                cstrand,
+                                                subk if not collapse_r1_r2 else None,  # read_number if separate
+                                                shared_qname
+                                            ))
 
-                                    # Save for multiprocessing later.
-                                    args_q.put(([read.to_string()
-                                                 for read in reads], header_dict, tags, consensus_strand))
-                        else:
-                            break
-
-                    to_remove = 0
-                    for gene in contig_gene_order[contig]:
-                        if gene_infos[gene]['segment'].end <= leftmost_start:
-                            to_remove += 1
-                        else:
-                            break
-                    if to_remove > 0:
-                        contig_gene_order[contig] = contig_gene_order[contig][to_remove:]
-
+                    # Drain queue
                     while True:
                         try:
                             result = results_q.get_nowait()
                             if result:
-                                consensus = pysam.AlignedSegment.fromstring(result, header)
-                                out.write(consensus)
+                                out.write(pysam.AlignedSegment.fromstring(result, header))
                         except queue.Empty:
                             break
 
-            # Put remaining
-            for gene, barcode_umi_groups in gx_barcode_umi_groups.items():
-                for barcode, umi_groups in barcode_umi_groups.items():
-                    for umi, reads in umi_groups.items():
-                        if len(reads) == 1:
-                            out.write(swap_gene_tags(reads[0], gene))
-                            continue
+            # Final flush
+            for g, bc_map in gx_barcode_umi_groups.items():
+                ginfo = gene_infos[g]
+                for bc, umi_map in bc_map.items():
+                    for this_umi, sub_map in umi_map.items():
+                        all_names = []
+                        for subk, reads_list in sub_map.items():
+                            all_names.extend(r.query_name for r in reads_list)
+                        shared_qname = sha256(''.join(all_names).encode('utf-8')).hexdigest()
 
-                        tags, consensus_strand = create_tags_and_strand(barcode, umi, reads, gene_infos[gene])
-                        args_q.put(([read.to_string() for read in reads], header_dict, tags, consensus_strand))
+                        for subk, reads_list in sub_map.items():
+                            if len(reads_list) == 1:
+                                single_read = swap_gene_tags(reads_list[0], g)
+                                single_read.query_name = shared_qname
+                                if not collapse_r1_r2:
+                                    if subk == 'R1':
+                                        single_read.is_paired = True
+                                        single_read.is_read1 = True
+                                        single_read.is_read2 = False
+                                    elif subk == 'R2':
+                                        single_read.is_paired = True
+                                        single_read.is_read1 = False
+                                        single_read.is_read2 = True
+                                out.write(single_read)
+                            else:
+                                tags, cstrand = create_tags_and_strand(bc, this_umi, reads_list, ginfo)
+                                args_q.put((
+                                    [r.to_string() for r in reads_list],
+                                    header_dict,
+                                    tags,
+                                    cstrand,
+                                    subk if not collapse_r1_r2 else None,
+                                    shared_qname
+                                ))
 
-            # Signal to workers to terminate once queue is depleted.
+            # Signal termination
             for _ in range(len(workers)):
                 args_q.put(None)
-            for worker in workers:
-                worker.join()
+            for w in workers:
+                w.join()
 
+            # Gather last results
             while not results_q.empty():
                 result = results_q.get()
-                consensus = pysam.AlignedSegment.fromstring(result, header)
-                out.write(consensus)
-    # Sort and index
+                out.write(pysam.AlignedSegment.fromstring(result, header))
+
+    # Sort and index as usual
     return bam.sort_and_index_bam(temp_out_path, out_path, n_threads=n_threads, temp_dir=temp_dir)
