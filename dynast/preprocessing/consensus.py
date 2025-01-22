@@ -18,6 +18,20 @@ BASES = ('A', 'C', 'G', 'T')
 BASE_IDX = {base: i for i, base in enumerate(BASES)}
 
 
+def _majority_flag(reads: List[pysam.AlignedSegment], attr: str) -> bool:
+    """
+    Return True if more than half of the reads have getattr(r, attr) == True.
+    Otherwise return False.
+
+    E.g.:
+      _majority_flag(reads, 'is_proper_pair')
+      _majority_flag(reads, 'is_reverse')
+      _majority_flag(reads, 'mate_is_reverse')
+    """
+    count_true = sum(1 for r in reads if getattr(r, attr))
+    return count_true > (len(reads) / 2)
+
+
 def call_consensus_from_reads(
     reads: List[pysam.AlignedSegment],
     header: pysam.AlignmentHeader,
@@ -36,14 +50,22 @@ def call_consensus_from_reads(
     If read_number is 'R1' or 'R2', we set the resulting consensus read
     to is_paired = True and is_read1/is_read2 = True accordingly,
     preserving the same QNAME for both consensus reads (if shared_qname is given).
+
+    We also aggregate the following flags by majority vote across `reads`:
+    - is_proper_pair
+    - is_reverse
+    - mate_is_reverse
     """
+    # Validate all reads on the same reference
     if len(set(r.reference_name for r in reads)) > 1:
         raise Exception("Cannot call consensus from reads mapping to multiple contigs.")
 
+    # Determine leftmost and rightmost positions
     left_pos = min(r.reference_start for r in reads)
     right_pos = max(r.reference_end for r in reads)
     length = right_pos - left_pos
 
+    # Build a matrix for base counts
     sequence = np.zeros((length, len(BASES)), dtype=np.uint32)
     reference = np.full(length, -1, dtype=np.int8)  # -1 means unobserved
 
@@ -52,13 +74,14 @@ def call_consensus_from_reads(
         read_quals = read.query_qualities
         for read_i, ref_i, ref_base in read.get_aligned_pairs(matches_only=False, with_seq=True):
             if ref_i is None or ref_base is None:
+                # Insertion or soft-clip, etc.
                 continue
             i = ref_i - left_pos
             ref_base = ref_base.upper()
             if ref_base == 'N':
                 continue
             if read_i is None:
-                # Deletion
+                # This is a deletion from the read
                 if reference[i] < 0:
                     reference[i] = BASE_IDX[ref_base]
                 continue
@@ -69,7 +92,7 @@ def call_consensus_from_reads(
                 reference[i] = BASE_IDX[ref_base]
             sequence[i, BASE_IDX[read_base]] += read_quals[read_i]
 
-    # Build consensus
+    # Now determine the consensus sequence
     consensus_mask = (sequence > 0).any(axis=1)
     consensus_length = consensus_mask.sum()
     consensus = np.zeros(consensus_length, dtype=np.uint8)
@@ -104,9 +127,11 @@ def call_consensus_from_reads(
                 md_del = False
                 base_q = seq.max()
                 if base_q < quality:
+                    # If no base surpasses the threshold, choose reference
                     base = ref_idx
                 else:
                     candidates = (seq == base_q).nonzero()[0]
+                    # On tie: if reference is in that tie, choose reference
                     if ref_idx in candidates:
                         base = ref_idx
                     else:
@@ -124,7 +149,7 @@ def call_consensus_from_reads(
                     nm += 1
                 if consensus_mask[i]:
                     consensus[consensus_i] = base
-                    qualities[consensus_i] = min(base_q, 42)
+                    qualities[consensus_i] = min(base_q, 42)  # cap at PHRED 42
                     consensus_i += 1
 
         if cigar_op == last_cigar_op:
@@ -135,14 +160,16 @@ def call_consensus_from_reads(
             last_cigar_op = cigar_op
             cigar_n = 1
 
+    # Finish up the last cigar chunk
     md.append(str(md_n))
     cigar.append(f"{cigar_n}{last_cigar_op}")
 
+    # Create a new pysam AlignedSegment
     al = pysam.AlignedSegment(header)
     if shared_qname is not None:
         al.query_name = shared_qname
     else:
-        # default: hash together original QNAMEs
+        # default: hash all read names
         all_names = ''.join(r.query_name for r in reads)
         al.query_name = sha256(all_names.encode('utf-8')).hexdigest()
 
@@ -154,12 +181,12 @@ def call_consensus_from_reads(
     al.mapping_quality = 255
     al.cigarstring = ''.join(cigar)
 
-    # Add tags
+    # Set tags
     tags = tags or {}
     tags.update({'MD': ''.join(md), 'NM': nm})
     al.set_tags(list(tags.items()))
 
-    # Mark R1 or R2 if provided
+    # Mark read1 or read2 if provided
     if read_number == 'R1':
         al.is_paired = True
         al.is_read1 = True
@@ -170,6 +197,20 @@ def call_consensus_from_reads(
         al.is_read2 = True
     else:
         al.is_paired = False
+
+    # --------------------------------------------------------------
+    # NEW: Aggregate certain flags with a "majority vote" approach:
+    #   is_proper_pair
+    #   is_reverse
+    #   mate_is_reverse
+    # --------------------------------------------------------------
+    al.is_proper_pair = _majority_flag(reads, 'is_proper_pair')
+    # If this consensus read is designated as reversed by majority:
+    al.is_reverse = _majority_flag(reads, 'is_reverse')
+
+    # Only relevant if read is paired
+    if al.is_paired:
+        al.mate_is_reverse = _majority_flag(reads, 'mate_is_reverse')
 
     # Force false for these
     al.is_unmapped = False
@@ -191,7 +232,7 @@ def call_consensus_from_reads_process(
     quality=27
 ):
     """
-    Helper for multiprocessing calls.
+    Helper function to call :func:`call_consensus_from_reads`.
     """
     header = pysam.AlignmentHeader.from_dict(header)
     pysam_reads = [pysam.AlignedSegment.fromstring(r, header) for r in reads]
@@ -206,12 +247,14 @@ def call_consensus_from_reads_process(
     )
     if strand == '-':
         aln.is_reverse = True
+
     return aln.to_string()
 
 
 def consensus_worker(args_q, results_q, quality=27):
     """
-    Worker that reads tasks from args_q, calls call_consensus_from_reads_process.
+    Multiprocessing worker that reads tasks from args_q and calls
+    call_consensus_from_reads_process.
     """
     while True:
         try:
@@ -247,7 +290,7 @@ def call_consensus(
     add_RS_RI: bool = False,
     temp_dir: Optional[str] = None,
     n_threads: int = 8,
-    collapse_r1_r2: bool = False  # <-- ### ADDED
+    collapse_r1_r2: bool = False
 ) -> str:
     """
     Call consensus sequences from BAM.
@@ -257,6 +300,9 @@ def call_consensus(
 
     If collapse_r1_r2 is False, R1 and R2 from the same UMI
     are stored separately, producing two consensus reads (one for R1, one for R2).
+
+    The final consensus read also aggregates is_proper_pair, is_reverse,
+    and mate_is_reverse from the source reads by majority vote.
 
     Args:
         bam_path: Path to BAM
@@ -306,16 +352,16 @@ def call_consensus(
 
     def create_tags_and_strand(barcode, umi, reads, ginfo):
         as_sum = sum(r.get_tag('AS') for r in reads if r.has_tag('AS'))
-        tags = {
+        tags_ = {
             'AS': as_sum,
             'NH': 1,
             'HI': 1,
             config.BAM_CONSENSUS_READ_COUNT_TAG: len(reads),
         }
         if barcode_tag:
-            tags[barcode_tag] = barcode
+            tags_[barcode_tag] = barcode
         if umi_tag:
-            tags[umi_tag] = umi
+            tags_[umi_tag] = umi
 
         if gene_tag:
             gene_id = None
@@ -324,16 +370,14 @@ def call_consensus(
                     gene_id = rr.get_tag(gene_tag)
                     break
             if gene_id:
-                tags['GX'] = gene_id
+                tags_['GX'] = gene_id
                 gn = ginfo.get('gene_name')
                 if gn:
-                    tags['GN'] = gn
+                    tags_['GN'] = gn
 
         if add_RS_RI:
-            tags['RS'] = ';'.join(r.query_name for r in reads)
-            tags['RI'] = ';'.join(
-                str(r.get_tag('HI')) if r.has_tag('HI') else '0' for r in reads
-            )
+            tags_['RS'] = ';'.join(r.query_name for r in reads)
+            tags_['RI'] = ';'.join(str(r.get_tag('HI')) if r.has_tag('HI') else '0' for r in reads)
 
         consensus_strand = None
         gene_strand = ginfo['strand']
@@ -342,30 +386,23 @@ def call_consensus(
         elif strand == 'reverse':
             consensus_strand = '-' if gene_strand == '+' else '+'
 
-        return tags, consensus_strand
+        return tags_, consensus_strand
 
     if add_RS_RI:
         logger.warning("RS and RI tags may greatly increase BAM size.")
 
     # Build index of genes per contig
     contig_gene_order = {}
-    for gene_id, ginfo in gene_infos.items():
-        contig_gene_order.setdefault(ginfo['chromosome'], []).append(gene_id)
+    for gid, ginfo in gene_infos.items():
+        contig_gene_order.setdefault(ginfo['chromosome'], []).append(gid)
     for contig in list(contig_gene_order.keys()):
         contig_gene_order[contig] = sorted(
             contig_gene_order[contig],
             key=lambda g: tuple(gene_infos[g]['segment'])
         )
 
-    # ### CHANGED
-    # Instead of storing R1 and R2 in separate keys unconditionally,
-    # we let the user decide via 'collapse_r1_r2'.
-    #
-    # Data structure:
-    #   gx_barcode_umi_groups[gene][barcode][umi][subkey] -> list_of_reads
-    # where 'subkey' is either:
-    #   'ALL'   (if collapse_r1_r2=True)
-    #   'R1' or 'R2' (if collapse_r1_r2=False)
+    # We'll store groups as: gx_barcode_umi_groups[gene][barcode][umi][subkey] -> list_of_reads
+    # Where subkey is either 'ALL' (if collapsing) or 'R1'/'R2' (if separate)
     gx_barcode_umi_groups = {}
     paired = {}
 
@@ -399,9 +436,11 @@ def call_consensus(
 
         total_reads = ngs.bam.count_bam(bam_path)
         with pysam.AlignmentFile(temp_out_path, 'wb', header=header) as out:
-            for i, read in tqdm(enumerate(f_in.fetch()),
-                                total=total_reads, ascii=True, smoothing=0.01,
-                                desc="Calling consensus"):
+            for i, read in tqdm(
+                enumerate(f_in.fetch()),
+                total=total_reads, ascii=True, smoothing=0.01,
+                desc="Calling consensus"
+            ):
                 if skip_alignment(read, required_tags):
                     continue
 
@@ -414,7 +453,6 @@ def call_consensus(
                 alignment_index = read.get_tag('HI') if read.has_tag('HI') else 1
                 key = (read_id, alignment_index)
 
-                # Handle pairing
                 mate = None
                 if read.is_paired:
                     if key not in paired:
@@ -447,20 +485,18 @@ def call_consensus(
                     genes = find_genes(contig, start, end, read_strand)
 
                 if len(genes) != 1:
-                    # If not exactly one gene, write raw
+                    # If not exactly one gene, we just write the read directly
                     out.write(read)
                     if mate:
                         out.write(mate)
                     continue
 
                 gene = genes[0]
-
-                # ### CHANGED
-                # Decide subkey = 'ALL' (if collapsing) or 'R1'/'R2' (if separating)
                 if collapse_r1_r2:
                     subkey = 'ALL'
                 else:
-                    subkey = get_read_number(read)
+                    from_read = 'R1' if read.is_read1 else 'R2'
+                    subkey = from_read
 
                 gx_barcode_umi_groups \
                     .setdefault(gene, {}) \
@@ -469,17 +505,16 @@ def call_consensus(
                     .setdefault(subkey, []) \
                     .append(read)
 
-                # Also store mate if present
                 if mate:
                     if collapse_r1_r2:
                         mate_subkey = 'ALL'
                     else:
-                        mate_subkey = get_read_number(mate)
+                        mate_subkey = 'R1' if mate.is_read1 else 'R2'
                     gx_barcode_umi_groups[gene][barcode][umi] \
                         .setdefault(mate_subkey, []) \
                         .append(mate)
 
-                # Periodically flush old genes
+                # Every 10k reads, flush old genes
                 if i % 10000 == 0:
                     leftmost = min(
                         read.reference_start,
@@ -495,18 +530,18 @@ def call_consensus(
                             bc_map = gx_barcode_umi_groups.pop(g)
                             for bc, umi_map in bc_map.items():
                                 for this_umi, sub_map in umi_map.items():
-                                    # Build a stable QNAME for everything in sub_map
+                                    # Build a stable QNAME from everything in sub_map
                                     all_names = []
-                                    for subkey_, reads_list in sub_map.items():
-                                        all_names.extend(r.query_name for r in reads_list)
+                                    for k_, subreads in sub_map.items():
+                                        all_names.extend(r.query_name for r in subreads)
                                     shared_qname = sha256(''.join(all_names).encode('utf-8')).hexdigest()
 
-                                    for subk, reads_list in sub_map.items():
-                                        if len(reads_list) == 1:
-                                            single_read = swap_gene_tags(reads_list[0], g)
+                                    for subk, subreads in sub_map.items():
+                                        if len(subreads) == 1:
+                                            single_read = swap_gene_tags(subreads[0], g)
                                             single_read.query_name = shared_qname
+                                            # If not collapsing, see if subk=R1/R2 to set flags
                                             if not collapse_r1_r2:
-                                                # If not collapsing, check if subk = 'R1'/'R2'
                                                 if subk == 'R1':
                                                     single_read.is_paired = True
                                                     single_read.is_read1 = True
@@ -517,18 +552,16 @@ def call_consensus(
                                                     single_read.is_read2 = True
                                             out.write(single_read)
                                         else:
-                                            tags, cstrand = create_tags_and_strand(bc, this_umi, reads_list, ginfo)
-                                            # subk might be 'ALL' or 'R1'/'R2'
+                                            tags_, cstrand = create_tags_and_strand(bc, this_umi, subreads, ginfo)
+                                            read_num = subk if not collapse_r1_r2 else None
                                             args_q.put((
-                                                [r.to_string() for r in reads_list],
+                                                [r.to_string() for r in subreads],
                                                 header_dict,
-                                                tags,
+                                                tags_,
                                                 cstrand,
-                                                subk if not collapse_r1_r2 else None,  # read_number if separate
+                                                read_num,
                                                 shared_qname
                                             ))
-
-                    # Drain queue
                     while True:
                         try:
                             result = results_q.get_nowait()
@@ -543,13 +576,13 @@ def call_consensus(
                 for bc, umi_map in bc_map.items():
                     for this_umi, sub_map in umi_map.items():
                         all_names = []
-                        for subk, reads_list in sub_map.items():
-                            all_names.extend(r.query_name for r in reads_list)
+                        for subk, subreads in sub_map.items():
+                            all_names.extend(r.query_name for r in subreads)
                         shared_qname = sha256(''.join(all_names).encode('utf-8')).hexdigest()
 
-                        for subk, reads_list in sub_map.items():
-                            if len(reads_list) == 1:
-                                single_read = swap_gene_tags(reads_list[0], g)
+                        for subk, subreads in sub_map.items():
+                            if len(subreads) == 1:
+                                single_read = swap_gene_tags(subreads[0], g)
                                 single_read.query_name = shared_qname
                                 if not collapse_r1_r2:
                                     if subk == 'R1':
@@ -562,13 +595,14 @@ def call_consensus(
                                         single_read.is_read2 = True
                                 out.write(single_read)
                             else:
-                                tags, cstrand = create_tags_and_strand(bc, this_umi, reads_list, ginfo)
+                                tags_, cstrand = create_tags_and_strand(bc, this_umi, subreads, ginfo)
+                                read_num = subk if not collapse_r1_r2 else None
                                 args_q.put((
-                                    [r.to_string() for r in reads_list],
+                                    [r.to_string() for r in subreads],
                                     header_dict,
-                                    tags,
+                                    tags_,
                                     cstrand,
-                                    subk if not collapse_r1_r2 else None,
+                                    read_num,
                                     shared_qname
                                 ))
 
@@ -583,5 +617,5 @@ def call_consensus(
                 result = results_q.get()
                 out.write(pysam.AlignedSegment.fromstring(result, header))
 
-    # Sort and index as usual
+    # Sort and index
     return bam.sort_and_index_bam(temp_out_path, out_path, n_threads=n_threads, temp_dir=temp_dir)
