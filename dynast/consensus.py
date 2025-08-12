@@ -24,8 +24,10 @@ def consensus(
     add_RS_RI: bool = False,
     n_threads: int = 8,
     temp_dir: Optional[str] = None,
+    collapse_r1_r2: bool = False  # <-- NEW parameter
 ):
-    """Main interface for the `consensus` command.
+    """
+    Main interface for the `consensus` command.
 
     Args:
         bam_path: Path to BAM to call consensus from
@@ -40,15 +42,19 @@ def consensus(
         add_RS_RI: Add RS and RI tags to BAM. Mostly useful for debugging.
         n_threads: Number of threads to use
         temp_dir: Temporary directory
+        collapse_r1_r2: If True, reads from R1 and R2 for the same UMI
+            will be combined into a single consensus read. If False,
+            R1 and R2 will each get their own consensus.
     """
     stats = Stats()
     stats.start()
     stats_path = os.path.join(
-        out_dir, f'{constants.STATS_PREFIX}_{dt.datetime.strftime(stats.start_time, "%Y%m%d_%H%M%S_%f")}.json'
+        out_dir,
+        f'{constants.STATS_PREFIX}_{dt.datetime.strftime(stats.start_time, "%Y%m%d_%H%M%S_%f")}.json'
     )
     os.makedirs(out_dir, exist_ok=True)
 
-    # Sort and index bam.
+    # Sort and index BAM
     bam_path = preprocessing.sort_and_index_bam(
         bam_path, '{}.sortedByCoord{}'.format(*os.path.splitext(bam_path)), n_threads=n_threads
     )
@@ -105,6 +111,10 @@ def consensus(
 
     consensus_path = os.path.join(out_dir, constants.CONSENSUS_BAM_FILENAME)
     logger.info(f'Calling consensus sequences from BAM to {consensus_path}')
+
+    # ----------------------------------------------------------------------
+    # Pass collapse_r1_r2 into preprocessing.call_consensus
+    # ----------------------------------------------------------------------
     preprocessing.call_consensus(
         bam_path,
         consensus_path,
@@ -117,7 +127,9 @@ def consensus(
         quality=quality,
         add_RS_RI=add_RS_RI,
         temp_dir=temp_dir,
-        n_threads=n_threads
+        n_threads=n_threads,
+        collapse_r1_r2=collapse_r1_r2
     )
+
     stats.end()
     stats.save(stats_path)

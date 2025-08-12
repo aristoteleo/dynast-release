@@ -167,16 +167,7 @@ def setup_align_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentP
 
 
 def setup_consensus_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Helper function to set up a subparser for the `consensus` command.
-
-    Args:
-        parser: Argparse parser to add the `consensus` command to
-        parent: Argparse parser parent of the newly added subcommand.
-            Used to inherit shared commands/flags
-
-    Returns:
-        The newly added parser
-    """
+    """Helper function to set up a subparser for the `consensus` command."""
     parser_consensus = parser.add_parser(
         'consensus',
         description='Generate consensus sequences',
@@ -258,6 +249,22 @@ def setup_consensus_args(parser: argparse.ArgumentParser, parent: argparse.Argum
         ),
         action='store_true'
     )
+
+    # ----------------------------------------------------------------
+    # NEW ARGUMENT to toggle separate R1/R2. Default is False => 
+    # (which means R1/R2 are collapsed together internally).
+    # ----------------------------------------------------------------
+    parser_consensus.add_argument(
+        '--separate-r1-r2',
+        action='store_true',
+        default=False,
+        help=(
+            'If specified, R1 and R2 from the same UMI will be collapsed '
+            'separately (i.e. produce two consensus reads). By default, '
+            'they are collapsed into one consensus read.'
+        ),
+    )
+
     parser_consensus.add_argument(
         'bam',
         help=(
@@ -267,7 +274,6 @@ def setup_consensus_args(parser: argparse.ArgumentParser, parent: argparse.Argum
         type=str,
     )
     return parser_consensus
-
 
 def setup_count_args(parser: argparse.ArgumentParser, parent: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Helper function to set up a subparser for the `count` command.
@@ -727,12 +733,9 @@ def parse_align(parser, args, temp_dir=None):
 
 
 def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, temp_dir: Optional[str] = None):
-    """Parser for the `consensus` command.
-
-    Args:
-        parser: The parser
-        args: Command-line arguments dictionary, as parsed by argparse
-        temp_dir: Temporary directory
+    """
+    Parser for the `consensus` command. We also handle whether to
+    separate R1/R2 (based on `args.separate_r1_r2`).
     """
     # Check quality
     if args.quality < 0 or args.quality > 41:
@@ -759,11 +762,19 @@ def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, t
         else:
             logger.info(f'Auto-detected strandedness: {strand}. Use `--strand` to override.')
 
+    # ------------------------------------------------------------------
+    # Convert user-specified --separate-r1-r2 to collapse_r1_r2 bool.
+    # If separate_r1_r2 == True => we do NOT collapse them together => 
+    # collapse_r1_r2 = False
+    # If separate_r1_r2 == False => we collapse them => True
+    # ------------------------------------------------------------------
+    collapse_r1_r2 = not args.separate_r1_r2
+
     from .consensus import consensus
     consensus(
-        args.bam,
-        args.g,
-        args.o,
+        bam_path=args.bam,
+        gtf_path=args.g,
+        out_dir=args.o,
         strand=strand,
         umi_tag=args.umi_tag,
         barcode_tag=args.barcode_tag,
@@ -773,6 +784,7 @@ def parse_consensus(parser: argparse.ArgumentParser, args: argparse.Namespace, t
         add_RS_RI=args.add_RS_RI,
         n_threads=args.t,
         temp_dir=temp_dir,
+        collapse_r1_r2=collapse_r1_r2,  # <-- pass the bool down
     )
 
 
@@ -995,19 +1007,20 @@ def main():
         metavar='<CMD>',
     )
 
-    # Add common options to this parent parser
+    # Common parent parser
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument('--tmp', metavar='TMP', help='Override default temporary directory', type=str, default='tmp')
     parent.add_argument('--keep-tmp', help='Do not delete the tmp directory', action='store_true')
     parent.add_argument('--verbose', help='Print debugging information', action='store_true')
     parent.add_argument('-t', metavar='THREADS', help='Number of threads to use (default: 8)', type=int, default=8)
 
-    # Command parsers
+    # Create each subcommand parser
     parser_ref = setup_ref_args(subparsers, parent)
     parser_align = setup_align_args(subparsers, parent)
     parser_consensus = setup_consensus_args(subparsers, parent)
     parser_count = setup_count_args(subparsers, parent)
     parser_estimate = setup_estimate_args(subparsers, parent)
+
     command_to_parser = {
         'ref': parser_ref,
         'align': parser_align,
@@ -1015,10 +1028,10 @@ def main():
         'count': parser_count,
         'estimate': parser_estimate,
     }
+
     if '--list' in sys.argv:
         print_technologies()
 
-    # Show help when no arguments are given
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
@@ -1045,6 +1058,7 @@ def main():
         )
     os.makedirs(args.tmp)
     os.environ['NUMEXPR_MAX_THREADS'] = str(args.t)
+
     try:
         patch_mp_connection_bpo_17560()  # Monkeypatch for python 3.7
         with warnings.catch_warnings():
